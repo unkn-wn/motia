@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit3, Trash2, Clock } from 'lucide-react';
+import { Edit3, Trash2, Clock, X, Check } from 'lucide-react';
 
 export interface Note {
   id: string;
@@ -105,7 +105,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
       pink: '#ec4899',
       purple: '#a855f7'
     };
-    return colorMap[color as keyof typeof colorMap] || colorMap.yellow;
+    return colorMap[color as keyof typeof colorMap] || colorMap.blue;
   };
 
   const handleEditStart = (note: Note) => {
@@ -122,6 +122,16 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
   const handleEditCancel = () => {
     setEditingNote(null);
     setEditContent('');
+  };
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent, noteId: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleEditSave(noteId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleEditCancel();
+    }
   };
 
   const handleMouseDown = (e: React.MouseEvent, note: Note) => {
@@ -221,33 +231,43 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
             {showNoteLabels && editingNote === note.id ? (
               /* Editing mode */
               <div
-                className="absolute pointer-events-auto bg-neutral-800 rounded-lg shadow-xl border border-neutral-600 p-1 w-60 z-30"
+                className="absolute pointer-events-auto bg-neutral-800/95 backdrop-blur-sm rounded-lg shadow-2xl border border-neutral-600/50 w-64 z-30"
                 style={{
                   left: `${screenPos.screenX}px`,
                   top: `${screenPos.screenY}px`,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full h-16 p-2 bg-neutral-900 text-white text-sm rounded resize-none focus:outline-none focus:ring-1 focus:ring-neutral-700"
-                  placeholder=""
-                  autoFocus
-                />
-                <div className="flex justify-end space-x-2">
-                  <button
-                    onClick={handleEditCancel}
-                    className="px-2 py-1 text-xs text-neutral-400 hover:text-neutral-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleEditSave(note.id)}
-                    className="px-2 py-1 text-xs bg-neutral-700 text-white rounded hover:bg-neutral-600"
-                  >
-                    Save
-                  </button>
+                <div className="relative h-20">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    onKeyDown={(e) => handleTextareaKeyDown(e, note.id)}
+                    className="w-full h-20 p-3 pr-14 bg-neutral-900/80 text-white text-sm rounded-lg resize-none
+                              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-neutral-900
+                              placeholder-neutral-500 leading-relaxed"
+                    placeholder="Empty note..."
+                    autoFocus
+                  />
+                  {/* Clean floating action buttons */}
+                  <div className="absolute top-2 right-2 flex space-x-1">
+                    <button
+                      onClick={handleEditCancel}
+                      className="p-1 hover:bg-red-600/50 rounded-md text-neutral-300 hover:text-white
+                                transition-all duration-200 shadow-sm hover:shadow-md"
+                      title="Cancel (Esc)"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => handleEditSave(note.id)}
+                      className="p-1 hover:bg-green-600/50 rounded-md text-neutral-300 hover:text-white
+                                transition-all duration-200 shadow-sm hover:shadow-md"
+                      title="Save (Enter)"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -280,13 +300,13 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
                     <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleEditStart(note)}
-                        className="p-1 hover:bg-neutral-600 rounded text-neutral-400 hover:text-white"
+                        className="p-1 hover:bg-neutral-600 rounded text-neutral-400 hover:text-white cursor-pointer"
                       >
                         <Edit3 className="w-3 h-3" />
                       </button>
                       <button
                         onClick={() => onDeleteNote(note.id)}
-                        className="p-1 hover:bg-red-600 rounded text-neutral-400 hover:text-white"
+                        className="p-1 hover:bg-red-600 rounded text-neutral-400 hover:text-white cursor-pointer"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -295,7 +315,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
 
                   {/* Content */}
                   <p
-                    className="text-sm text-neutral-200 leading-relaxed"
+                    className="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap break-words"
                   >
                     {note.content || 'Empty note' }
                   </p>

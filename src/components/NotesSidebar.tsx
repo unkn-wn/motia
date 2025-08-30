@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Note } from './NotesOverlay';
-import { Clock, Trash2, Edit3, Palette, X } from 'lucide-react';
+import { Clock, Trash2, Edit3, Palette, X, Check } from 'lucide-react';
 
 interface NotesSidebarProps {
   notes: Note[];
   onDeleteNote: (id: string) => void;
   onJumpToTime: (time: number) => void;
   onChangeNoteColor: (id: string, color: string) => void;
+  onUpdateNote: (id: string, content: string) => void;
   onClose?: () => void;
+  currentTime?: number;
+  isPlaying?: boolean;
 }
 
 const NotesSidebar: React.FC<NotesSidebarProps> = ({
@@ -15,11 +18,19 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   onDeleteNote,
   onJumpToTime,
   onChangeNoteColor,
+  onUpdateNote,
   onClose,
+  currentTime = 0,
+  isPlaying = false,
 }) => {
-  const colors = ['yellow', 'blue', 'green', 'pink', 'purple'];
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const activeNoteRef = useRef<HTMLDivElement>(null);
 
-  const formatTime = (time: number) => {
+  // Editing state
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+
+  const colors = ['yellow', 'blue', 'green', 'pink', 'purple'];  const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -27,54 +38,97 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
 
   const getColorClasses = (color: string) => {
     const colorMap: Record<string, string> = {
-      yellow: 'border-yellow-600 text-yellow-200',
-      blue: 'border-blue-600 text-blue-200',
-      green: 'border-green-600 text-green-200',
-      pink: 'border-pink-600 text-pink-200',
-      purple: 'border-purple-600 text-purple-200',
+      yellow: 'border-yellow-500',
+      blue: 'border-blue-500',
+      green: 'border-green-500',
+      pink: 'border-pink-500',
+      purple: 'border-purple-500',
     };
     return colorMap[color] || colorMap.yellow;
   };
 
   const sortedNotes = [...notes].sort((a, b) => a.time - b.time);
 
-  return (
-    <div className="w-80 rounded-xl bg-neutral-900/95 backdrop-blur-sm border-neutral-700 h-5/6 overflow-y-auto shadow-2xl">
-      <div className="p-4 bg-neutral-800/50">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-200 flex items-center space-x-2">
-            <Edit3 className="w-5 h-5" />
-            <span>Notes ({notes.length})</span>
-          </h2>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-neutral-700 rounded-lg transition-colors text-neutral-400 hover:text-white"
-              title="Close notes panel"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
-        </div>
-      </div>
+  // Find the current active note (most recent note that has been passed)
+  const getCurrentActiveNote = () => {
+    for (let i = sortedNotes.length - 1; i >= 0; i--) {
+      if (sortedNotes[i].time <= currentTime) {
+        return sortedNotes[i];
+      }
+    }
+    return null;
+  };
 
+  const activeNote = getCurrentActiveNote();
+
+  // Editing handlers
+  const handleEditStart = (note: Note) => {
+    setEditingNote(note.id);
+    setEditContent(note.content);
+  };
+
+  const handleEditSave = (noteId: string) => {
+    onUpdateNote(noteId, editContent);
+    setEditingNote(null);
+    setEditContent('');
+  };
+
+  const handleEditCancel = () => {
+    setEditingNote(null);
+    setEditContent('');
+  };
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent, noteId: string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleEditSave(noteId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleEditCancel();
+    }
+  };
+
+  const handleDoubleClick = (note: Note) => {
+    handleEditStart(note);
+  };
+
+  // Auto-scroll to active note during playback
+  useEffect(() => {
+    if (isPlaying && activeNote && activeNoteRef.current && sidebarRef.current) {
+      activeNoteRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+  }, [isPlaying, activeNote?.id]);
+
+  return (
+    <div
+      ref={sidebarRef}
+      className="w-80 rounded-xl bg-neutral-900/95 backdrop-blur-sm border-neutral-700 h-5/6 overflow-y-auto shadow-2xl"
+    >
       <div className="p-4 space-y-3">
         {sortedNotes.length === 0 ? (
           <div className="text-center py-8 text-neutral-400">
-            <Edit3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <Edit3 className="w-8 h-8 mx-auto mb-3 opacity-50" />
             <p>No notes yet</p>
-            <p className="text-sm">Click on the waveform to add notes</p>
+            <p className="text-sm">Press 'N' or the plus to add a note!</p>
           </div>
         ) : (
-          sortedNotes.map((note) => (
-            <div
-              key={note.id}
-              className={`border rounded-lg p-3 transition-all hover:shadow-md ${getColorClasses(note.color)}`}
-            >
-              <div className="flex items-center justify-between mb-2">
+          sortedNotes.map((note) => {
+            const isActiveNote = activeNote?.id === note.id;
+            return (
+              <div
+                key={note.id}
+                ref={isActiveNote ? activeNoteRef : null}
+                className={`border rounded-lg p-2 transition-all hover:shadow-md text-neutral-200 ${getColorClasses(note.color)} ${
+                  isActiveNote && isPlaying ? 'ring-2 ring-white/60 shadow-lg bg-neutral-800/50' : ''
+                }`}
+              >
+              <div className="flex items-center justify-between mb-1">
                 <button
                   onClick={() => onJumpToTime(note.time)}
-                  className="flex items-center space-x-1 text-sm hover:text-neutral-100 transition-colors"
+                  className="flex items-center space-x-1 text-sm hover:text-neutral-100 cursor-pointer transition-colors"
                 >
                   <Clock className="w-4 h-4" />
                   <span>{formatTime(note.time)}</span>
@@ -91,7 +145,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                           <button
                             key={color}
                             onClick={() => onChangeNoteColor(note.id, color)}
-                            className={`w-6 h-6 rounded-full border-2 hover:ring-1 ${
+                            className={`w-6 h-6 rounded-full border-2 hover:ring-1 cursor-pointer ${
                               note.color === color ? 'border-neutral-200' : 'border-neutral-500'
                             }`}
                             style={{
@@ -109,22 +163,64 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
 
                   <button
                     onClick={() => onDeleteNote(note.id)}
-                    className="p-1 hover:bg-red-600 hover:bg-opacity-50 text-red-400 rounded transition-colors"
+                    className="p-1 hover:bg-red-600/50 hover:bg-opacity-50 text-red-400 rounded cursor-pointer transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              <p className="text-sm whitespace-pre-wrap break-words">
-                {note.content || 'Empty note'}
-              </p>
+              {/* Note content - editable on double click */}
+              {editingNote === note.id ? (
+                /* Editing mode */
+                <div className="relative mb-2">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    onKeyDown={(e) => handleTextareaKeyDown(e, note.id)}
+                    className="w-full h-20 p-2 pr-12 bg-neutral-900/80 text-white text-sm rounded border border-neutral-600
+                              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-neutral-900
+                              placeholder-neutral-500 leading-relaxed resize-none"
+                    placeholder="Empty note..."
+                    autoFocus
+                  />
+                  {/* Action buttons */}
+                  <div className="absolute top-2 right-2 flex space-x-1">
+                    <button
+                      onClick={handleEditCancel}
+                      className="p-1 hover:bg-red-600/50 rounded text-neutral-300 hover:text-white
+                                transition-all duration-200"
+                      title="Cancel (Esc)"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => handleEditSave(note.id)}
+                      className="p-1 hover:bg-green-600/50 rounded text-neutral-300 hover:text-white
+                                transition-all duration-200"
+                      title="Save (Enter)"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Display mode */
+                <p
+                  className="text-sm whitespace-pre-wrap break-words cursor-pointer hover:bg-neutral-800/30 p-1 rounded transition-colors"
+                  onDoubleClick={() => handleDoubleClick(note)}
+                  title="Double-click to edit"
+                >
+                  {note.content || 'Empty note'}
+                </p>
+              )}
 
               <div className="text-xs text-neutral-500 mt-2">
                 {new Date(note.createdAt).toLocaleString()}
               </div>
             </div>
-          ))
+          );
+          })
         )}
       </div>
     </div>

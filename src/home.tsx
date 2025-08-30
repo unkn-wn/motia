@@ -11,6 +11,8 @@ function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -69,6 +71,14 @@ function Home() {
     console.log('Audio duration:', newDuration);
   }, []);
 
+  const handleCurrentTimeChange = useCallback((time: number) => {
+    setCurrentTime(time);
+  }, []);
+
+  const handlePlayStateChange = useCallback((playing: boolean) => {
+    setIsPlaying(playing);
+  }, []);
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {!audioFile ? (
@@ -85,6 +95,8 @@ function Home() {
             audioFile={audioFile}
             onAddNote={handleAddNote}
             onDurationChange={handleDurationChange}
+            onCurrentTimeChange={handleCurrentTimeChange}
+            onPlayStateChange={handlePlayStateChange}
             notes={notes}
             onUpdateNote={handleUpdateNote}
             onDeleteNote={handleDeleteNote}
@@ -94,11 +106,11 @@ function Home() {
           {/* Sidebar Toggle Button */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="fixed top-4 right-4 z-30 bg-neutral-700 hover:bg-neutral-600 text-white p-3 rounded-lg shadow-lg transition-all"
+            className="fixed top-4 right-4 z-30 bg-neutral-700 hover:bg-neutral-600 text-white p-2 cursor-pointer rounded-lg shadow-lg transition-all"
             title={sidebarOpen ? 'Hide notes' : 'Show notes'}
           >
             <div className="flex items-center space-x-2">
-              <Edit3 className="w-5 h-5" />
+              <Edit3 className="w-4 h-4" />
               <span className="text-sm font-medium">{notes.length}</span>
             </div>
           </button>
@@ -112,6 +124,9 @@ function Home() {
               onDeleteNote={handleDeleteNote}
               onJumpToTime={handleJumpToTime}
               onChangeNoteColor={handleChangeNoteColor}
+              onUpdateNote={handleUpdateNote}
+              currentTime={currentTime}
+              isPlaying={isPlaying}
             />
           </div>
         </div>

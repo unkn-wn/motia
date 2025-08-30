@@ -9,6 +9,8 @@ interface WaveformPlayerProps {
   audioFile: File;
   onAddNote: (time: number, canvasX: number, canvasY: number) => void;
   onDurationChange?: (duration: number) => void;
+  onCurrentTimeChange?: (time: number) => void;
+  onPlayStateChange?: (isPlaying: boolean) => void;
   notes: Note[];
   onUpdateNote: (id: string, content: string) => void;
   onDeleteNote: (id: string) => void;
@@ -30,6 +32,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   audioFile,
   onAddNote,
   onDurationChange,
+  onCurrentTimeChange,
+  onPlayStateChange,
   notes,
   onUpdateNote,
   onDeleteNote,
@@ -48,6 +52,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   const [transform, setTransform] = useState<CanvasTransform>({ offsetX: 0, offsetY: 150, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+  const [isFollowingPlayhead, setIsFollowingPlayhead] = useState(false);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -132,15 +137,25 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     });
 
     wavesurfer.on('audioprocess', () => {
-      setCurrentTime(wavesurfer.getCurrentTime());
+      const time = wavesurfer.getCurrentTime();
+      setCurrentTime(time);
+      onCurrentTimeChange?.(time);
     });
 
     wavesurfer.on('interaction', () => {
-      setCurrentTime(wavesurfer.getCurrentTime());
+      const time = wavesurfer.getCurrentTime();
+      setCurrentTime(time);
+      onCurrentTimeChange?.(time);
     });
 
-    wavesurfer.on('play', () => setIsPlaying(true));
-    wavesurfer.on('pause', () => setIsPlaying(false));
+    wavesurfer.on('play', () => {
+      setIsPlaying(true);
+      onPlayStateChange?.(true);
+    });
+    wavesurfer.on('pause', () => {
+      setIsPlaying(false);
+      onPlayStateChange?.(false);
+    });
 
     return () => {
       wavesurfer.destroy();
@@ -148,6 +163,27 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       URL.revokeObjectURL(audioUrl);
     };
   }, [audioFile]);
+
+  // Effect to follow playhead when in following mode
+  useEffect(() => {
+    if (!isFollowingPlayhead || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const canvasHeight = canvas.height;
+
+    // Calculate where the playhead should be in canvas coordinates (accounting for zoom)
+    const timeProgress = duration > 0 ? currentTime / duration : 0;
+    const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
+    const scaledWaveformHeight = baseWaveformHeight * transform.scale;
+    const targetPlayheadY = timeProgress * scaledWaveformHeight;
+    const playheadPositionY = canvasHeight * 0.33; // Keep at 33% from top
+
+    setTransform(prev => ({
+      offsetX: prev.offsetX, // Don't change X position - let user control horizontal panning
+      offsetY: playheadPositionY - targetPlayheadY, // Follow playhead vertically only
+      scale: prev.scale // Maintain zoom level
+    }));
+  }, [currentTime, duration, isFollowingPlayhead, transform.scale]);
 
   // Custom vertical waveform rendering with panning support
   useEffect(() => {
@@ -192,7 +228,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
       // Color based on progress
       const isPlayed = index / waveformData.length < progress;
-      ctx.fillStyle = isPlayed ? '#404040' : '#a3a3a3';
+      ctx.fillStyle = isPlayed ? '#a3a3a3' : '#404040';
 
       // Draw centered bar
       const x = waveformX + (waveformWidth - barWidth) / 2;
@@ -247,10 +283,12 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
   // Mouse event handlers for panning
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button === 0) { // Middle mouse button
+    if (e.button === 0) { // Left mouse button
       e.preventDefault();
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
+      // Disable playhead following when user starts panning
+      setIsFollowingPlayhead(false);
     }
 
     document.addEventListener(
@@ -359,6 +397,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       const newPos = Math.max(0, currentTime - 5);
       wavesurferRef.current.seekTo(newPos / duration);
       setCurrentTime(newPos);
+      onCurrentTimeChange?.(newPos);
     }
   };
 
@@ -368,6 +407,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       const newPos = Math.min(duration, currentTime + 5);
       wavesurferRef.current.seekTo(newPos / duration);
       setCurrentTime(newPos);
+      onCurrentTimeChange?.(newPos);
     }
   };
 
@@ -377,7 +417,31 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       wavesurferRef.current.seekTo(seekPosition);
       // Immediately update the current time state for responsive UI
       setCurrentTime(time);
+      onCurrentTimeChange?.(time);
     }
+  };
+
+  const handleRecenterToPlayhead = () => {
+    if (!wavesurferRef.current || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const canvasHeight = canvas.height;
+
+    // Calculate where the playhead should be in canvas coordinates (accounting for current zoom)
+    const timeProgress = duration > 0 ? currentTime / duration : 0;
+    const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
+    const scaledWaveformHeight = baseWaveformHeight * transform.scale;
+    const targetPlayheadY = timeProgress * scaledWaveformHeight;
+    const playheadPositionY = canvasHeight * 0.33; // Position at 33% from top
+
+    setTransform(prev => ({
+      offsetX: prev.offsetX, // Don't change X position - preserve user's horizontal view
+      offsetY: playheadPositionY - targetPlayheadY, // Position playhead at desired Y position
+      scale: prev.scale // Maintain current zoom level
+    }));
+
+    // Enable playhead following mode
+    setIsFollowingPlayhead(true);
   };
 
   // Expose methods to parent component
@@ -410,7 +474,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
               onMouseLeave={handleCanvasMouseLeave}
               onWheel={handleWheel}
               onContextMenu={(e) => e.preventDefault()}
-              title="Left click waveform to seek • Middle click and drag to pan • Scroll to zoom • Press 'N' to add note"
+              // title="Left click waveform to seek • Middle click and drag to pan • Scroll to zoom • Press 'N' to add note"
               style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
             />
 
@@ -439,15 +503,27 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
           </div>
 
           {/* Notes Overlay positioned relative to the canvas container */}
-          <NotesOverlay
-            notes={notes}
-            onUpdateNote={onUpdateNote}
-            onDeleteNote={onDeleteNote}
-            onMoveNote={onMoveNote}
-            onSeek={handleSeek}
-            duration={duration}
-            canvasTransform={transform}
-          />
+          {/* Hide notes overlay only while following playhead AND playing to prevent visual lag */}
+          {(!isFollowingPlayhead || !isPlaying) && (
+            <NotesOverlay
+              notes={notes}
+              onUpdateNote={onUpdateNote}
+              onDeleteNote={onDeleteNote}
+              onMoveNote={onMoveNote}
+              onSeek={handleSeek}
+              duration={duration}
+              canvasTransform={transform}
+            />
+          )}
+
+          {/* Show subtle indicator when notes are hidden during follow mode */}
+          {isFollowingPlayhead && isPlaying && notes.length > 0 && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+              <div className="bg-neutral-800/90 backdrop-blur-sm rounded-lg px-2 py-1 text-xs text-neutral-500 border border-neutral-600/50">
+                Notes hidden during playback follow mode
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -462,6 +538,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
         onSkipForward={handleSkipForward}
         onVolumeChange={handleVolumeChange}
         onSeek={handleSeek}
+        onRecenterToPlayhead={handleRecenterToPlayhead}
       />
     </>
   );

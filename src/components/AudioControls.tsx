@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Target } from 'lucide-react';
 
 interface AudioControlsProps {
   isPlaying: boolean;
@@ -11,6 +11,7 @@ interface AudioControlsProps {
   onSkipForward: () => void;
   onVolumeChange: (volume: number) => void;
   onSeek: (time: number) => void;
+  onRecenterToPlayhead?: () => void;
 }
 
 const AudioControls: React.FC<AudioControlsProps> = ({
@@ -23,6 +24,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
   onSkipForward,
   onVolumeChange,
   onSeek,
+  onRecenterToPlayhead,
 }) => {
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -87,7 +89,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={onSkipBack}
-              className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-all"
+              className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg cursor-pointer transition-all"
               title="Skip back 5s (←)"
             >
               <SkipBack className="w-4 h-4" />
@@ -95,7 +97,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
 
             <button
               onClick={onPlayPause}
-              className="p-3 bg-neutral-700 hover:bg-neutral-600 text-white rounded-full transition-all shadow-lg"
+              className="p-3 bg-neutral-800 hover:bg-neutral-700 text-white rounded-full cursor-pointer transition-all shadow-lg"
               title="Play/Pause (Space)"
             >
               {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -103,16 +105,26 @@ const AudioControls: React.FC<AudioControlsProps> = ({
 
             <button
               onClick={onSkipForward}
-              className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-all"
+              className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg cursor-pointer transition-all"
               title="Skip forward 5s (→)"
             >
               <SkipForward className="w-4 h-4" />
             </button>
+
+            {onRecenterToPlayhead && (
+              <button
+                onClick={onRecenterToPlayhead}
+                className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg cursor-pointer transition-all"
+                title="Recenter view to playhead"
+              >
+                <Target className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* Progress Bar - takes up most space */}
           <div className="flex-1 flex items-center space-x-4">
-            <span className="text-neutral-400 text-sm font-mono min-w-[45px]">
+            <span className="text-neutral-400 text-sm font-mono text-right min-w-[45px]">
               {formatTime(currentTime)}
             </span>
 
@@ -125,7 +137,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
                 step="0.1"
                 value={currentTime}
                 onChange={handleProgressChange}
-                className="w-full h-2 bg-neutral-700 rounded-full appearance-none cursor-pointer
+                className="w-full h-2 bg-neutral-700 rounded-full appearance-none -translate-y-0.5 cursor-pointer
                            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4
                            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer
                            [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-neutral-900
@@ -134,7 +146,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
                            [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-neutral-900 [&::-moz-range-thumb]:shadow-lg
                            [&::-moz-range-track]:bg-neutral-700 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:h-2"
                 style={{
-                  background: `linear-gradient(to right, #6b7280 0%, #6b7280 ${(currentTime / (duration || 1)) * 100}%, #374151 ${(currentTime / (duration || 1)) * 100}%, #374151 100%)`
+                  background: `linear-gradient(to right, #737373 0%, #737373 ${(currentTime / (duration || 1)) * 100}%, #27272a ${(currentTime / (duration || 1)) * 100}%, #27272a 100%)`
                 }}
               />
             </div>
@@ -165,10 +177,10 @@ const AudioControls: React.FC<AudioControlsProps> = ({
                          [&::-moz-range-track]:bg-neutral-700 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:h-2"
               title="Volume (↑/↓)"
               style={{
-                background: `linear-gradient(to right, #6b7280 0%, #6b7280 ${volume * 100}%, #374151 ${volume * 100}%, #374151 100%)`
+                background: `linear-gradient(to right, #737373 0%, #737373 ${volume * 100}%, #27272a ${volume * 100}%, #27272a 100%)`
               }}
             />
-            <span className="text-neutral-400 text-sm font-mono w-10 text-right">
+            <span className="text-neutral-400 text-sm font-mono w-10 text-left">
               {Math.round(volume * 100)}%
             </span>
           </div>
