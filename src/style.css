@@ -1,30 +1,35 @@
 @import "tailwindcss";
 
-/* Custom styles for the music annotation app */
-.waveform-container {
-  position: relative;
-  overflow: hidden;
+/* CSS Variables for Dark Theme */
+:root {
+  --bg-primary: #171717;
+  --bg-secondary: #292524;
+  --bg-tertiary: #525252;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --accent: #6b7280;
 }
 
-/* Custom scrollbar for sidebar */
+/* Custom scrollbar */
 .overflow-y-auto::-webkit-scrollbar {
   width: 6px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--bg-tertiary);
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--accent);
   border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--text-muted);
 }
 
-/* Custom range slider styling */
+/* Custom range slider */
 input[type="range"] {
   background: transparent;
   appearance: none;
@@ -32,7 +37,7 @@ input[type="range"] {
 }
 
 input[type="range"]::-webkit-slider-track {
-  background: #e2e8f0;
+  background: var(--bg-tertiary);
   height: 8px;
   border-radius: 4px;
 }
@@ -40,7 +45,7 @@ input[type="range"]::-webkit-slider-track {
 input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  background: #8b5cf6;
+  background: var(--text-muted);
   height: 16px;
   width: 16px;
   border-radius: 50%;
@@ -48,14 +53,14 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 input[type="range"]::-moz-range-track {
-  background: #e2e8f0;
+  background: var(--bg-tertiary);
   height: 8px;
   border-radius: 4px;
   border: none;
 }
 
 input[type="range"]::-moz-range-thumb {
-  background: #8b5cf6;
+  background: var(--text-muted);
   height: 16px;
   width: 16px;
   border-radius: 50%;
@@ -63,37 +68,7 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-/* Animations */
-@keyframes pulse-soft {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-.animate-pulse-soft {
-  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Note indicators */
-.note-indicator {
-  position: absolute;
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-}
-
-/* Smooth transitions for all interactive elements */
+/* Smooth transitions */
 * {
-  transition-property: color, background-color, border-color, opacity, transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
+  transition: all 150ms ease;
 }
