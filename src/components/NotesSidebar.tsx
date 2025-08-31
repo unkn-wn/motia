@@ -1,6 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Note } from './NotesOverlay';
 import { Clock, Trash2, Edit3, Palette, X, Check } from 'lucide-react';
+import { formatTime } from '../utils/timeUtils';
+import { getColorClasses } from '../utils/colorUtils';
+import { sortNotesByTime, findActiveNote } from '../utils/notesUtils';
 
 interface NotesSidebarProps {
   notes: Note[];
@@ -8,7 +11,6 @@ interface NotesSidebarProps {
   onJumpToTime: (time: number) => void;
   onChangeNoteColor: (id: string, color: string) => void;
   onUpdateNote: (id: string, content: string) => void;
-  onClose?: () => void;
   currentTime?: number;
   isPlaying?: boolean;
 }
@@ -19,7 +21,6 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   onJumpToTime,
   onChangeNoteColor,
   onUpdateNote,
-  onClose,
   currentTime = 0,
   isPlaying = false,
 }) => {
@@ -30,67 +31,48 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
 
-  const colors = ['yellow', 'blue', 'green', 'pink', 'purple'];  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  const colors = ['yellow', 'blue', 'green', 'pink', 'purple'];
 
-  const getColorClasses = (color: string) => {
-    const colorMap: Record<string, string> = {
-      yellow: 'border-yellow-500',
-      blue: 'border-blue-500',
-      green: 'border-green-500',
-      pink: 'border-pink-500',
-      purple: 'border-purple-500',
-    };
-    return colorMap[color] || colorMap.yellow;
-  };
+  const sortedNotes = useMemo(() =>
+    sortNotesByTime(notes),
+    [notes]
+  );
 
-  const sortedNotes = [...notes].sort((a, b) => a.time - b.time);
-
-  // Find the current active note (most recent note that has been passed)
-  const getCurrentActiveNote = () => {
-    for (let i = sortedNotes.length - 1; i >= 0; i--) {
-      if (sortedNotes[i].time <= currentTime) {
-        return sortedNotes[i];
-      }
-    }
-    return null;
-  };
-
-  const activeNote = getCurrentActiveNote();
+  const activeNote = useMemo(() =>
+    findActiveNote(notes, currentTime),
+    [notes, currentTime]
+  );
 
   // Editing handlers
-  const handleEditStart = (note: Note) => {
+  const handleEditStart = useCallback((note: Note) => {
     setEditingNote(note.id);
     setEditContent(note.content);
-  };
+  }, []);
 
-  const handleEditSave = (noteId: string) => {
+  const handleEditSave = useCallback((noteId: string) => {
     onUpdateNote(noteId, editContent);
     setEditingNote(null);
     setEditContent('');
-  };
+  }, [onUpdateNote, editContent]);
 
-  const handleEditCancel = () => {
+  const handleEditCancel = useCallback(() => {
     setEditingNote(null);
     setEditContent('');
-  };
+  }, []);
 
-  const handleTextareaKeyDown = (e: React.KeyboardEvent, noteId: string) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent, noteId: string) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.shiftKey || e.metaKey)) {
       e.preventDefault();
       handleEditSave(noteId);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       handleEditCancel();
     }
-  };
+  }, [handleEditSave, handleEditCancel]);
 
-  const handleDoubleClick = (note: Note) => {
+  const handleDoubleClick = useCallback((note: Note) => {
     handleEditStart(note);
-  };
+  }, [handleEditStart]);
 
   // Auto-scroll to active note during playback
   useEffect(() => {
@@ -178,7 +160,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
                     onKeyDown={(e) => handleTextareaKeyDown(e, note.id)}
-                    className="w-full h-20 p-2 pr-12 bg-neutral-900/80 text-white text-sm rounded border border-neutral-600
+                    className="w-full field-sizing-content p-2 pr-12 bg-neutral-900/80 text-white text-sm rounded border border-neutral-600
                               focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-neutral-900
                               placeholder-neutral-500 leading-relaxed resize-none"
                     placeholder="Empty note..."
@@ -198,7 +180,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                       onClick={() => handleEditSave(note.id)}
                       className="p-1 hover:bg-green-600/50 rounded text-neutral-300 hover:text-white
                                 transition-all duration-200"
-                      title="Save (Enter)"
+                      title="Save (Ctrl+Enter)"
                     >
                       <Check className="w-3 h-3" />
                     </button>

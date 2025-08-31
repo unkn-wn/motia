@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit3, Trash2, Clock, X, Check } from 'lucide-react';
+import { getColorCode } from '../utils/colorUtils';
+import { formatTime } from '../utils/timeUtils';
+import { calculateWaveformDimensions } from '../utils/canvasUtils';
 
 export interface Note {
   id: string;
@@ -26,6 +29,7 @@ interface NotesOverlayProps {
   onSeek?: (time: number) => void;
   duration?: number;
   canvasTransform?: CanvasTransform;
+  onWheel?: (e: React.WheelEvent) => void;
 }
 
 const NotesOverlay: React.FC<NotesOverlayProps> = ({
@@ -36,6 +40,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
   onSeek,
   duration = 0,
   canvasTransform = { offsetX: 0, offsetY: 0, scale: 1 },
+  onWheel,
 }) => {
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -50,14 +55,6 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
 
   // Zoom threshold below which note labels will be hidden (only dots remain)
   const NOTE_LABEL_HIDE_THRESHOLD = 0.3;
-
-  // Helper function to convert canvas coordinates to screen coordinates
-  const canvasToScreen = (canvasX: number, canvasY: number) => {
-    return {
-      screenX: canvasX * canvasTransform.scale + canvasTransform.offsetX,
-      screenY: canvasY * canvasTransform.scale + canvasTransform.offsetY,
-    };
-  };
 
   // Global mouse handlers for improved dragging
   useEffect(() => {
@@ -97,17 +94,6 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
     };
   }, [dragging, onMoveNote, canvasTransform.scale]);
 
-  const getColorCode = (color: string) => {
-    const colorMap = {
-      yellow: '#eab308',
-      blue: '#3b82f6',
-      green: '#22c55e',
-      pink: '#ec4899',
-      purple: '#a855f7'
-    };
-    return colorMap[color as keyof typeof colorMap] || colorMap.blue;
-  };
-
   const handleEditStart = (note: Note) => {
     setEditingNote(note.id);
     setEditContent(note.content);
@@ -125,7 +111,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
   };
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent, noteId: string) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.shiftKey || e.metaKey)) {
       e.preventDefault();
       handleEditSave(noteId);
     } else if (e.key === 'Escape') {
@@ -134,7 +120,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent, note: Note) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent, note: Note) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -146,186 +132,182 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
       initialCanvasX: note.canvasX,
       initialCanvasY: note.canvasY
     });
-  };
+  }, []);
 
-  const handleNoteClick = (e: React.MouseEvent, note: Note) => {
+  const handleNoteClick = useCallback((e: React.MouseEvent, note: Note) => {
     e.stopPropagation();
     // Only seek if no drag occurred and not clicking on buttons
     if (!dragOccurred && !(e.target as HTMLElement).closest('button')) {
       onSeek?.(note.time);
     }
-  };
+  }, [dragOccurred, onSeek]);
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  // Memoize waveform dimensions calculation
+  const waveformDimensions = useMemo(() =>
+    calculateWaveformDimensions(duration),
+    [duration]
+  );
 
   return (
     <div className="absolute inset-0 pointer-events-none z-20">
-      {/* SVG for connecting lines - synced with canvas transform */}
-      <svg
-        className="absolute pointer-events-none"
+      {/* Container that applies the same transform as the canvas - much more performant */}
+      <div
+        className="absolute inset-0"
         style={{
-          left: '0',
-          top: '0',
-          width: '100%',
-          height: '100%',
-          zIndex: 15,
+          transform: `translate(${canvasTransform.offsetX}px, ${canvasTransform.offsetY}px) scale(${canvasTransform.scale})`,
+          transformOrigin: '0 0',
         }}
       >
+        {/* SVG for connecting lines - now uses canvas coordinates directly */}
+        <svg
+          className="absolute pointer-events-none"
+          style={{
+            left: '0',
+            top: '0',
+            width: `${window.innerWidth}px`,
+            height: `${waveformDimensions.height}px`,
+            zIndex: 15,
+          }}
+        >
+          {notes.map((note) => {
+            // Calculate the waveform position in canvas space - no screen conversion needed!
+            const timeProgress = duration > 0 ? note.time / duration : 0;
+            const waveformCanvasY = timeProgress * waveformDimensions.height;
+
+            return (
+              <g key={`line-${note.id}`}>
+                {/* Connecting line from waveform to note - using canvas coordinates directly */}
+                <line
+                  x1={waveformDimensions.centerX}
+                  y1={waveformCanvasY}
+                  x2={note.canvasX}
+                  y2={note.canvasY}
+                  stroke="#6b7280"
+                  strokeWidth="1"
+                  strokeDasharray="3,3"
+                  opacity="0.5"
+                />
+                {/* Dot at waveform position */}
+                <circle
+                  cx={waveformDimensions.centerX}
+                  cy={waveformCanvasY}
+                  r="4"
+                  fill={getColorCode(note.color)}
+                  stroke="#1f2937"
+                  strokeWidth="2"
+                />
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Notes positioned using canvas coordinates directly - CSS handles transform */}
         {notes.map((note) => {
-          // Calculate the waveform position in canvas space, then convert to screen space
-          const timeProgress = duration > 0 ? note.time / duration : 0;
-          const waveformHeight = Math.max(window.innerHeight * 3, duration * 100);
-          const waveformWidth = 120;
-
-          // Waveform position in canvas space (exactly matching WaveformPlayer calculations)
-          const canvasWidth = window.innerWidth;
-          const waveformX = (canvasWidth - waveformWidth) / 2; // This matches WaveformPlayer
-          const waveformCanvasX = waveformX + waveformWidth / 2; // Center of waveform
-          const waveformCanvasY = timeProgress * waveformHeight;
-
-          // Convert canvas coordinates to screen coordinates for rendering
-          const waveformScreenPos = canvasToScreen(waveformCanvasX, waveformCanvasY);
-          const noteScreenPos = canvasToScreen(note.canvasX, note.canvasY);
+          // Show note labels only when zoomed in enough
+          const showNoteLabels = canvasTransform.scale > NOTE_LABEL_HIDE_THRESHOLD;
 
           return (
-            <g key={`line-${note.id}`}>
-              {/* Connecting line from waveform to note */}
-              <line
-                x1={waveformScreenPos.screenX}
-                y1={waveformScreenPos.screenY}
-                x2={noteScreenPos.screenX}
-                y2={noteScreenPos.screenY}
-                stroke="#6b7280"
-                strokeWidth="1"
-                strokeDasharray="3,3"
-                opacity="0.5"
-              />
-              {/* Dot at waveform position */}
-              <circle
-                cx={waveformScreenPos.screenX}
-                cy={waveformScreenPos.screenY}
-                r="4"
-                fill={getColorCode(note.color)}
-                stroke="#1f2937"
-                strokeWidth="2"
-              />
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Notes positioned using canvas coordinates converted to screen coordinates */}
-      {notes.map((note) => {
-        // Convert canvas coordinates to screen coordinates for positioning
-        const screenPos = canvasToScreen(note.canvasX, note.canvasY);
-
-        // Show note labels only when zoomed in enough
-        const showNoteLabels = canvasTransform.scale > NOTE_LABEL_HIDE_THRESHOLD;
-
-        return (
-          <div key={note.id}>
-            {showNoteLabels && editingNote === note.id ? (
-              /* Editing mode */
-              <div
-                className="absolute pointer-events-auto bg-neutral-800/95 backdrop-blur-sm rounded-lg shadow-2xl border border-neutral-600/50 w-64 z-30"
-                style={{
-                  left: `${screenPos.screenX}px`,
-                  top: `${screenPos.screenY}px`,
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                <div className="relative h-20">
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    onKeyDown={(e) => handleTextareaKeyDown(e, note.id)}
-                    className="w-full h-20 p-3 pr-14 bg-neutral-900/80 text-white text-sm rounded-lg resize-none
-                              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-neutral-900
-                              placeholder-neutral-500 leading-relaxed"
-                    placeholder="Empty note..."
-                    autoFocus
-                  />
-                  {/* Clean floating action buttons */}
-                  <div className="absolute top-2 right-2 flex space-x-1">
-                    <button
-                      onClick={handleEditCancel}
-                      className="p-1 hover:bg-red-600/50 rounded-md text-neutral-300 hover:text-white
-                                transition-all duration-200 shadow-sm hover:shadow-md"
-                      title="Cancel (Esc)"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => handleEditSave(note.id)}
-                      className="p-1 hover:bg-green-600/50 rounded-md text-neutral-300 hover:text-white
-                                transition-all duration-200 shadow-sm hover:shadow-md"
-                      title="Save (Enter)"
-                    >
-                      <Check className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* Display mode - only show when zoomed in enough */
-              showNoteLabels && (
+            <div key={note.id}>
+              {showNoteLabels && editingNote === note.id ? (
+                /* Editing mode */
                 <div
-                  className="absolute pointer-events-auto group cursor-pointer z-30"
+                  className="absolute pointer-events-auto bg-neutral-800/95 backdrop-blur-sm rounded-lg shadow-2xl border border-neutral-600/50 w-72 z-30"
                   style={{
-                    left: `${screenPos.screenX}px`,
-                    top: `${screenPos.screenY}px`,
+                    left: `${note.canvasX}px`,
+                    top: `${note.canvasY}px`,
                     transform: 'translate(-50%, -50%)',
                   }}
-                  onMouseDown={(e) => handleMouseDown(e, note)}
-                  onClick={(e) => handleNoteClick(e, note)}
-                  title="Click to jump to this timestamp, drag to move"
                 >
-                <div
-                  className="bg-neutral-800 rounded-lg shadow-lg border border-neutral-600 p-2 w-52 hover:shadow-xl transition-all"
-                  style={{
-                    borderLeftColor: getColorCode(note.color),
-                    borderLeftWidth: '3px',
-                  }}
-                >
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center space-x-1 text-xs text-neutral-400">
-                      <Clock className="w-3 h-3" />
-                      <span>{formatTime(note.time)}</span>
-                    </div>
-                    <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="relative h-auto">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      onKeyDown={(e) => handleTextareaKeyDown(e, note.id)}
+                      className="block w-full field-sizing-content p-3 pr-14 bg-neutral-900/80 text-white text-lg rounded-lg resize-none
+                          focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-neutral-900
+                          placeholder-neutral-500 leading-relaxed"
+                      placeholder="Empty note..."
+                      autoFocus
+                    />
+                    {/* Clean floating action buttons */}
+                    <div className="absolute top-2 right-2 flex space-x-1">
                       <button
-                        onClick={() => handleEditStart(note)}
-                        className="p-1 hover:bg-neutral-600 rounded text-neutral-400 hover:text-white cursor-pointer"
+                        onClick={handleEditCancel}
+                        className="p-1 hover:bg-red-600/50 rounded-md text-neutral-300 hover:text-white
+                            transition-all duration-200 shadow-sm hover:shadow-md"
+                        title="Cancel (Esc)"
                       >
-                        <Edit3 className="w-3 h-3" />
+                        <X className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => onDeleteNote(note.id)}
-                        className="p-1 hover:bg-red-600 rounded text-neutral-400 hover:text-white cursor-pointer"
+                        onClick={() => handleEditSave(note.id)}
+                        className="p-1 hover:bg-green-600/50 rounded-md text-neutral-300 hover:text-white
+                            transition-all duration-200 shadow-sm hover:shadow-md"
+                        title="Save (Ctrl+Enter)"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Check className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-
-                  {/* Content */}
-                  <p
-                    className="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap break-words"
-                  >
-                    {note.content || 'Empty note' }
-                  </p>
                 </div>
-              </div>
-              )
-            )}
-          </div>
-        );
-      })}
+              ) : (
+                /* Display mode - only show when zoomed in enough */
+                showNoteLabels && (
+                  <div
+                    className="absolute pointer-events-auto group cursor-pointer z-30"
+                    style={{
+                      left: `${note.canvasX}px`,
+                      top: `${note.canvasY}px`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    onMouseDown={(e) => handleMouseDown(e, note)}
+                    onClick={(e) => handleNoteClick(e, note)}
+                    onWheel={onWheel}
+                    title="Click to jump to this timestamp, drag to move"
+                  >
+                    <div
+                      className="bg-neutral-800 rounded-lg shadow-lg border border-neutral-600 p-2 w-60 hover:shadow-xl transition-all"
+                      style={{
+                        borderLeftColor: getColorCode(note.color),
+                        borderLeftWidth: '3px',
+                      }}
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2 text-lg text-neutral-400">
+                          <Clock className="w-4 h-4" />
+                          <span>{formatTime(note.time)}</span>
+                        </div>
+                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleEditStart(note)}
+                            className="p-1 hover:bg-neutral-600 rounded text-neutral-400 hover:text-white cursor-pointer"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onDeleteNote(note.id)}
+                            className="p-1 hover:bg-red-600 rounded text-neutral-400 hover:text-white cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <p
+                        className="text-lg text-neutral-200 leading-relaxed whitespace-pre-wrap break-words"
+                      >
+                        {note.content || 'Empty note'}
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

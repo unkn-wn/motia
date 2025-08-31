@@ -4,11 +4,12 @@ import WaveSurfer from 'wavesurfer.js';
 import { Plus } from 'lucide-react';
 import AudioControls from './AudioControls';
 import NotesOverlay, { type Note } from './NotesOverlay';
+import { isUserTyping } from '../utils/keyboardUtils';
+import type { CanvasTransform } from '../utils/canvasUtils';
 
 interface WaveformPlayerProps {
   audioFile: File;
   onAddNote: (time: number, canvasX: number, canvasY: number) => void;
-  onDurationChange?: (duration: number) => void;
   onCurrentTimeChange?: (time: number) => void;
   onPlayStateChange?: (isPlaying: boolean) => void;
   notes: Note[];
@@ -22,16 +23,9 @@ export interface WaveformPlayerRef {
   getCanvasTransform: () => { offsetX: number; offsetY: number; scale: number };
 }
 
-interface CanvasTransform {
-  offsetX: number;
-  offsetY: number;
-  scale: number;
-}
-
 const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   audioFile,
   onAddNote,
-  onDurationChange,
   onCurrentTimeChange,
   onPlayStateChange,
   notes,
@@ -57,8 +51,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Add note with 'N' key
-      if (e.key === 'n' || e.key === 'N') {
+      // Don't trigger shortcuts when user is typing in input fields
+      const isTyping = isUserTyping();
+
+      // Add note with 'N' key - only if not typing
+      if ((e.key === 'n' || e.key === 'N') && !isTyping) {
         e.preventDefault();
         if (duration > 0) {
           // Create a synthetic mouse event for the handler
@@ -72,7 +69,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [duration, currentTime, transform]);
+  }, [duration, currentTime, transform.scale]); // Added transform.scale dependency
 
   useEffect(() => {
     if (!waveformRef.current) return;
@@ -105,7 +102,6 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     wavesurfer.on('ready', () => {
       const audioDuration = wavesurfer.getDuration();
       setDuration(audioDuration);
-      onDurationChange?.(audioDuration);
 
       // Extract waveform data for custom rendering
       try {
@@ -291,13 +287,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       setIsFollowingPlayhead(false);
     }
 
-    document.addEventListener(
-      'mouseup',
-      () => {
-        setIsPanning(false);
-      },
-      { once: true }
-    );
+    const handleMouseUp = () => {
+      setIsPanning(false);
+    };
+
+    document.addEventListener('mouseup', handleMouseUp, { once: true });
   }, []);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -317,7 +311,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   }, [isPanning, lastPanPoint]);
 
 
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -364,10 +358,6 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     }
   };
 
-  const handleCanvasMouseLeave = () => {
-    //
-  };
-
   const handleAddNoteAtCurrentTime = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!canvasRef.current || duration === 0) return;
@@ -377,7 +367,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     // Position note further to the right of the waveform in canvas space
     const waveformWidth = 120;
     const waveformX = (rect.width - waveformWidth) / 2; // This matches the canvas drawing
-    const noteCanvasX = waveformX + waveformWidth + 300; // 300px to the right of waveform (more offset)
+    const noteCanvasX = waveformX + waveformWidth + 150; // 150px to the right of waveform (more offset)
 
     // Calculate Y position based on current playback time
     const waveformHeight = Math.max(rect.height * 3, duration * 100);
@@ -385,7 +375,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     const noteCanvasY = timeProgress * waveformHeight;
 
     onAddNote(currentTime, noteCanvasX, noteCanvasY);
-  }; const handlePlayPause = () => {
+  };
+
+  const handlePlayPause = () => {
     if (wavesurferRef.current) {
       wavesurferRef.current.playPause();
     }
@@ -470,11 +462,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
               onClick={handleCanvasClick}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
-              // onMouseUp={handleMouseUp}
-              onMouseLeave={handleCanvasMouseLeave}
               onWheel={handleWheel}
               onContextMenu={(e) => e.preventDefault()}
-              // title="Left click waveform to seek • Middle click and drag to pan • Scroll to zoom • Press 'N' to add note"
               style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
             />
 
@@ -484,7 +473,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
                 onClick={handleAddNoteAtCurrentTime}
                 className="group absolute bg-neutral-700
                           text-white rounded-full p-3 shadow-xl hover:shadow-2xl transition-all duration-300
-                          z-50 add-note-button pointer-events-auto
+                          z-50 add-note-button pointer-events-auto cursor-pointer
                           border-2 border-white/20 hover:border-white/40"
                 style={{
                   left: '50%',
@@ -503,27 +492,16 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
           </div>
 
           {/* Notes Overlay positioned relative to the canvas container */}
-          {/* Hide notes overlay only while following playhead AND playing to prevent visual lag */}
-          {(!isFollowingPlayhead || !isPlaying) && (
-            <NotesOverlay
-              notes={notes}
-              onUpdateNote={onUpdateNote}
-              onDeleteNote={onDeleteNote}
-              onMoveNote={onMoveNote}
-              onSeek={handleSeek}
-              duration={duration}
-              canvasTransform={transform}
-            />
-          )}
-
-          {/* Show subtle indicator when notes are hidden during follow mode */}
-          {isFollowingPlayhead && isPlaying && notes.length > 0 && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
-              <div className="bg-neutral-800/90 backdrop-blur-sm rounded-lg px-2 py-1 text-xs text-neutral-500 border border-neutral-600/50">
-                Notes hidden during playback follow mode
-              </div>
-            </div>
-          )}
+          <NotesOverlay
+            notes={notes}
+            onUpdateNote={onUpdateNote}
+            onDeleteNote={onDeleteNote}
+            onMoveNote={onMoveNote}
+            onSeek={handleSeek}
+            duration={duration}
+            canvasTransform={transform}
+            onWheel={handleWheel}
+          />
         </div>
       </div>
 

@@ -1,16 +1,17 @@
 import { useState, useCallback, useRef } from 'react';
-import { Edit3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import FileUploader from './components/FileUploader';
 import WaveformPlayer, { type WaveformPlayerRef } from './components/WaveformPlayer';
 import NotesSidebar from './components/NotesSidebar';
 import type { Note } from './components/NotesOverlay';
+import { createNote } from './utils/notesUtils';
 import './style.css';
 
 function Home() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
@@ -24,16 +25,7 @@ function Home() {
   }, []);
 
   const handleAddNote = useCallback((time: number, canvasX: number, canvasY: number) => {
-    const newNote: Note = {
-      id: `note_${Date.now()}_${Math.random()}`,
-      time,
-      canvasX,
-      canvasY,
-      content: '',
-      color: 'blue', // Default consistent color - users can change later
-      createdAt: new Date(),
-    };
-
+    const newNote = createNote(time, canvasX, canvasY, '', 'blue');
     setNotes(prev => [...prev, newNote]);
   }, []);
 
@@ -65,12 +57,6 @@ function Home() {
     ));
   }, []);
 
-  const handleDurationChange = useCallback((newDuration: number) => {
-    // Duration is used for waveform calculations, but we don't need to store it in state
-    // since the WaveformPlayer manages it internally
-    console.log('Audio duration:', newDuration);
-  }, []);
-
   const handleCurrentTimeChange = useCallback((time: number) => {
     setCurrentTime(time);
   }, []);
@@ -94,7 +80,6 @@ function Home() {
             ref={waveformPlayerRef}
             audioFile={audioFile}
             onAddNote={handleAddNote}
-            onDurationChange={handleDurationChange}
             onCurrentTimeChange={handleCurrentTimeChange}
             onPlayStateChange={handlePlayStateChange}
             notes={notes}
@@ -103,14 +88,20 @@ function Home() {
             onMoveNote={handleMoveNote}
           />
 
-          {/* Sidebar Toggle Button */}
+          {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="fixed top-4 right-4 z-30 bg-neutral-700 hover:bg-neutral-600 text-white p-2 cursor-pointer rounded-lg shadow-lg transition-all"
+            className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${
+              sidebarOpen ? 'right-80' : 'right-0'
+            }`}
             title={sidebarOpen ? 'Hide notes' : 'Show notes'}
           >
             <div className="flex items-center space-x-2">
-              <Edit3 className="w-4 h-4" />
+              {sidebarOpen ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <ChevronLeft className="w-4 h-4" />
+              )}
               <span className="text-sm font-medium">{notes.length}</span>
             </div>
           </button>
