@@ -57,6 +57,8 @@ const FloatingDock: React.FC<FloatingDockProps> = ({
         </button>
       )}
 
+      <div className='border-t-2 border-neutral-600/20 rounded-full' />
+
       {/* Keyboard Shortcuts Button */}
       <button
         onClick={onShowShortcuts}

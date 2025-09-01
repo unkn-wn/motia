@@ -498,6 +498,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
             onWheel={handleWheel}
             isDrawingMode={isDrawingMode}
             onAddDrawing={onAddDrawing}
+            isCanvasPanning={isPanning}
           />
         </div>
       </div>

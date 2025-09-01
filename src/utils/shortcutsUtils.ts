@@ -108,9 +108,9 @@ export const formatKeyDisplay = (key: string): string => {
 export const isUserTyping = (): boolean => {
   const activeElement = document.activeElement;
 
-  // Check for input fields and textareas
+  // Check for input fields and textareas, but exclude range inputs (sliders)
   if (activeElement && (
-    activeElement.tagName === 'INPUT' ||
+    (activeElement.tagName === 'INPUT' && (activeElement as HTMLInputElement).type !== 'range') ||
     activeElement.tagName === 'TEXTAREA' ||
     activeElement.getAttribute('contenteditable') === 'true'
   )) {

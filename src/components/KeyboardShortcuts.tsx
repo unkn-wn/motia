@@ -91,8 +91,8 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   if (!isOpen) return null;
 
   const categories = [
-    { id: 'playback', label: 'Playback', shortcuts: shortcuts.filter(s => s.category === 'playback') },
     { id: 'notes', label: 'Notes', shortcuts: shortcuts.filter(s => s.category === 'notes') },
+    { id: 'playback', label: 'Playback', shortcuts: shortcuts.filter(s => s.category === 'playback') },
     { id: 'navigation', label: 'Navigation', shortcuts: shortcuts.filter(s => s.category === 'navigation') }
   ].filter(cat => cat.shortcuts.length > 0);
 
@@ -107,7 +107,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-neutral-700/50">
+        <div className="flex items-center justify-between py-2 px-4 border-b border-neutral-700/50">
           <div className="flex items-center space-x-2">
             <Keyboard className="w-4 h-4 text-neutral-400" />
             <h2 className="text-sm font-medium text-white">Shortcuts</h2>
@@ -138,7 +138,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                   {category.shortcuts.map(shortcut => (
                     <div
                       key={shortcut.id}
-                      className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg hover:bg-neutral-800 transition-colors group"
+                      className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg group"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-white truncate">{shortcut.label}</div>
@@ -160,7 +160,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                           </div>
                         ) : (
                           <kbd
-                            className="px-2 py-1 bg-neutral-700 border border-neutral-600 rounded text-xs text-neutral-300 min-w-[60px] text-center cursor-pointer hover:bg-neutral-600 transition-colors"
+                            className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs text-neutral-300 min-w-[60px] text-center cursor-pointer hover:bg-neutral-600 transition-colors"
                             onClick={() => handleEditStart(shortcut)}
                             title={`Click to edit ${shortcut.label} shortcut`}
                           >

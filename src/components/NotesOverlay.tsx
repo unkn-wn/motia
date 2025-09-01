@@ -28,6 +28,8 @@ interface NotesOverlayProps {
   // Drawing mode props
   isDrawingMode?: boolean;
   onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => void;
+  // Canvas panning state
+  isCanvasPanning?: boolean;
 }
 
 const NotesOverlay: React.FC<NotesOverlayProps> = ({
@@ -41,6 +43,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
   onWheel,
   isDrawingMode = false,
   onAddDrawing,
+  isCanvasPanning = false,
 }) => {
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
@@ -493,7 +496,7 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
               {showNoteLabels && editingNote === note.id ? (
                 /* Editing mode */
                 <div
-                  className="absolute pointer-events-auto bg-neutral-800/95 backdrop-blur-sm rounded-lg shadow-2xl border border-neutral-600/50 w-72 z-30"
+                  className={`absolute bg-neutral-800/95 backdrop-blur-sm rounded-lg shadow-2xl border border-neutral-600/50 w-72 z-30 ${isCanvasPanning ? 'pointer-events-none' : 'pointer-events-auto'}`}
                   style={{
                     left: `${note.canvasX}px`,
                     top: `${note.canvasY}px`,
@@ -536,14 +539,14 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
                 /* Display mode - only show when zoomed in enough */
                 showNoteLabels && (
                   <div
-                    className="absolute pointer-events-auto group cursor-pointer z-30"
+                    className={`absolute group cursor-pointer z-30 ${isCanvasPanning ? 'pointer-events-none' : 'pointer-events-auto'}`}
                     style={{
                       left: `${note.canvasX}px`,
                       top: `${note.canvasY}px`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    onMouseDown={(e) => handleMouseDown(e, note)}
-                    onClick={(e) => handleNoteClick(e, note)}
+                    onMouseDown={isCanvasPanning ? undefined : (e) => handleMouseDown(e, note)}
+                    onClick={isCanvasPanning ? undefined : (e) => handleNoteClick(e, note)}
                     onWheel={onWheel}
                     title="Click to jump to this timestamp, drag to move"
                   >
