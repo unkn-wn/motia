@@ -57,6 +57,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
   const [isFollowingPlayhead, setIsFollowingPlayhead] = useState(false);
+  const transformRef = useRef(transform);
 
   useEffect(() => {
     if (!waveformRef.current) return;
@@ -147,6 +148,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     };
   }, [audioFile]);
 
+  // Keep transformRef in sync with transform state
+  useEffect(() => {
+    transformRef.current = transform;
+  }, [transform]);
+
   // Effect to follow playhead when in following mode
   useEffect(() => {
     if (!isFollowingPlayhead || !canvasRef.current) return;
@@ -157,7 +163,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     // Calculate where the playhead should be in canvas coordinates (accounting for zoom)
     const timeProgress = duration > 0 ? currentTime / duration : 0;
     const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
-    const scaledWaveformHeight = baseWaveformHeight * transform.scale;
+    const scaledWaveformHeight = baseWaveformHeight * transformRef.current.scale;
     const targetPlayheadY = timeProgress * scaledWaveformHeight;
     const playheadPositionY = canvasHeight * 0.33; // Keep at 33% from top
 
@@ -166,7 +172,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       offsetY: playheadPositionY - targetPlayheadY, // Follow playhead vertically only
       scale: prev.scale // Maintain zoom level
     }));
-  }, [currentTime, duration, isFollowingPlayhead, transform.scale]);
+  }, [currentTime, duration, isFollowingPlayhead]);
 
   // Custom vertical waveform rendering with panning support
   useEffect(() => {
@@ -284,8 +290,10 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isPanning) {
       e.preventDefault();
-      const deltaX = e.clientX - lastPanPoint.x;
-      const deltaY = e.clientY - lastPanPoint.y;
+
+      // Use movementX/Y to get raw mouse movement without OS acceleration
+      const deltaX = (e.nativeEvent as MouseEvent).movementX || (e.clientX - lastPanPoint.x);
+      const deltaY = (e.nativeEvent as MouseEvent).movementY || (e.clientY - lastPanPoint.y);
 
       setTransform(prev => ({
         ...prev,

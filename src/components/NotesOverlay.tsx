@@ -90,12 +90,12 @@ const NotesOverlay: React.FC<NotesOverlayProps> = ({
     // Use adaptive compression for the entire drawing session
     const compressionResult = compressDrawingAdaptive(session.strokes);
 
-    console.log('Drawing session compression metrics:', {
-      originalSize: compressionResult.originalSize,
-      compressedSize: compressionResult.compressedSize,
-      reductionPercentage: compressionResult.reduction,
-      strokeCount: session.strokes.length
-    });
+    // console.log('Drawing session compression metrics:', {
+    //   originalSize: compressionResult.originalSize,
+    //   compressedSize: compressionResult.compressedSize,
+    //   reductionPercentage: compressionResult.reduction,
+    //   strokeCount: session.strokes.length
+    // });
 
     // Calculate bounds for the entire drawing
     const allPoints = session.strokes.flatMap(stroke => stroke.points);
