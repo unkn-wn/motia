@@ -1,7 +1,8 @@
 /**
- * Notes management utilities
+ * Utilities for managing notes data
  */
-import type { Note } from '../components/NotesOverlay';
+
+import type { Note } from '../types';
 
 /**
  * Sorts notes by time in ascending order

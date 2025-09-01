@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, Target } from 'lucide-react';
 
 interface AudioControlsProps {
@@ -42,43 +42,7 @@ const AudioControls: React.FC<AudioControlsProps> = ({
     onVolumeChange(newVolume);
   };
 
-  // Keyboard controls
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Prevent default behavior if the target is not an input/textarea
-    if ((e.target instanceof HTMLInputElement && e.target.type !== "range") || e.target instanceof HTMLTextAreaElement) {
-      return;
-    }
-
-    switch (e.code) {
-      case 'Space':
-        e.preventDefault();
-        onPlayPause();
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        onSkipBack();
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        onSkipForward();
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        onVolumeChange(Math.min(1, volume + 0.1));
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        onVolumeChange(Math.max(0, volume - 0.1));
-        break;
-    }
-  }, [onPlayPause, onSkipBack, onSkipForward, onVolumeChange, volume]);
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleKeyDown]);
+  // Keyboard controls are now handled centrally in home.tsx via the shortcuts system
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-neutral-900/50 backdrop-blur-xs border-neutral-700 z-30">

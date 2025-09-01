@@ -2,18 +2,7 @@
  * Canvas transform and coordinate utilities
  */
 
-export interface CanvasTransform {
-  offsetX: number;
-  offsetY: number;
-  scale: number;
-}
-
-export interface WaveformDimensions {
-  height: number;
-  width: number;
-  centerX: number;
-  offsetX: number;
-}
+import type { CanvasTransform, WaveformDimensions } from '../types/canvas';
 
 /**
  * Calculates waveform dimensions based on duration and window size
@@ -29,6 +18,7 @@ export const calculateWaveformDimensions = (duration: number): WaveformDimension
     height: waveformHeight,
     width: waveformWidth,
     centerX: waveformCanvasX,
+    centerY: waveformHeight / 2,
     offsetX: waveformX
   };
 };

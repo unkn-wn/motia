@@ -72,3 +72,9 @@ input[type="range"]::-moz-range-thumb {
 * {
   transition: all 150ms ease;
 }
+
+/* Backdrop blur support */
+.backdrop-blur-sm {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}

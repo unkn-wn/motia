@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 
-import { Plus } from 'lucide-react';
 import AudioControls from './AudioControls';
-import NotesOverlay, { type Note } from './NotesOverlay';
-import { isUserTyping } from '../utils/keyboardUtils';
-import type { CanvasTransform } from '../utils/canvasUtils';
+import NotesOverlay from './NotesOverlay';
+import type { Note } from '../types';
+import type { CanvasTransform } from '../types';
 
 interface WaveformPlayerProps {
   audioFile: File;
@@ -16,11 +15,20 @@ interface WaveformPlayerProps {
   onUpdateNote: (id: string, content: string) => void;
   onDeleteNote: (id: string) => void;
   onMoveNote?: (id: string, canvasX: number, canvasY: number) => void;
+  // Drawing props
+  isDrawingMode?: boolean;
+  onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => void;
 }
 
 export interface WaveformPlayerRef {
   seekToTime: (time: number) => void;
   getCanvasTransform: () => { offsetX: number; offsetY: number; scale: number };
+  playPause: () => void;
+  skipBack: () => void;
+  skipForward: () => void;
+  addNoteAtCurrentTime: () => void;
+  volumeUp: () => void;
+  volumeDown: () => void;
 }
 
 const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
@@ -31,7 +39,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   notes,
   onUpdateNote,
   onDeleteNote,
-  onMoveNote
+  onMoveNote,
+  isDrawingMode = false,
+  onAddDrawing
 }, ref) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,29 +57,6 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
   const [isFollowingPlayhead, setIsFollowingPlayhead] = useState(false);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when user is typing in input fields
-      const isTyping = isUserTyping();
-
-      // Add note with 'N' key - only if not typing
-      if ((e.key === 'n' || e.key === 'N') && !isTyping) {
-        e.preventDefault();
-        if (duration > 0) {
-          // Create a synthetic mouse event for the handler
-          const syntheticEvent = {
-            stopPropagation: () => { },
-          } as React.MouseEvent;
-          handleAddNoteAtCurrentTime(syntheticEvent);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [duration, currentTime, transform.scale]); // Added transform.scale dependency
 
   useEffect(() => {
     if (!waveformRef.current) return;
@@ -312,7 +299,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
+    e.cancelable && e.preventDefault();
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -440,6 +427,24 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   useImperativeHandle(ref, () => ({
     seekToTime: handleSeek,
     getCanvasTransform: () => transform,
+    playPause: handlePlayPause,
+    skipBack: handleSkipBack,
+    skipForward: handleSkipForward,
+    addNoteAtCurrentTime: () => {
+      // Create a synthetic event for the handler
+      const syntheticEvent = {
+        stopPropagation: () => {},
+      } as React.MouseEvent;
+      handleAddNoteAtCurrentTime(syntheticEvent);
+    },
+    volumeUp: () => {
+      const newVolume = Math.min(1, volume + 0.1);
+      handleVolumeChange(newVolume);
+    },
+    volumeDown: () => {
+      const newVolume = Math.max(0, volume - 0.1);
+      handleVolumeChange(newVolume);
+    },
   }));
 
   const handleVolumeChange = (newVolume: number) => {
@@ -458,7 +463,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
           <div className="absolute inset-0">
             <canvas
               ref={canvasRef}
-              className="w-full h-full bg-neutral-800 cursor-grab active:cursor-grabbing"
+              className="w-full h-full bg-neutral-800 cursor-grab active:cursor-grabbing touch-none"
               onClick={handleCanvasClick}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
@@ -468,25 +473,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
             />
 
             {/* Modern Add Note Button - positioned over waveform center */}
-            {duration > 0 && (
-              <button
-                onClick={handleAddNoteAtCurrentTime}
-                className="group absolute bg-neutral-700
-                          text-white rounded-full p-3 shadow-xl hover:shadow-2xl transition-all duration-300
-                          z-50 add-note-button pointer-events-auto cursor-pointer
-                          border-2 border-white/20 hover:border-white/40"
-                style={{
-                  left: '50%',
-                  top: '24px',
-                  transform: 'translateX(-50%)',
-                }}
-                title={`Add note at current time (${Math.floor(currentTime / 60)}:${Math.floor(currentTime % 60).toString().padStart(2, '0')}) - Press 'N' key`}
-              >
-                <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-                <div className="absolute inset-0 rounded-full
-                              opacity-0 group-hover:opacity-20 transition-opacity duration-300 animate-pulse"></div>
-              </button>
-            )}
+            {/* Note: Add Note button moved to FloatingDock component for better organization */}
 
             <div ref={waveformRef} className="hidden" />
           </div>
@@ -501,6 +488,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
             duration={duration}
             canvasTransform={transform}
             onWheel={handleWheel}
+            isDrawingMode={isDrawingMode}
+            onAddDrawing={onAddDrawing}
           />
         </div>
       </div>

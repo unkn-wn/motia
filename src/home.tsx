@@ -1,10 +1,13 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import FileUploader from './components/FileUploader';
 import WaveformPlayer, { type WaveformPlayerRef } from './components/WaveformPlayer';
 import NotesSidebar from './components/NotesSidebar';
-import type { Note } from './components/NotesOverlay';
+import KeyboardShortcuts from './components/KeyboardShortcuts';
+import FloatingDock from './components/FloatingDock';
+import type { Note } from './types';
 import { createNote } from './utils/notesUtils';
+import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler } from './utils/shortcutsUtils';
 import './style.css';
 
 function Home() {
@@ -14,6 +17,9 @@ function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -29,7 +35,72 @@ function Home() {
     setNotes(prev => [...prev, newNote]);
   }, []);
 
-  const handleUpdateNote = useCallback((id: string, content: string) => {
+  const handleAddNoteAtCurrentTime = useCallback(() => {
+    if (waveformPlayerRef.current) {
+      waveformPlayerRef.current.addNoteAtCurrentTime();
+    }
+  }, []);
+
+  const handleToggleDrawingMode = useCallback(() => {
+    setIsDrawingMode(prev => !prev);
+  }, []);
+
+  const handleAddDrawing = useCallback((time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => {
+    const newNote = createNote(time, canvasX, canvasY, '', 'gray');
+    newNote.type = 'drawing';
+    newNote.drawing = drawing;
+    setNotes(prev => [...prev, newNote]);
+  }, []);
+
+  // Keyboard shortcuts handlers
+  const handleUpdateShortcut = useCallback((id: string, newKey: string) => {
+    setShortcuts(prev => prev.map(shortcut =>
+      shortcut.id === id ? { ...shortcut, currentKey: newKey } : shortcut
+    ));
+  }, []);
+
+  const handleResetShortcuts = useCallback(() => {
+    setShortcuts(DEFAULT_SHORTCUTS);
+  }, []);
+
+  // Global keyboard event handler
+  useEffect(() => {
+    // Create action handlers
+    const actionHandlers = {
+      'ADD_NOTE': handleAddNoteAtCurrentTime,
+      'TOGGLE_PLAYBACK': () => {
+        if (waveformPlayerRef.current) {
+          waveformPlayerRef.current.playPause();
+        }
+      },
+      'REWIND': () => {
+        if (waveformPlayerRef.current) {
+          waveformPlayerRef.current.skipBack();
+        }
+      },
+      'FORWARD': () => {
+        if (waveformPlayerRef.current) {
+          waveformPlayerRef.current.skipForward();
+        }
+      },
+      'VOLUME_UP': () => {
+        if (waveformPlayerRef.current) {
+          waveformPlayerRef.current.volumeUp();
+        }
+      },
+      'VOLUME_DOWN': () => {
+        if (waveformPlayerRef.current) {
+          waveformPlayerRef.current.volumeDown();
+        }
+      }
+    };
+
+    // Create the centralized keyboard handler
+    const keyboardHandler = createKeyboardHandler(shortcuts, actionHandlers);
+
+    window.addEventListener('keydown', keyboardHandler);
+    return () => window.removeEventListener('keydown', keyboardHandler);
+  }, [shortcuts, handleAddNoteAtCurrentTime]);  const handleUpdateNote = useCallback((id: string, content: string) => {
     setNotes(prev => prev.map(note =>
       note.id === id ? { ...note, content } : note
     ));
@@ -67,6 +138,15 @@ function Home() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {/* Keyboard Shortcuts Panel */}
+      <KeyboardShortcuts
+        isOpen={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+        shortcuts={shortcuts}
+        onUpdateShortcut={handleUpdateShortcut}
+        onResetShortcuts={handleResetShortcuts}
+      />
+
       {!audioFile ? (
         <div className="h-screen flex items-center justify-center p-6">
           <FileUploader
@@ -86,6 +166,18 @@ function Home() {
             onUpdateNote={handleUpdateNote}
             onDeleteNote={handleDeleteNote}
             onMoveNote={handleMoveNote}
+            isDrawingMode={isDrawingMode}
+            onAddDrawing={handleAddDrawing}
+          />
+
+          {/* Floating Dock with Add Note and Keyboard Shortcuts */}
+          <FloatingDock
+            onAddNote={handleAddNoteAtCurrentTime}
+            onShowShortcuts={() => setShowShortcuts(true)}
+            canAddNote={!!audioFile}
+            currentTime={currentTime}
+            isDrawingMode={isDrawingMode}
+            onToggleDrawingMode={handleToggleDrawingMode}
           />
 
           {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
@@ -102,7 +194,7 @@ function Home() {
               ) : (
                 <ChevronLeft className="w-4 h-4" />
               )}
-              <span className="text-sm font-medium">{notes.length}</span>
+              <span className="text-sm font-medium">{notes.filter(note => note.type !== 'drawing').length}</span>
             </div>
           </button>
 

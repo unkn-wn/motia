@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import type { Note } from './NotesOverlay';
+import type { Note } from '../types';
 import { Clock, Trash2, Edit3, Palette, X, Check } from 'lucide-react';
 import { formatTime } from '../utils/timeUtils';
 import { getColorClasses } from '../utils/colorUtils';
@@ -34,12 +34,12 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   const colors = ['yellow', 'blue', 'green', 'pink', 'purple'];
 
   const sortedNotes = useMemo(() =>
-    sortNotesByTime(notes),
+    sortNotesByTime(notes.filter(note => note.type !== 'drawing')), // Filter out drawings from sidebar
     [notes]
   );
 
   const activeNote = useMemo(() =>
-    findActiveNote(notes, currentTime),
+    findActiveNote(notes.filter(note => note.type !== 'drawing'), currentTime), // Only find active text notes
     [notes, currentTime]
   );
 
