@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import FileUploader from '@components/FileUploader';
 import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
 import AudioControls from '@components/AudioControlsContainer';
-import NotesSidebar from '@components/NotesSidebar';
+import NotesSidebarContainer from '@components/NotesSidebar/NotesSidebarContainer';
 import KeyboardShortcuts from '@components/KeyboardShortcuts';
 import FloatingDock from '@components/FloatingDock';
 import { AudioProvider } from '@contexts/AudioContext';
@@ -212,14 +212,13 @@ function Home() {
             <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${
               sidebarOpen ? 'translate-x-0' : 'translate-x-full'
             }`}>
-              <NotesSidebar
+              <NotesSidebarContainer
                 notes={notes}
                 onDeleteNote={handleDeleteNote}
                 onJumpToTime={handleJumpToTime}
                 onChangeNoteColor={handleChangeNoteColor}
                 onUpdateNote={handleUpdateNote}
                 currentTime={currentTime}
-                isPlaying={isPlaying}
               />
             </div>
           </div>
