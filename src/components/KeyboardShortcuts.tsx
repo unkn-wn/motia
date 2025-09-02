@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { X, Keyboard, RotateCcw } from 'lucide-react';
-import type { KeyboardShortcut } from '../utils/shortcutsUtils';
-import { formatKeyDisplay, isValidShortcut } from '../utils/shortcutsUtils';
+import type { KeyboardShortcut } from '@utils/shortcutsUtils';
+import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
+import { XIcon, KeyboardIcon, RotateCcwIcon } from '@assets/icons';
 
 interface KeyboardShortcutsProps {
   isOpen: boolean;
@@ -109,7 +109,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between py-2 px-4 border-b border-neutral-700/50">
           <div className="flex items-center space-x-2">
-            <Keyboard className="w-4 h-4 text-neutral-400" />
+            <KeyboardIcon className="w-4 h-4 text-neutral-400" />
             <h2 className="text-sm font-medium text-white">Shortcuts</h2>
           </div>
           <div className="flex items-center space-x-1">
@@ -118,13 +118,13 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
               className="p-1.5 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white transition-colors"
               title="Reset to defaults"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcwIcon className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onClose}
               className="p-1.5 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white transition-colors"
             >
-              <X className="w-3.5 h-3.5" />
+              <XIcon className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -155,7 +155,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                               className="p-1 bg-neutral-600 hover:bg-neutral-700 text-white cursor-pointer rounded transition-colors"
                               title="Cancel (ESC)"
                             >
-                              <X className="w-3 h-3" />
+                              <XIcon className="w-3 h-3" />
                             </button>
                           </div>
                         ) : (

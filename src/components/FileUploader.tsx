@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Upload } from 'lucide-react';
+import { UploadIcon } from '@assets/icons';
 
 interface FileUploaderProps {
   onFileSelect: (file: File) => void;
@@ -28,7 +28,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelect, isLoading }) 
           {isLoading ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
-            <Upload className="w-5 h-5" />
+            <UploadIcon className="w-5 h-5" />
           )}
           <span className="text-lg">
             {isLoading ? 'Processing...' : 'Upload Audio'}

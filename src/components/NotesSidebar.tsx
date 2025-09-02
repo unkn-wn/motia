@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import type { Note } from '../types';
-import { Clock, Trash2, Edit3, Palette, X, Check } from 'lucide-react';
-import { formatTime } from '../utils/timeUtils';
-import { getColorClasses } from '../utils/colorUtils';
-import { sortNotesByTime, findActiveNote } from '../utils/notesUtils';
+import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
+import type { Note } from '../types/notes';
+import { formatTime } from '@utils/timeUtils';
+import { getColorClasses } from '@utils/colorUtils';
+import { sortNotesByTime, findActiveNote } from '@utils/notesUtils';
+import { ClockIcon, Trash2Icon, Edit3Icon, PaletteIcon, XIcon, CheckIcon } from '@assets/icons';
 
 interface NotesSidebarProps {
   notes: Note[];
@@ -15,6 +15,7 @@ interface NotesSidebarProps {
   isPlaying?: boolean;
 }
 
+// Memoized component that only rerenders when notes change or when crossing note boundaries
 const NotesSidebar: React.FC<NotesSidebarProps> = ({
   notes,
   onDeleteNote,
@@ -92,7 +93,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
       <div className="p-4 space-y-3">
         {sortedNotes.length === 0 ? (
           <div className="text-center py-8 text-neutral-400">
-            <Edit3 className="w-8 h-8 mx-auto mb-3 opacity-50" />
+            <Edit3Icon className="w-8 h-8 mx-auto mb-3 opacity-50" />
             <p>No notes yet</p>
             <p className="text-sm">Press 'N' or the plus to add a note!</p>
           </div>
@@ -112,14 +113,14 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                   onClick={() => onJumpToTime(note.time)}
                   className="flex items-center space-x-1 text-sm hover:text-neutral-100 cursor-pointer transition-colors"
                 >
-                  <Clock className="w-4 h-4" />
+                  <ClockIcon className="w-4 h-4" />
                   <span>{formatTime(note.time)}</span>
                 </button>
 
                 <div className="flex items-center space-x-1">
                   <div className="relative group">
                     <button className="p-1 hover:bg-neutral-600 rounded transition-colors">
-                      <Palette className="w-4 h-4" />
+                      <PaletteIcon className="w-4 h-4" />
                     </button>
                     <div className="absolute right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-lg p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
                       <div className="flex space-x-1">
@@ -147,7 +148,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                     onClick={() => onDeleteNote(note.id)}
                     className="p-1 hover:bg-red-600/50 hover:bg-opacity-50 text-red-400 rounded cursor-pointer transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2Icon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -174,7 +175,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                                 transition-all duration-200"
                       title="Cancel (Esc)"
                     >
-                      <X className="w-3 h-3" />
+                      <XIcon className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => handleEditSave(note.id)}
@@ -182,7 +183,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
                                 transition-all duration-200"
                       title="Save (Ctrl+Enter)"
                     >
-                      <Check className="w-3 h-3" />
+                      <CheckIcon className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -209,4 +210,31 @@ const NotesSidebar: React.FC<NotesSidebarProps> = ({
   );
 };
 
-export default NotesSidebar;
+// Memoized component to prevent unnecessary rerenders
+const MemoizedNotesSidebar = memo(NotesSidebar, (prevProps, nextProps) => {
+  // Only rerender if:
+  // 1. Notes array changes
+  // 2. The active note changes (crossing note boundaries)
+
+  // Check if notes changed
+  if (prevProps.notes.length !== nextProps.notes.length) return false;
+  if (prevProps.notes !== nextProps.notes) return false;
+
+  // Check if we crossed a note boundary (active note changed)
+  const prevActiveNote = findActiveNote(
+    prevProps.notes.filter(note => note.type !== 'drawing'),
+    prevProps.currentTime || 0
+  );
+  const nextActiveNote = findActiveNote(
+    nextProps.notes.filter(note => note.type !== 'drawing'),
+    nextProps.currentTime || 0
+  );
+
+  if (prevActiveNote?.id !== nextActiveNote?.id) return false;
+
+  return true;
+});
+
+MemoizedNotesSidebar.displayName = 'NotesSidebar';
+
+export default MemoizedNotesSidebar;

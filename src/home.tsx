@@ -1,13 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import FileUploader from './components/FileUploader';
-import WaveformPlayer, { type WaveformPlayerRef } from './components/WaveformPlayer';
-import NotesSidebar from './components/NotesSidebar';
-import KeyboardShortcuts from './components/KeyboardShortcuts';
-import FloatingDock from './components/FloatingDock';
-import type { Note } from './types';
-import { createNote } from './utils/notesUtils';
-import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler } from './utils/shortcutsUtils';
+import FileUploader from '@components/FileUploader';
+import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
+import AudioControls from '@components/AudioControlsContainer';
+import NotesSidebar from '@components/NotesSidebar';
+import KeyboardShortcuts from '@components/KeyboardShortcuts';
+import FloatingDock from '@components/FloatingDock';
+import { AudioProvider } from '@contexts/AudioContext';
+import type { Note } from '@types';
+import { createNote } from '@utils/notesUtils';
+import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler } from '@utils/shortcutsUtils';
+import { ChevronLeftIcon, ChevronRightIcon } from '@assets/icons';
 import './style.css';
 
 function Home() {
@@ -43,6 +45,10 @@ function Home() {
 
   const handleToggleDrawingMode = useCallback(() => {
     setIsDrawingMode(prev => !prev);
+  }, []);
+
+  const handleShowShortcuts = useCallback(() => {
+    setShowShortcuts(true);
   }, []);
 
   const handleAddDrawing = useCallback((time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => {
@@ -155,64 +161,69 @@ function Home() {
           />
         </div>
       ) : (
-        <div className="relative h-screen overflow-hidden">
-          <WaveformPlayer
-            ref={waveformPlayerRef}
-            audioFile={audioFile}
-            onAddNote={handleAddNote}
-            onCurrentTimeChange={handleCurrentTimeChange}
-            onPlayStateChange={handlePlayStateChange}
-            notes={notes}
-            onUpdateNote={handleUpdateNote}
-            onDeleteNote={handleDeleteNote}
-            onMoveNote={handleMoveNote}
-            isDrawingMode={isDrawingMode}
-            onAddDrawing={handleAddDrawing}
-          />
-
-          {/* Floating Dock with Add Note and Keyboard Shortcuts */}
-          <FloatingDock
-            onAddNote={handleAddNoteAtCurrentTime}
-            onShowShortcuts={() => setShowShortcuts(true)}
-            canAddNote={!!audioFile}
-            currentTime={currentTime}
-            isDrawingMode={isDrawingMode}
-            onToggleDrawingMode={handleToggleDrawingMode}
-          />
-
-          {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${
-              sidebarOpen ? 'right-80' : 'right-0'
-            }`}
-            title={sidebarOpen ? 'Hide notes' : 'Show notes'}
-          >
-            <div className="flex items-center space-x-2">
-              {sidebarOpen ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-              <span className="text-sm font-medium">{notes.filter(note => note.type !== 'drawing').length}</span>
-            </div>
-          </button>
-
-          {/* Collapsible Sidebar */}
-          <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${
-            sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}>
-            <NotesSidebar
+        <AudioProvider
+          onCurrentTimeChange={handleCurrentTimeChange}
+          onPlayStateChange={handlePlayStateChange}
+        >
+          <div className="relative h-screen overflow-hidden">
+            <WaveformPlayer
+              ref={waveformPlayerRef}
+              audioFile={audioFile}
+              onAddNote={handleAddNote}
               notes={notes}
-              onDeleteNote={handleDeleteNote}
-              onJumpToTime={handleJumpToTime}
-              onChangeNoteColor={handleChangeNoteColor}
               onUpdateNote={handleUpdateNote}
-              currentTime={currentTime}
-              isPlaying={isPlaying}
+              onDeleteNote={handleDeleteNote}
+              onMoveNote={handleMoveNote}
+              isDrawingMode={isDrawingMode}
+              onAddDrawing={handleAddDrawing}
             />
+
+            {/* Audio Controls - now outside WaveformPlayer */}
+            <AudioControls />
+
+            {/* Floating Dock with Add Note and Keyboard Shortcuts */}
+            <FloatingDock
+              onAddNote={handleAddNoteAtCurrentTime}
+              onShowShortcuts={handleShowShortcuts}
+              canAddNote={!!audioFile}
+              isDrawingMode={isDrawingMode}
+              onToggleDrawingMode={handleToggleDrawingMode}
+            />
+
+            {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${
+                sidebarOpen ? 'right-80' : 'right-0'
+              }`}
+              title={sidebarOpen ? 'Hide notes' : 'Show notes'}
+            >
+              <div className="flex items-center space-x-2">
+                {sidebarOpen ? (
+                  <ChevronRightIcon className="w-4 h-4" />
+                ) : (
+                  <ChevronLeftIcon className="w-4 h-4" />
+                )}
+                <span className="text-sm font-medium">{notes.filter(note => note.type !== 'drawing').length}</span>
+              </div>
+            </button>
+
+            {/* Collapsible Sidebar */}
+            <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${
+              sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}>
+              <NotesSidebar
+                notes={notes}
+                onDeleteNote={handleDeleteNote}
+                onJumpToTime={handleJumpToTime}
+                onChangeNoteColor={handleChangeNoteColor}
+                onUpdateNote={handleUpdateNote}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+              />
+            </div>
           </div>
-        </div>
+        </AudioProvider>
       )}
     </div>
   );
