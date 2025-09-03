@@ -73,7 +73,9 @@ export const useMouseInteractions = () => {
   }, [isPanning, lastPanPoint, setTransform, setLastPanPoint]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.cancelable && e.preventDefault();
+    if (e.cancelable) {
+      e.preventDefault();
+    }
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;

@@ -82,7 +82,9 @@ export const isValidShortcut = (key: string, shortcuts: KeyboardShortcut[], excl
   );
 
   return !hasConflict;
-};/**
+};
+
+/**
  * Format key display name for UI
  */
 export const formatKeyDisplay = (key: string): string => {

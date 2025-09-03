@@ -18,7 +18,6 @@ function Home() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -138,10 +137,6 @@ function Home() {
     setCurrentTime(time);
   }, []);
 
-  const handlePlayStateChange = useCallback((playing: boolean) => {
-    setIsPlaying(playing);
-  }, []);
-
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Keyboard Shortcuts Panel */}
@@ -163,7 +158,6 @@ function Home() {
       ) : (
         <AudioProvider
           onCurrentTimeChange={handleCurrentTimeChange}
-          onPlayStateChange={handlePlayStateChange}
         >
           <div className="relative h-screen overflow-hidden">
             <WaveformPlayer

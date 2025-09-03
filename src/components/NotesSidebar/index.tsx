@@ -50,7 +50,7 @@ const NotesSidebar: React.FC = memo(() => {
               block: 'center',
               inline: 'nearest'
             });
-          } catch (error) {
+          } catch {
             // Fallback for older browsers
             newActiveElement.scrollIntoView(true);
           }

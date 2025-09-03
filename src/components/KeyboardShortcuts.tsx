@@ -21,6 +21,11 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string>('');
 
+  const handleCancel = useCallback(() => {
+    setEditingId(null);
+    setKeyError('');
+  }, []);
+
   // Handle ESC key to close panel or cancel editing
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -42,7 +47,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
 
     window.addEventListener('keydown', handleEscape, { capture: true });
     return () => window.removeEventListener('keydown', handleEscape, { capture: true });
-  }, [isOpen, editingId, onClose]);
+  }, [isOpen, editingId, onClose, handleCancel]);
 
   const handleEditStart = useCallback((shortcut: KeyboardShortcut) => {
     setEditingId(shortcut.id);
@@ -74,11 +79,6 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
       setKeyError('');
     }
   }, [shortcuts, editingId, onUpdateShortcut]);
-
-  const handleCancel = useCallback(() => {
-    setEditingId(null);
-    setKeyError('');
-  }, []);
 
   // Add global key capture when editing
   useEffect(() => {

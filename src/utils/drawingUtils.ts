@@ -273,8 +273,8 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
 
   // Extract common properties
   const firstStroke = strokes[0];
-  let commonColor = firstStroke.data.c || firstStroke.data.color;
-  let commonStrokeWidth = firstStroke.data.w || firstStroke.data.strokeWidth;
+  const commonColor = firstStroke.data.c || firstStroke.data.color;
+  const commonStrokeWidth = firstStroke.data.w || firstStroke.data.strokeWidth;
 
   // Check if all strokes share the same color and width
   const allSameColor = strokes.every(stroke =>
