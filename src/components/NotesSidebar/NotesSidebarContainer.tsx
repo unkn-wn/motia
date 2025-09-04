@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { NotesProvider } from './NotesContext';
+import { NotesProvider } from '@contexts/NotesContext';
 import NotesSidebar from './index';
 import type { Note } from '../../types/notes';
 

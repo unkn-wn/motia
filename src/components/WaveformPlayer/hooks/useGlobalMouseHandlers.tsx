@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useWaveformContext } from '../contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/WaveformContext';
 import { useDrawingInteractions } from './useDrawingInteractions';
 import { optimizeDrawingPoints } from '@utils/drawingUtils';
 
@@ -22,7 +22,9 @@ export const useGlobalMouseHandlers = () => {
   const { handleDrawingEnd } = useDrawingInteractions();
 
   useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
+    const handleGlobalMouseMove = (e: MouseEvent | PointerEvent) => {
+      // Avoid double-processing: if this is a PointerEvent from a mouse, ignore it and rely on mousemove
+      if ('pointerType' in e && e.pointerType === 'mouse') return;
       // Handle note dragging
       if (dragging && onMoveNote) {
         const deltaX = e.clientX - dragging.startX;
@@ -31,8 +33,8 @@ export const useGlobalMouseHandlers = () => {
         const newCanvasX = dragging.initialCanvasX + deltaX / transform.scale;
         const newCanvasY = dragging.initialCanvasY + deltaY / transform.scale;
 
-        onMoveNote(dragging.id, newCanvasX, newCanvasY);
-        setDragOccurred(true);
+  onMoveNote(dragging.id, newCanvasX, newCanvasY);
+  setDragOccurred(true);
       }
 
       // Handle drawing
@@ -64,7 +66,9 @@ export const useGlobalMouseHandlers = () => {
       }
     };
 
-    const handleGlobalMouseUp = () => {
+    const handleGlobalMouseUp = (e?: MouseEvent | PointerEvent) => {
+      // Avoid double-processing on desktop
+      if (e && 'pointerType' in e && e.pointerType === 'mouse') return;
       // Handle panning
       if (isPanning) {
         setIsPanning(false);
@@ -72,24 +76,28 @@ export const useGlobalMouseHandlers = () => {
 
       // Handle note dragging
       if (dragging) {
-        setDragging(null);
-        setTimeout(() => setDragOccurred(false), 10);
+  setDragging(null);
+  setTimeout(() => setDragOccurred(false), 10);
       }
 
       // Handle drawing - this is critical for stopping drawing
       if (isDrawing) {
-        handleDrawingEnd();
+  handleDrawingEnd();
       }
     };
 
     // Only add listeners if we have active interactions
     if (dragging || isDrawing || isPanning) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
-      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('mouseup', handleGlobalMouseUp as EventListener);
+      document.addEventListener('pointermove', handleGlobalMouseMove as EventListener, { passive: true } as AddEventListenerOptions);
+      document.addEventListener('pointerup', handleGlobalMouseUp as EventListener);
 
       return () => {
-        document.removeEventListener('mousemove', handleGlobalMouseMove);
-        document.removeEventListener('mouseup', handleGlobalMouseUp);
+  document.removeEventListener('mousemove', handleGlobalMouseMove);
+  document.removeEventListener('mouseup', handleGlobalMouseUp as EventListener);
+  document.removeEventListener('pointermove', handleGlobalMouseMove as EventListener);
+  document.removeEventListener('pointerup', handleGlobalMouseUp as EventListener);
       };
     }
   }, [

@@ -12,6 +12,62 @@ export interface KeyboardShortcut {
   category: 'playback' | 'notes' | 'navigation';
 }
 
+// Touch gestures mapping (non-breaking: additive)
+export type TouchGesture = 'tap' | 'double-tap' | 'long-press' | 'two-finger-tap' | 'pinch' | 'pan';
+
+export interface TouchShortcut {
+  id: string;
+  label: string;
+  description: string;
+  gesture: TouchGesture;
+  action: string;
+  category: 'playback' | 'notes' | 'navigation';
+}
+
+export const DEFAULT_TOUCH_SHORTCUTS: TouchShortcut[] = [
+  {
+    id: 'tap-toggle-play',
+    label: 'Tap to Play/Pause',
+    description: 'Single tap toggles audio playback',
+    gesture: 'tap',
+    action: 'TOGGLE_PLAYBACK',
+    category: 'playback',
+  },
+  {
+    id: 'double-tap-add-note',
+    label: 'Double Tap Add Note',
+    description: 'Double tap to add a note at tapped time',
+    gesture: 'double-tap',
+    action: 'ADD_NOTE',
+    category: 'notes',
+  },
+  {
+    id: 'two-finger-tap-recenter',
+    label: 'Two-finger Recenter',
+    description: 'Two-finger tap to recenter on playhead',
+    gesture: 'two-finger-tap',
+    action: 'RECENTER',
+    category: 'navigation',
+  },
+  // Pinch and pan are continuous gestures handled in canvas; listed here for docs
+  {
+    id: 'pinch-zoom',
+    label: 'Pinch to Zoom',
+    description: 'Pinch gesture to zoom waveform',
+    gesture: 'pinch',
+    action: 'ZOOM',
+    category: 'navigation',
+  },
+  {
+    id: 'pan-canvas',
+    label: 'Drag to Pan',
+    description: 'Drag to pan around the canvas',
+    gesture: 'pan',
+    action: 'PAN',
+    category: 'navigation',
+  },
+];
+
 export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
   {
     id: 'play-pause',
@@ -151,4 +207,32 @@ export const createKeyboardHandler = (
     e.stopPropagation();
     handler();
   };
+};
+
+// Touch helpers: map gesture to a handler by action name
+export const createTouchHandler = (
+  shortcuts: TouchShortcut[],
+  handlers: Record<string, () => void>
+) => {
+  return (gesture: TouchGesture) => {
+    const shortcut = shortcuts.find(s => s.gesture === gesture);
+    if (!shortcut) return;
+    const handler = handlers[shortcut.action];
+    if (!handler) return;
+    handler();
+  };
+};
+
+// Note editing helpers: centralized combos for Save/Cancel while in textareas
+export const isNoteEditSubmitCombo = (e: KeyboardEvent | React.KeyboardEvent): boolean => {
+  if (e.key !== 'Enter') return false;
+  // Allow Ctrl+Enter, Cmd+Enter (meta), or Shift+Enter to save
+  const ke = e as KeyboardEvent;
+  // React.KeyboardEvent has same flags
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return !!(ke.ctrlKey || (ke as any).metaKey || ke.shiftKey);
+};
+
+export const isNoteEditCancelKey = (e: KeyboardEvent | React.KeyboardEvent): boolean => {
+  return e.key === 'Escape';
 };

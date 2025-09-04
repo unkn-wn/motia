@@ -5,7 +5,7 @@ import type { Note, CanvasTransform } from '@types';
 import type { DrawingPoint, DrawingSession } from '@types';
 
 // Import refactored components and hooks
-import { WaveformProvider } from './contexts/WaveformContext';
+import { WaveformProvider } from '@contexts/WaveformContext';
 import { WaveformPlayerContent } from './components/WaveformPlayerContent';
 
 export interface WaveformPlayerProps {
@@ -81,6 +81,10 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     initialCanvasY: number;
   } | null>(null);
   const [dragOccurred, setDragOccurred] = useState(false);
+
+  // Context menu and delete-confirm state
+  const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number; noteId: string | null }>({ isOpen: false, x: 0, y: 0, noteId: null });
+  const [deleteConfirmNoteId, setDeleteConfirmNoteId] = useState<string | null>(null);
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -320,7 +324,15 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     canvasRef,
 
     // Constants
-    NOTE_LABEL_HIDE_THRESHOLD,
+  NOTE_LABEL_HIDE_THRESHOLD,
+
+  // Context menu
+  contextMenu,
+  setContextMenu,
+
+  // Delete confirmation
+  deleteConfirmNoteId,
+  setDeleteConfirmNoteId,
   };
 
   return (

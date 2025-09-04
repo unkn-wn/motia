@@ -1,5 +1,5 @@
 import { useMemo, useRef, useCallback } from 'react';
-import type { Note } from '../../types/notes';
+import type { Note } from '@types';
 import { findActiveNote } from '@utils/notesUtils';
 
 /**

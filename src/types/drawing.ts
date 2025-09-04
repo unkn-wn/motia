@@ -17,7 +17,7 @@ export interface DrawingData {
   // Raw strokes (for rendering and backward compatibility)
   strokes?: DrawingStroke[];
   // Compressed data (for storage)
-  compressed?: any[];
+  compressed?: unknown[];
   bounds: { width: number; height: number };
   // Storage metrics
   originalSize?: number;
@@ -45,7 +45,7 @@ export type CompressionType =
 
 export interface CompressedStroke {
   type: CompressionType;
-  data: any;
+  data: unknown;
 }
 
 export interface CompressionResult {

@@ -62,6 +62,24 @@ export interface WaveformContextValue {
 
   // Constants
   NOTE_LABEL_HIDE_THRESHOLD: number;
+
+  // Context menu state
+  contextMenu: {
+    isOpen: boolean;
+    x: number;
+    y: number;
+    noteId: string | null;
+  };
+  setContextMenu: React.Dispatch<React.SetStateAction<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    noteId: string | null;
+  }>>;
+
+  // Delete confirmation dialog
+  deleteConfirmNoteId: string | null;
+  setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const WaveformContext = createContext<WaveformContextValue | null>(null);

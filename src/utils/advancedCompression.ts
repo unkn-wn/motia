@@ -204,20 +204,20 @@ export const compressStrokeAdvancedAdaptive = (stroke: DrawingStroke): Compresse
 export const decompressStrokeAdvancedAdaptive = (compressed: CompressedStroke): DrawingStroke => {
   switch (compressed.type) {
     case 'raw':
-      return compressed.data;
+  return compressed.data as DrawingStroke;
     case 'ultraCompact':
     case 'ultraCompact20':
-      return decompressStrokeUltraCompact(compressed.data);
+  return decompressStrokeUltraCompact(compressed.data as any);
     case 'rle':
-      return decompressStrokeRLE(compressed.data);
+  return decompressStrokeRLE(compressed.data as any);
     case 'vectorQuantization':
     case 'vectorQuantization2':
-      return decompressStrokeVectorQuantization(compressed.data);
+  return decompressStrokeVectorQuantization(compressed.data as any);
     case 'session':
       // This is handled at the session level, not individual stroke level
       throw new Error('Session compression should be decompressed at session level');
     default:
-      return compressed.data;
+  return compressed.data as DrawingStroke;
   }
 };
 
@@ -227,11 +227,11 @@ export const decompressStrokeAdvancedAdaptive = (compressed: CompressedStroke): 
 export const decompressSession = (compressedSession: CompressedStroke[]): DrawingStroke[] => {
   if (compressedSession.length === 1 && compressedSession[0].type === 'session') {
     // Handle session-level compression
-    const sessionData = compressedSession[0].data;
-    const commonColor = sessionData.commonColor;
-    const commonStrokeWidth = sessionData.commonStrokeWidth;
+  const sessionData = compressedSession[0].data as any;
+  const commonColor = sessionData.commonColor as string;
+  const commonStrokeWidth = sessionData.commonStrokeWidth as number;
 
-    return sessionData.strokes.map((compressedStroke: CompressedStroke) => {
+  return (sessionData.strokes as CompressedStroke[]).map((compressedStroke: CompressedStroke) => {
       const decompressed = decompressStrokeAdvancedAdaptive(compressedStroke);
 
       // Restore common properties

@@ -1,7 +1,9 @@
 import React, { memo, useCallback, useState } from 'react';
 import type { Note } from '../../types/notes';
 import { formatTime } from '@utils/timeUtils';
+import { isNoteEditSubmitCombo, isNoteEditCancelKey } from '@utils/shortcutsUtils';
 import { getColorClasses } from '@utils/colorUtils';
+import { getNoteItemActions } from './noteItemActions';
 import {
   ClockIcon,
   Trash2Icon,
@@ -13,18 +15,6 @@ import {
 interface NoteItemProps {
   note: Note;
 }
-
-// Create a global actions store to avoid prop changes
-let globalActions: {
-  onDeleteNote: (id: string) => void;
-  onJumpToTime: (time: number) => void;
-  onChangeNoteColor: (id: string, color: string) => void;
-  onUpdateNote: (id: string, content: string) => void;
-} | null = null;
-
-export const setNoteItemActions = (actions: typeof globalActions) => {
-  globalActions = actions;
-};
 
 const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
 
@@ -41,9 +31,8 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
   }, [note.content]);
 
   const handleEditSave = useCallback(() => {
-    if (globalActions) {
-      globalActions.onUpdateNote(note.id, editContent);
-    }
+  const actions = getNoteItemActions();
+  if (actions) actions.onUpdateNote(note.id, editContent);
     setIsEditing(false);
     setEditContent('');
   }, [note.id, editContent]);
@@ -54,10 +43,10 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
   }, []);
 
   const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.shiftKey || e.metaKey)) {
+    if (isNoteEditSubmitCombo(e)) {
       e.preventDefault();
       handleEditSave();
-    } else if (e.key === 'Escape') {
+    } else if (isNoteEditCancelKey(e)) {
       e.preventDefault();
       handleEditCancel();
     }
@@ -68,21 +57,18 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
   }, [handleEditStart]);
 
   const handleDeleteClick = useCallback(() => {
-    if (globalActions) {
-      globalActions.onDeleteNote(note.id);
-    }
+  const actions = getNoteItemActions();
+  if (actions) actions.onDeleteNote(note.id);
   }, [note.id]);
 
   const handleJumpClick = useCallback(() => {
-    if (globalActions) {
-      globalActions.onJumpToTime(note.time);
-    }
+  const actions = getNoteItemActions();
+  if (actions) actions.onJumpToTime(note.time);
   }, [note.time]);
 
   const handleColorChange = useCallback((color: string) => {
-    if (globalActions) {
-      globalActions.onChangeNoteColor(note.id, color);
-    }
+  const actions = getNoteItemActions();
+  if (actions) actions.onChangeNoteColor(note.id, color);
   }, [note.id]);
 
   return (
@@ -144,8 +130,8 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
             onKeyDown={handleTextareaKeyDown}
-            className="w-full field-sizing-content p-2 pr-12 bg-neutral-900/80 text-white text-sm rounded border border-neutral-600
-                      focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:bg-neutral-900
+            className="w-full field-sizing-content p-2 pr-12 bg-neutral-900/80 text-white text-sm rounded ring-neutral-600
+                      focus:outline-none ring-1 focus:ring-blue-500/50 focus:bg-neutral-900
                       placeholder-neutral-500 leading-relaxed resize-none"
             placeholder="Empty note..."
             autoFocus

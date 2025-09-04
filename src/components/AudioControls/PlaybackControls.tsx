@@ -1,5 +1,6 @@
-import React, { memo } from 'react';
-import { usePlaybackState } from './hooks';
+import React, { memo, useSyncExternalStore } from 'react';
+import { usePlaybackContext } from '@contexts/AudioControlsContext';
+import { isPlayingStore } from './state';
 import {
   PlayIcon,
   PauseIcon,
@@ -10,7 +11,8 @@ import {
 
 // Optimized PlaybackControls that uses hooks directly to avoid prop drilling
 const PlaybackControls: React.FC = memo(() => {
-  const { isPlaying, playPause, skipBack, skipForward, recenterToPlayhead } = usePlaybackState();
+  const { playPause, skipBack, skipForward, recenterToPlayhead } = usePlaybackContext();
+  const isPlaying = useSyncExternalStore(isPlayingStore.subscribe, isPlayingStore.getSnapshot);
 
   return (
     <div className="flex items-center space-x-2">

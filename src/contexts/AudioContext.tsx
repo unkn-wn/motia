@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useRef, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import WaveSurfer from 'wavesurfer.js';
+import { isPlayingStore, volumeStore } from '@components/AudioControls/state';
 
 interface AudioState {
   isPlaying: boolean;
@@ -87,19 +88,19 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
   const setIsPlayingInternal = useCallback((playing: boolean) => {
     setIsPlaying(playing);
     onPlayStateChangeRef.current?.(playing);
-  }, []);
+  }, [onPlayStateChangeRef]);
 
   const setCurrentTimeInternal = useCallback((time: number) => {
     setCurrentTime(time);
     onCurrentTimeChangeRef.current?.(time);
-  }, []);
+  }, [onCurrentTimeChangeRef]);
 
   // Playback controls - now stable
   const playPause = useCallback(() => {
     if (wavesurferRef.current) {
       wavesurferRef.current.playPause();
     }
-  }, []);
+  }, [setCurrentTimeInternal]);
 
   const skipBack = useCallback(() => {
     if (wavesurferRef.current && durationRef.current > 0) {
@@ -108,7 +109,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
       wavesurferRef.current.seekTo(newPos / durationRef.current);
       setCurrentTimeInternal(newPos);
     }
-  }, []); // Remove dependency - setCurrentTimeInternal should be stable
+  }, [setCurrentTimeInternal]);
 
   const skipForward = useCallback(() => {
     if (wavesurferRef.current && durationRef.current > 0) {
@@ -117,7 +118,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
       wavesurferRef.current.seekTo(newPos / durationRef.current);
       setCurrentTimeInternal(newPos);
     }
-  }, []); // Remove dependency - setCurrentTimeInternal should be stable
+  }, [setCurrentTimeInternal]);
 
   const seekToTime = useCallback((time: number) => {
     if (wavesurferRef.current && durationRef.current > 0) {
@@ -125,7 +126,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
       wavesurferRef.current.seekTo(seekPosition);
       setCurrentTimeInternal(time);
     }
-  }, []); // Remove dependency - setCurrentTimeInternal should be stable
+  }, [setCurrentTimeInternal]);
 
   // Volume controls - now stable
   const setVolume = useCallback((newVolume: number) => {
@@ -138,12 +139,12 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
   const volumeUp = useCallback(() => {
     const newVolume = Math.min(1, volumeRef.current + 0.1);
     setVolume(newVolume);
-  }, []); // Remove dependency - setVolume should be stable
+  }, [setVolume]);
 
   const volumeDown = useCallback(() => {
     const newVolume = Math.max(0, volumeRef.current - 0.1);
     setVolume(newVolume);
-  }, []); // Remove dependency - setVolume should be stable
+  }, [setVolume]);
 
   // Waveform controls
   const recenterToPlayhead = useCallback(() => {
@@ -200,11 +201,42 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
     duration,
     volume,
     waveformData,
+    playPause,
+    skipBack,
+    skipForward,
+    seekToTime,
+    setVolume,
+    volumeUp,
+    volumeDown,
+    recenterToPlayhead,
+    setRecenterToPlayhead,
+    setIsPlayingInternal,
+    setCurrentTimeInternal,
+    setDuration,
+    setWaveformData,
+    setWavesurferRef,
+    getWavesurferRef,
   ]);
 
   return (
     <AudioContext.Provider value={contextValue}>
-      {children}
+  {children}
+  {/* Synchronize external stores for fine-grained subscribers */}
+  <AudioProviderEffects isPlaying={isPlaying} volume={volume} />
     </AudioContext.Provider>
   );
+};
+
+// Keep external stores in sync with provider state changes
+export const AudioProviderEffects: React.FC<{
+  isPlaying: boolean;
+  volume: number;
+}> = ({ isPlaying, volume }) => {
+  useEffect(() => {
+    isPlayingStore.set(isPlaying);
+  }, [isPlaying]);
+  useEffect(() => {
+    volumeStore.set(volume);
+  }, [volume]);
+  return null;
 };

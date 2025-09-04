@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { useWaveformContext } from '../contexts/WaveformContext';
-import { screenToCanvasCoords, findNoteAtPosition } from '../utils/canvasUtils';
+import { useWaveformContext } from '@contexts/WaveformContext';
+import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
 
 export const useMouseInteractions = () => {
   const {

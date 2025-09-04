@@ -272,16 +272,16 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
   if (strokes.length <= 1) return strokes;
 
   // Extract common properties
-  const firstStroke = strokes[0];
-  const commonColor = firstStroke.data.c || firstStroke.data.color;
-  const commonStrokeWidth = firstStroke.data.w || firstStroke.data.strokeWidth;
+  const firstStroke = strokes[0] as any;
+  const commonColor = (firstStroke.data as any).c || (firstStroke.data as any).color;
+  const commonStrokeWidth = (firstStroke.data as any).w || (firstStroke.data as any).strokeWidth;
 
   // Check if all strokes share the same color and width
   const allSameColor = strokes.every(stroke =>
-    (stroke.data.c || stroke.data.color) === commonColor
+    ((stroke as any).data.c || (stroke as any).data.color) === commonColor
   );
   const allSameWidth = strokes.every(stroke =>
-    (stroke.data.w || stroke.data.strokeWidth) === commonStrokeWidth
+    ((stroke as any).data.w || (stroke as any).data.strokeWidth) === commonStrokeWidth
   );
 
   if (!allSameColor && !allSameWidth) {
@@ -290,7 +290,7 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
 
   // Create session with common properties
   const optimizedStrokes = strokes.map(stroke => {
-    const newData = { ...stroke.data };
+    const newData = { ...(stroke as any).data } as any;
 
     if (allSameColor) {
       delete newData.c;
@@ -303,7 +303,7 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
 
     return {
       ...stroke,
-      data: newData
+  data: newData
     };
   });
 

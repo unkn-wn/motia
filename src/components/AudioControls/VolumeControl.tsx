@@ -1,10 +1,12 @@
-import React, { memo, useCallback } from 'react';
-import { useVolumeState } from './hooks';
+import React, { memo, useCallback, useSyncExternalStore } from 'react';
+import { useVolumeContext } from '@contexts/AudioControlsContext';
+import { volumeStore } from './state';
 import { Volume2Icon } from '@assets/icons';
 
-// Optimized VolumeControl that uses hooks directly to avoid prop drilling
+// Optimized VolumeControl that uses a narrowed context to avoid time-driven re-renders
 const VolumeControl: React.FC = memo(() => {
-  const { volume, setVolume } = useVolumeState();
+  const { setVolume } = useVolumeContext();
+  const volume = useSyncExternalStore(volumeStore.subscribe, volumeStore.getSnapshot);
 
   const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);

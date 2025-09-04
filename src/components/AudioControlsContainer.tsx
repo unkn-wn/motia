@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import PlaybackControls from './AudioControls/PlaybackControls';
 import ProgressSection from './AudioControls/ProgressSection';
 import VolumeControl from './AudioControls/VolumeControl';
+import { PlaybackProvider, VolumeProvider } from '@contexts/AudioControlsContext';
 
 const AudioControls: React.FC = memo(() => {
   return (
@@ -9,14 +10,18 @@ const AudioControls: React.FC = memo(() => {
       <div className="max-w-6xl mx-auto px-4 pb-3 pt-2">
         {/* Modern compact layout */}
         <div className="flex items-center space-x-4">
-          {/* Playback Controls - rarely changes */}
-          <PlaybackControls />
+          <PlaybackProvider>
+            {/* Playback Controls - rarely changes */}
+            <PlaybackControls />
+          </PlaybackProvider>
 
           {/* Progress Section - updates frequently */}
           <ProgressSection />
 
-          {/* Volume Control - rarely changes */}
-          <VolumeControl />
+          <VolumeProvider>
+            {/* Volume Control - rarely changes */}
+            <VolumeControl />
+          </VolumeProvider>
         </div>
       </div>
     </div>

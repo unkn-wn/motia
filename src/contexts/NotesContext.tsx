@@ -1,21 +1,18 @@
-import React, { createContext, useContext, useMemo, useCallback, type ReactNode } from 'react';
-import type { Note } from '../../types/notes';
+import React, { createContext, useMemo, useCallback, useContext, type ReactNode } from 'react';
+import type { Note } from '@types';
 import { sortNotesByTime } from '@utils/notesUtils';
-import { useActiveNote } from './useActiveNote';
+import { useActiveNote } from '@components/NotesSidebar/useActiveNote';
 
 interface NotesContextType {
-  // Sorted and filtered notes for sidebar display
   displayNotes: Note[];
-  activeNoteId: string | null; // Only expose ID for efficient DOM manipulation
-
-  // Actions
+  activeNoteId: string | null;
   onDeleteNote: (id: string) => void;
   onJumpToTime: (time: number) => void;
   onChangeNoteColor: (id: string, color: string) => void;
   onUpdateNote: (id: string, content: string) => void;
 }
 
-const NotesContext = createContext<NotesContextType | null>(null);
+export const NotesContext = createContext<NotesContextType | null>(null);
 
 interface NotesProviderProps {
   children: ReactNode;
@@ -36,16 +33,13 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({
   onChangeNoteColor,
   onUpdateNote,
 }) => {
-  // Memoize expensive computations with stable references
   const displayNotes = useMemo(() => {
     const textNotes = notes.filter(note => note.type !== 'drawing');
     return sortNotesByTime(textNotes);
   }, [notes]);
 
-  // Use optimized active note calculation - only get the ID
   const { activeNoteId } = useActiveNote(notes, currentTime, 16);
 
-  // Create stable function references that won't cause NoteItem rerenders
   const stableOnDeleteNote = useCallback((id: string) => {
     onDeleteNote(id);
   }, [onDeleteNote]);
@@ -84,6 +78,7 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({
     </NotesContext.Provider>
   );
 };
+
 
 export const useNotes = () => {
   const context = useContext(NotesContext);

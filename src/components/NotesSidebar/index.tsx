@@ -1,6 +1,7 @@
 import React, { memo, useRef, useEffect, useCallback } from 'react';
-import { useNotes } from './NotesContext';
-import NoteItem, { setNoteItemActions } from './NoteItem';
+import { useNotes } from '@contexts/NotesContext';
+import NoteItem from './NoteItem';
+import { setNoteItemActions } from './noteItemActions';
 import { Edit3Icon } from '@assets/icons';
 
 const NotesSidebar: React.FC = memo(() => {

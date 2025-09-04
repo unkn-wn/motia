@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useWaveformContext } from '../contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/WaveformContext';
 import { compressDrawingAdaptive } from '@utils/drawingUtils';
 import type { DrawingSession } from '@types';
 
@@ -81,7 +81,7 @@ export const useDrawingInteractions = () => {
     setDrawingStartPos(null);
 
     // Note: Don't clear drawingSession here - let the drawing mode change handle saving
-  }, [drawingStartPos, currentStroke, drawingSession, setIsDrawing, setCurrentStroke, setDrawingStartPos, setDrawingSession]);
+  }, [drawingStartPos, currentStroke, setIsDrawing, setCurrentStroke, setDrawingStartPos, setDrawingSession]);
 
   // Save drawing session
   const saveDrawingSession = useCallback((session: DrawingSession) => {
