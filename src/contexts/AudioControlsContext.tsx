@@ -1,18 +1,31 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useAudio } from '@contexts/AudioContext';
 
-// Separate contexts for different concerns to enable selective subscriptions
-
-// Playback state context - only isPlaying and playback functions
-interface PlaybackContextType {
+// Collocated contexts and hooks
+export interface PlaybackContextType {
   playPause: () => void;
   skipBack: () => void;
   skipForward: () => void;
   recenterToPlayhead: (() => void) | null;
 }
+export const PlaybackContext = createContext<PlaybackContextType | null>(null);
+export const usePlaybackContext = () => {
+  const ctx = useContext(PlaybackContext);
+  if (!ctx) throw new Error('usePlaybackContext must be used within PlaybackProvider');
+  return ctx;
+};
 
-const PlaybackContext = createContext<PlaybackContextType | null>(null);
+export interface VolumeContextType { setVolume: (volume: number) => void }
+export const VolumeContext = createContext<VolumeContextType | null>(null);
+export const useVolumeContext = () => {
+  const ctx = useContext(VolumeContext);
+  if (!ctx) throw new Error('useVolumeContext must be used within VolumeProvider');
+  return ctx;
+};
 
+// Separate contexts for different concerns to enable selective subscriptions
+
+// Playback state context - only isPlaying and playback functions
 export const PlaybackProvider = ({ children }: { children: ReactNode }) => {
   const { playPause, skipBack, skipForward, recenterToPlayhead } = useAudio();
 
@@ -31,21 +44,7 @@ export const PlaybackProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const usePlaybackContext = () => {
-  const context = useContext(PlaybackContext);
-  if (!context) {
-    throw new Error('usePlaybackContext must be used within PlaybackProvider');
-  }
-  return context;
-};
-
 // Volume state context - only volume and volume functions
-interface VolumeContextType {
-  setVolume: (volume: number) => void;
-}
-
-const VolumeContext = createContext<VolumeContextType | null>(null);
-
 export const VolumeProvider = ({ children }: { children: ReactNode }) => {
   const { setVolume } = useAudio();
 
@@ -59,12 +58,4 @@ export const VolumeProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </VolumeContext.Provider>
   );
-};
-
-export const useVolumeContext = () => {
-  const context = useContext(VolumeContext);
-  if (!context) {
-    throw new Error('useVolumeContext must be used within VolumeProvider');
-  }
-  return context;
 };

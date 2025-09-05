@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { isPlayingStore, volumeStore } from '@components/AudioControls/state';
@@ -40,15 +40,15 @@ interface AudioActions {
 
 type AudioContextType = AudioState & AudioActions;
 
-const AudioContext = createContext<AudioContextType | null>(null);
+// Collocated context + hook
+export const AudioContext = createContext<AudioContextType | null>(null);
 
 export const useAudio = () => {
-  const context = useContext(AudioContext);
-  if (!context) {
-    throw new Error('useAudio must be used within AudioProvider');
-  }
-  return context;
+  const ctx = useContext(AudioContext);
+  if (!ctx) throw new Error('useAudio must be used within AudioProvider');
+  return ctx;
 };
+
 
 interface AudioProviderProps {
   children: ReactNode;
@@ -100,7 +100,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
     if (wavesurferRef.current) {
       wavesurferRef.current.playPause();
     }
-  }, [setCurrentTimeInternal]);
+  }, []);
 
   const skipBack = useCallback(() => {
     if (wavesurferRef.current && durationRef.current > 0) {
@@ -219,7 +219,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
   ]);
 
   return (
-    <AudioContext.Provider value={contextValue}>
+  <AudioContext.Provider value={contextValue}>
   {children}
   {/* Synchronize external stores for fine-grained subscribers */}
   <AudioProviderEffects isPlaying={isPlaying} volume={volume} />

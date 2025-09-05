@@ -1,18 +1,8 @@
-import React, { createContext, useMemo, useCallback, useContext, type ReactNode } from 'react';
+import React, { useMemo, useCallback, type ReactNode, useContext } from 'react';
 import type { Note } from '@types';
 import { sortNotesByTime } from '@utils/notesUtils';
 import { useActiveNote } from '@components/NotesSidebar/useActiveNote';
-
-interface NotesContextType {
-  displayNotes: Note[];
-  activeNoteId: string | null;
-  onDeleteNote: (id: string) => void;
-  onJumpToTime: (time: number) => void;
-  onChangeNoteColor: (id: string, color: string) => void;
-  onUpdateNote: (id: string, content: string) => void;
-}
-
-export const NotesContext = createContext<NotesContextType | null>(null);
+import { NotesContext, type NotesContextType } from './NotesContextObject';
 
 interface NotesProviderProps {
   children: ReactNode;
@@ -79,11 +69,8 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({
   );
 };
 
-
 export const useNotes = () => {
-  const context = useContext(NotesContext);
-  if (!context) {
-    throw new Error('useNotes must be used within a NotesProvider');
-  }
-  return context;
+  const ctx = useContext(NotesContext);
+  if (!ctx) throw new Error('useNotes must be used within a NotesProvider');
+  return ctx;
 };

@@ -9,6 +9,21 @@ import type {
   CompressedStroke
 } from '../types/drawing';
 
+// Local compressed representations to avoid any
+interface DeltaCompressedStroke {
+  start: [number, number];
+  deltas: [number, number][];
+  color: string;
+  strokeWidth: number;
+}
+
+interface IntegerCompressedStroke {
+  points: [number, number][];
+  color: string;
+  strokeWidth: number;
+  scale: number;
+}
+
 // Import advanced compression methods
 import {
   compressStrokeAdvancedAdaptive,
@@ -165,7 +180,7 @@ export const compressStrokeWithDeltas = (stroke: DrawingStroke) => {
 /**
  * Reconstruct stroke from delta compression
  */
-export const decompressStrokeFromDeltas = (compressed: any): DrawingStroke => {
+export const decompressStrokeFromDeltas = (compressed: DeltaCompressedStroke): DrawingStroke => {
   const points: DrawingPoint[] = [];
   const [startX, startY] = compressed.start;
 
@@ -206,8 +221,8 @@ export const compressStrokeToIntegers = (stroke: DrawingStroke, scale: number = 
 /**
  * Reconstruct stroke from integer compression
  */
-export const decompressStrokeFromIntegers = (compressed: any): DrawingStroke => {
-  const scale = compressed.scale || 10;
+export const decompressStrokeFromIntegers = (compressed: IntegerCompressedStroke): DrawingStroke => {
+  const scale = compressed.scale ?? 10;
   return {
     points: compressed.points.map(([x, y]: [number, number]) => ({
       x: x / scale,
@@ -237,9 +252,7 @@ export const decompressStrokeAdaptive = (compressed: CompressedStroke): DrawingS
 /**-
  * Calculate storage size of compressed data
  */
-export const calculateCompressedSize = (compressedData: any): number => {
-  return JSON.stringify(compressedData).length;
-};
+export const calculateCompressedSize = (compressedData: unknown): number => JSON.stringify(compressedData).length;
 
 /**
  * Compress entire drawing with advanced adaptive strategy
@@ -272,17 +285,20 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
   if (strokes.length <= 1) return strokes;
 
   // Extract common properties
-  const firstStroke = strokes[0] as any;
-  const commonColor = (firstStroke.data as any).c || (firstStroke.data as any).color;
-  const commonStrokeWidth = (firstStroke.data as any).w || (firstStroke.data as any).strokeWidth;
+  const firstStroke = strokes[0];
+  const firstData = firstStroke.data as { c?: string; color?: string; w?: number; strokeWidth?: number };
+  const commonColor = firstData.c ?? firstData.color;
+  const commonStrokeWidth = firstData.w ?? firstData.strokeWidth;
 
   // Check if all strokes share the same color and width
-  const allSameColor = strokes.every(stroke =>
-    ((stroke as any).data.c || (stroke as any).data.color) === commonColor
-  );
-  const allSameWidth = strokes.every(stroke =>
-    ((stroke as any).data.w || (stroke as any).data.strokeWidth) === commonStrokeWidth
-  );
+  const allSameColor = strokes.every(stroke => {
+    const d = stroke.data as { c?: string; color?: string };
+    return (d.c ?? d.color) === commonColor;
+  });
+  const allSameWidth = strokes.every(stroke => {
+    const d = stroke.data as { w?: number; strokeWidth?: number };
+    return (d.w ?? d.strokeWidth) === commonStrokeWidth;
+  });
 
   if (!allSameColor && !allSameWidth) {
     return strokes; // No common properties to extract
@@ -290,30 +306,30 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
 
   // Create session with common properties
   const optimizedStrokes = strokes.map(stroke => {
-    const newData = { ...(stroke as any).data } as any;
+    const newData = { ...(stroke.data as Record<string, unknown>) } as Record<string, unknown>;
 
     if (allSameColor) {
-      delete newData.c;
-      delete newData.color;
+      delete (newData as { c?: string }).c;
+      delete (newData as { color?: string }).color;
     }
     if (allSameWidth) {
-      delete newData.w;
-      delete newData.strokeWidth;
+      delete (newData as { w?: number }).w;
+      delete (newData as { strokeWidth?: number }).strokeWidth;
     }
 
     return {
       ...stroke,
-  data: newData
+      data: newData
     };
   });
 
   // Wrap in session format with extracted common properties
   return [{
-    type: 'session' as any,
+    type: 'session',
     data: {
       strokes: optimizedStrokes,
       commonColor: allSameColor ? commonColor : undefined,
       commonStrokeWidth: allSameWidth ? commonStrokeWidth : undefined
     }
-  }] as CompressedStroke[];
+  } as CompressedStroke];
 }

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useWaveformContext } from '@contexts/WaveformContext';
 import { useMouseInteractions } from '../hooks/useMouseInteractions';
 import { usePointerInteractions } from '../hooks/usePointerInteractions';
@@ -22,6 +22,10 @@ export const WaveformCanvas: React.FC = () => {
   const { handlePointerDown, handlePointerMove, handlePointerUp } = usePointerInteractions();
   const { handleDrawingStart } = useDrawingInteractions();
   const { setContextMenu } = useWaveformContext();
+  // Right-click hold timer state
+  const holdTimerRef = useRef<number | null>(null);
+  const rightButtonDownRef = useRef(false);
+  const lastRCDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Enhanced mouse down handler that includes drawing
   const enhancedHandleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -44,8 +48,8 @@ export const WaveformCanvas: React.FC = () => {
     const rect = canvasRef.current.getBoundingClientRect();
     const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
 
-  // Check if clicking on a note - exclude drawings when not in drawing mode
-  const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
+    // Check if clicking on a note - exclude drawings when not in drawing mode
+    const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
 
     if (clickedNote && !isDrawingMode) {
       // Seek to note time
@@ -63,45 +67,70 @@ export const WaveformCanvas: React.FC = () => {
   }, [canvasRef, duration, isPanning, dragOccurred, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, isDrawingMode, seekToTime]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Always suppress the default browser menu; opening our menu is managed by right-hold logic
     e.preventDefault();
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
-    const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, false);
-    if (clickedNote) {
-      setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, noteId: clickedNote.id });
-    } else {
-      setContextMenu(m => ({ ...m, isOpen: false, noteId: null }));
-    }
-  }, [canvasRef, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, setContextMenu]);
+  }, []);
 
   // Also support right-button press (mousedown with button === 2) to open menu immediately for hold-select gesture
   const handleMouseDownForMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button !== 2) return;
     if (!canvasRef.current) return;
+    // Start hold detection for right-click
+    rightButtonDownRef.current = true;
+    lastRCDownPosRef.current = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
+
     const rect = canvasRef.current.getBoundingClientRect();
     const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
     const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, false);
-    if (clickedNote) {
-      e.preventDefault();
-      setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, noteId: clickedNote.id });
-    }
+
+    // Only allow menu for notes
+    if (!clickedNote) return;
+
+    // Open after a short hold; cancel if mouseup happens first
+    if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = window.setTimeout(() => {
+      if (rightButtonDownRef.current) {
+        const pos = lastRCDownPosRef.current || { x: e.clientX, y: e.clientY };
+        setContextMenu({ isOpen: true, x: pos.x, y: pos.y, noteId: clickedNote.id });
+      }
+    }, 280); // ~300ms hold
   }, [canvasRef, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, setContextMenu]);
+
+  // Cancel hold if right button released anywhere
+  useEffect(() => {
+    const onDocMouseUp = (ev: MouseEvent) => {
+      if (ev.button === 2) {
+        rightButtonDownRef.current = false;
+        if (holdTimerRef.current) {
+          window.clearTimeout(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
+      }
+    };
+    document.addEventListener('mouseup', onDocMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', onDocMouseUp);
+      if (holdTimerRef.current) {
+        window.clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className={`w-full h-full touch-none ${
-        isDrawingMode ? 'bg-neutral-700/50 cursor-crosshair' :
+      className={`w-full h-full touch-none ${isDrawingMode ? 'bg-neutral-700/50 cursor-crosshair' :
         isPanning ? 'bg-neutral-800 cursor-grabbing' :
-        'bg-neutral-800 cursor-grab'
-      }`}
+          'bg-neutral-800 cursor-grab'
+        }`}
       onClick={handleCanvasClick}
-  onMouseDown={(e) => { handleMouseDownForMenu(e); enhancedHandleMouseDown(e); }}
+      onMouseDown={(e) => { handleMouseDownForMenu(e); enhancedHandleMouseDown(e); }}
       onMouseMove={handleMouseMove}
-  onPointerDown={handlePointerDown}
-  onPointerMove={handlePointerMove}
-  onPointerUp={handlePointerUp}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
     />

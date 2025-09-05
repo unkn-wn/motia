@@ -35,6 +35,7 @@ export const InlineNoteEditor: React.FC = () => {
     <div
       className="absolute z-40"
       style={{ left: pos.left, top: pos.top, transform: 'translate(-4px, -4px)' }}
+      data-inline-editor="true"
     >
       <div className="relative shadow-lg">
         <textarea

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useWaveformContext } from '@contexts/WaveformContext';
 
 export const DeleteConfirmModal: React.FC = () => {
@@ -7,6 +7,17 @@ export const DeleteConfirmModal: React.FC = () => {
 
   const cancel = () => setDeleteConfirmNoteId(null);
   const confirm = () => { if (onDeleteNote) onDeleteNote(deleteConfirmNoteId); cancel(); };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancel();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
