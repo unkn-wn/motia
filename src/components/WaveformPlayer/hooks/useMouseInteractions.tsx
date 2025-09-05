@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useWaveformContext } from '@contexts/WaveformContext';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
+import { getPreferences } from '@utils/shortcutsUtils';
 
 export const useMouseInteractions = () => {
   const {
@@ -20,36 +21,54 @@ export const useMouseInteractions = () => {
   } = useWaveformContext();
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button === 0) { // Left mouse button
+    const prefs = getPreferences();
+    const desired = prefs.panMouseButton; // 'Left' | 'Middle' | 'Right'
+
+    // Map mouse button to label
+    const buttonLabel = e.button === 0 ? 'Left' : e.button === 1 ? 'Middle' : e.button === 2 ? 'Right' : 'Left';
+
+    // Common rect/clicked note calculation where needed
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
+    const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
+
+    // If clicking on a note with left button and not drawing, start dragging
+    if (buttonLabel === 'Left' && clickedNote && !isDrawingMode) {
       e.preventDefault();
+      setDragOccurred(false);
+      setDragging({
+        id: clickedNote.id,
+        startX: e.clientX,
+        startY: e.clientY,
+        initialCanvasX: clickedNote.canvasX,
+        initialCanvasY: clickedNote.canvasY
+      });
+      return;
+    }
 
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
+    // Drawing start is handled elsewhere; don’t block here
 
-      const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
-
-      // Check if clicking on a note - exclude drawings when not in drawing mode to prevent interference with panning
-      const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
-
-      if (clickedNote && !isDrawingMode) {
-        // Start dragging the note
-        setDragOccurred(false);
-        setDragging({
-          id: clickedNote.id,
-          startX: e.clientX,
-          startY: e.clientY,
-          initialCanvasX: clickedNote.canvasX,
-          initialCanvasY: clickedNote.canvasY
-        });
-      } else if (isDrawingMode) {
-        // Start drawing - this will be handled by drawing hooks
-        // We'll emit a custom event or use a callback for this
-      } else {
-        // Start panning
-        setIsPanning(true);
-        setLastPanPoint({ x: e.clientX, y: e.clientY });
-        setIsFollowingPlayhead(false);
-      }
+    // Start panning only when the pressed mouse button matches preference
+    if (buttonLabel === desired) {
+      e.preventDefault();
+      setIsPanning(true);
+      setLastPanPoint({ x: e.clientX, y: e.clientY });
+      setIsFollowingPlayhead(false);
+      // One-shot global cleanup to avoid "stuck" panning if the effect-based listeners haven't attached yet
+      const onUp = () => {
+        setIsPanning(false);
+        window.removeEventListener('mouseup', onUp, true);
+        window.removeEventListener('pointerup', onUp as unknown as EventListener, true);
+        window.removeEventListener('blur', onBlur, true);
+        window.removeEventListener('contextmenu', onUp, true);
+      };
+      const onBlur = () => onUp();
+      window.addEventListener('mouseup', onUp, { capture: true } as AddEventListenerOptions);
+      window.addEventListener('pointerup', onUp as unknown as EventListener, { capture: true } as AddEventListenerOptions);
+      window.addEventListener('blur', onBlur, { capture: true } as AddEventListenerOptions);
+      window.addEventListener('contextmenu', onUp, { capture: true } as AddEventListenerOptions);
+      return;
     }
   }, [canvasRef, transform, isDrawingMode, setDragOccurred, setDragging, setIsPanning, setLastPanPoint, setIsFollowingPlayhead, notes, NOTE_LABEL_HIDE_THRESHOLD]);
 

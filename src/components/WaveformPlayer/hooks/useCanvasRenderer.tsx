@@ -160,11 +160,18 @@ export const useCanvasRenderer = () => {
           const layoutKey = `${note.id}:${note.content ?? ''}`;
           let layout = noteLayoutCacheRef.current.get(note.id);
           if (!layout || layout.key !== layoutKey) {
-            const rawLines = note.content ? note.content.split('\n') : ['Empty note'];
+            // Support CRLF and preserve explicit blank lines
+            const rawLines = note.content ? note.content.split(/\r?\n/) : ['Empty note'];
             const lines: string[] = [];
             ctx.save();
             ctx.font = '18px system-ui, -apple-system, sans-serif';
-            for (const line of rawLines) {
+            for (const raw of rawLines) {
+              const line = raw.replace(/\r/g, '');
+              if (line.trim() === '') {
+                // Preserve empty line
+                lines.push('');
+                continue;
+              }
               const words = line.split(' ');
               let current = '';
               for (const w of words) {
@@ -214,11 +221,17 @@ export const useCanvasRenderer = () => {
         const layoutKey = `${note.id}:${note.content ?? ''}`;
         let layout = noteLayoutCacheRef.current.get(note.id)!;
         if (!layout || layout.key !== layoutKey) {
-          const rawLines = note.content ? note.content.split('\n') : ['Empty note'];
+          // Support CRLF and preserve explicit blank lines
+          const rawLines = note.content ? note.content.split(/\r?\n/) : ['Empty note'];
           const lines: string[] = [];
           ctx.save();
           ctx.font = '18px system-ui, -apple-system, sans-serif';
-          for (const line of rawLines) {
+          for (const raw of rawLines) {
+            const line = raw.replace(/\r/g, '');
+            if (line.trim() === '') {
+              lines.push('');
+              continue;
+            }
             const words = line.split(' ');
             let current = '';
             for (const w of words) {

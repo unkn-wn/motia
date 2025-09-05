@@ -1,5 +1,6 @@
 import React, { memo, useRef, useEffect, useCallback } from 'react';
 import { useNotes } from '@contexts/NotesContext';
+import { getDefaultShortcutKey, formatKeyDisplay } from '@utils/shortcutsUtils';
 import NoteItem from './NoteItem';
 import { setNoteItemActions } from './noteItemActions';
 import { Edit3Icon } from '@assets/icons';
@@ -78,7 +79,7 @@ const NotesSidebar: React.FC = memo(() => {
           <div className="text-center py-8 text-neutral-400">
             <Edit3Icon className="w-8 h-8 mx-auto mb-3 opacity-50" />
             <p>No notes yet</p>
-            <p className="text-sm">Press 'N' or the plus to add a note!</p>
+            <p className="text-sm">{`Press ${formatKeyDisplay(getDefaultShortcutKey('add-note') || 'A')} or the plus to add a note!`}</p>
           </div>
         ) : (
           displayNotes.map((note) => (

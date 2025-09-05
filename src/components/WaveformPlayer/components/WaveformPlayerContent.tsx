@@ -83,7 +83,7 @@ export const WaveformPlayerContent: React.FC = () => {
     return () => document.removeEventListener('keydown', onKey);
   }, [contextMenu.isOpen, editingNote, deleteConfirmNoteId, setEditingNote, setEditContent, setDeleteConfirmNoteId, setContextMenu]);
 
-  // Temporary suppression of native context menu for ~500ms after any right mouseup
+  // Temporary suppression of native context menu for ~100ms after any right mouseup
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       if (e.button === 2) {
@@ -95,7 +95,7 @@ export const WaveformPlayerContent: React.FC = () => {
       if (e.button === 2) {
         // Only suppress if the right-click did NOT originate inside the inline editor
         if (!rcOriginInsideEditorRef.current) {
-          suppressContextUntilRef.current = Date.now() + 500;
+          suppressContextUntilRef.current = Date.now() + 100;
         }
         rcOriginInsideEditorRef.current = false;
       }

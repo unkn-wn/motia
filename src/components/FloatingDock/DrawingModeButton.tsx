@@ -15,7 +15,7 @@ const DrawingModeButton = memo<DrawingModeButtonProps>(
         isDrawingMode
           ? 'bg-blue-600 hover:bg-blue-700'
           : 'bg-neutral-800 hover:bg-neutral-700'
-      } text-white rounded-full p-3 shadow-md transition-all duration-300`}
+      } text-white rounded-full p-3 shadow-md transition-all duration-300 cursor-pointer`}
       title={isDrawingMode ? 'Exit drawing mode' : 'Enter drawing mode - Click and drag to draw'}
     >
       <PenIcon className={`w-5 h-5 transition-transform duration-300 ${

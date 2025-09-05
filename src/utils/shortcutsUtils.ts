@@ -82,8 +82,8 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
     id: 'add-note',
     label: 'Add Note',
     description: 'Add note at current time',
-    defaultKey: 'n',
-    currentKey: 'n',
+    defaultKey: 'a',
+    currentKey: 'a',
     action: 'ADD_NOTE',
     category: 'notes'
   },
@@ -122,8 +122,68 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
     currentKey: 'ArrowDown',
     action: 'VOLUME_DOWN',
     category: 'playback'
+  },
+  {
+    id: 'toggle-drawing-mode',
+    label: 'Toggle Drawing Mode',
+    description: 'Enable/disable drawing mode',
+    defaultKey: 'd',
+    currentKey: 'd',
+    action: 'TOGGLE_DRAWING_MODE',
+    category: 'notes'
+  },
+  {
+    id: 'toggle-sidebar',
+    label: 'Toggle Sidebar',
+    description: 'Show or hide notes sidebar',
+    defaultKey: 's',
+    currentKey: 's',
+    action: 'TOGGLE_SIDEBAR',
+    category: 'navigation'
+  },
+  {
+    id: 'show-shortcuts',
+    label: 'Show Shortcuts',
+    description: 'Open keyboard shortcuts panel',
+    defaultKey: '?',
+    currentKey: '?',
+    action: 'SHOW_SHORTCUTS',
+    category: 'navigation'
   }
 ];
+
+// Editor and navigation preferences (non-destructive; global config)
+export type EditorEnterBehavior = 'newline' | 'save';
+export type PanMouseButton = 'Left' | 'Middle' | 'Right';
+
+export interface Preferences {
+  editorEnterBehavior: EditorEnterBehavior;
+  panMouseButton: PanMouseButton;
+}
+
+export const DEFAULT_PREFERENCES: Preferences = {
+  editorEnterBehavior: 'save',
+  panMouseButton: 'Left',
+};
+
+let preferences: Preferences = { ...DEFAULT_PREFERENCES };
+export const getPreferences = (): Preferences => preferences;
+export const setPreferences = (partial: Partial<Preferences>) => {
+  preferences = { ...preferences, ...partial };
+};
+
+// Single reset entrypoint used by UI to reset everything
+export const resetAllShortcutsAndPreferences = (): KeyboardShortcut[] => {
+  preferences = { ...DEFAULT_PREFERENCES };
+  // Return a fresh array copy of defaults so callers can set state
+  return DEFAULT_SHORTCUTS.map(s => ({ ...s }));
+};
+
+// Lightweight accessor for UI hints: get default display key by shortcut id
+export const getDefaultShortcutKey = (id: string): string | undefined => {
+  const sc = DEFAULT_SHORTCUTS.find(s => s.id === id);
+  return sc?.defaultKey;
+};
 
 /**
  * Check if a key combination is valid and not conflicting
@@ -226,11 +286,17 @@ export const createTouchHandler = (
 // Note editing helpers: centralized combos for Save/Cancel while in textareas
 export const isNoteEditSubmitCombo = (e: KeyboardEvent | React.KeyboardEvent): boolean => {
   if (e.key !== 'Enter') return false;
-  // Allow Ctrl+Enter, Cmd+Enter (meta), or Shift+Enter to save
-  const ke = e as KeyboardEvent;
-  // React.KeyboardEvent has same flags
+  // Behavior depends on preference: 'newline' (default) or 'save'
+  // newline: Save on Shift/Ctrl/Cmd + Enter; plain Enter inserts newline
+  // save: Save on plain Enter; Shift+Enter inserts newline
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return !!(ke.ctrlKey || (ke as any).metaKey || ke.shiftKey);
+  const anyE: any = e as any;
+  const hasCtrlMeta = !!(anyE.ctrlKey || anyE.metaKey);
+  const hasShift = !!anyE.shiftKey;
+  if (preferences.editorEnterBehavior === 'save') {
+    return !(hasCtrlMeta || hasShift);
+  }
+  return hasCtrlMeta || hasShift;
 };
 
 export const isNoteEditCancelKey = (e: KeyboardEvent | React.KeyboardEvent): boolean => {

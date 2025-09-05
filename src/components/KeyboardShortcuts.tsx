@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
+import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton } from '@utils/shortcutsUtils';
 import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
-import { XIcon, KeyboardIcon, RotateCcwIcon } from '@assets/icons';
+import { XIcon, SettingsIcon, RotateCcwIcon } from '@assets/icons';
 
 interface KeyboardShortcutsProps {
   isOpen: boolean;
@@ -20,6 +21,17 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string>('');
+  const [enterBehavior, setEnterBehaviorState] = useState<EditorEnterBehavior>(getPreferences().editorEnterBehavior);
+  const [panButton, setPanButtonState] = useState<PanMouseButton>(getPreferences().panMouseButton);
+
+  // Keep local state in sync when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      const prefs = getPreferences();
+      setEnterBehaviorState(prefs.editorEnterBehavior);
+  setPanButtonState(prefs.panMouseButton);
+    }
+  }, [isOpen]);
 
   const handleCancel = useCallback(() => {
     setEditingId(null);
@@ -109,20 +121,26 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between py-2 px-4 border-b border-neutral-700/50">
           <div className="flex items-center space-x-2">
-            <KeyboardIcon className="w-4 h-4 text-neutral-400" />
-            <h2 className="text-sm font-medium text-white">Shortcuts</h2>
+            <SettingsIcon className="w-4 h-4 text-neutral-400" />
+            <h2 className="text-sm font-medium text-white">Settings</h2>
           </div>
           <div className="flex items-center space-x-1">
             <button
-              onClick={onResetShortcuts}
-              className="p-1.5 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white transition-colors"
+              onClick={() => {
+                onResetShortcuts();
+                // Reflect global reset in local UI
+                const prefs = getPreferences();
+                setEnterBehaviorState(prefs.editorEnterBehavior);
+                setPanButtonState(prefs.panMouseButton);
+              }}
+              className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
               title="Reset to defaults"
             >
               <RotateCcwIcon className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-neutral-800 rounded text-neutral-400 hover:text-white transition-colors"
+              className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
             >
               <XIcon className="w-3.5 h-3.5" />
             </button>
@@ -132,6 +150,43 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
         {/* Content */}
         <div className="max-h-96 overflow-y-auto">
           <div className="p-3 space-y-4">
+            {/* Preferences */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg">
+                <div className="text-sm font-medium text-neutral-200">Enter button saves note</div>
+                <button
+                  role="switch"
+                  aria-checked={enterBehavior === 'save'}
+                  onClick={() => {
+                    const next: EditorEnterBehavior = enterBehavior === 'save' ? 'newline' : 'save';
+                    setEnterBehaviorState(next);
+                    setPreferences({ editorEnterBehavior: next });
+                  }}
+                  className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${enterBehavior === 'save' ? 'bg-green-600' : 'bg-neutral-700'}`}
+                  title={enterBehavior === 'save' ? 'Enter saves the note (Shift+Enter newline)' : 'Enter creates newline (Shift/Ctrl/Cmd+Enter saves)'}
+                >
+                  <span className={`block w-4 h-4 bg-white rounded-full shadow transform transition-transform ${enterBehavior === 'save' ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg">
+                <div className="text-sm font-medium text-neutral-200">Pan button</div>
+                <div className="inline-flex bg-neutral-900 border border-neutral-700 rounded overflow-hidden">
+                  {(['Left','Middle','Right'] as PanMouseButton[]).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => { setPanButtonState(opt); setPreferences({ panMouseButton: opt }); }}
+                      className={`px-2 py-1 text-xs ${panButton === opt ? 'bg-neutral-700 text-white' : 'text-neutral-300 hover:bg-neutral-800'} cursor-pointer transition-colors`}
+                      title={`Pan with ${opt.toLowerCase()} mouse button`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Minimal divider between preferences and shortcuts */}
+            <div className="h-px my-4 bg-neutral-800" />
             {categories.map(category => (
               <div key={category.id}>
                 <div className="space-y-1.5">
@@ -175,7 +230,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
             ))}
           </div>
           {keyError && (
-            <div className="px-3 pb-2">
+            <div className="sticky bottom-0 left-0 right-0 px-3 pb-2">
               <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/30 rounded px-2 py-1">
                 {keyError}
               </div>

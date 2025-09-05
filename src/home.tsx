@@ -8,7 +8,7 @@ import FloatingDock from '@components/FloatingDock';
 import { AudioProvider } from '@contexts/AudioContext';
 import type { Note } from '@types';
 import { createNote } from '@utils/notesUtils';
-import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler } from '@utils/shortcutsUtils';
+import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences } from '@utils/shortcutsUtils';
 import { ChevronLeftIcon, ChevronRightIcon } from '@assets/icons';
 import './style.css';
 
@@ -16,11 +16,11 @@ function Home() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -45,6 +45,9 @@ function Home() {
   const handleToggleDrawingMode = useCallback(() => {
     setIsDrawingMode(prev => !prev);
   }, []);
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
 
   const handleShowShortcuts = useCallback(() => {
     setShowShortcuts(true);
@@ -65,7 +68,8 @@ function Home() {
   }, []);
 
   const handleResetShortcuts = useCallback(() => {
-    setShortcuts(DEFAULT_SHORTCUTS);
+    const defaults = resetAllShortcutsAndPreferences();
+    setShortcuts(defaults);
   }, []);
 
   // Global keyboard event handler
@@ -73,6 +77,9 @@ function Home() {
     // Create action handlers
     const actionHandlers = {
       'ADD_NOTE': handleAddNoteAtCurrentTime,
+      'TOGGLE_DRAWING_MODE': handleToggleDrawingMode,
+      'TOGGLE_SIDEBAR': handleToggleSidebar,
+      'SHOW_SHORTCUTS': () => setShowShortcuts(true),
       'TOGGLE_PLAYBACK': () => {
         if (waveformPlayerRef.current) {
           waveformPlayerRef.current.playPause();
@@ -105,7 +112,7 @@ function Home() {
 
     window.addEventListener('keydown', keyboardHandler);
     return () => window.removeEventListener('keydown', keyboardHandler);
-  }, [shortcuts, handleAddNoteAtCurrentTime]);  const handleUpdateNote = useCallback((id: string, content: string) => {
+  }, [shortcuts, handleAddNoteAtCurrentTime]); const handleUpdateNote = useCallback((id: string, content: string) => {
     setNotes(prev => prev.map(note =>
       note.id === id ? { ...note, content } : note
     ));
@@ -187,9 +194,8 @@ function Home() {
             {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${
-                sidebarOpen ? 'right-80' : 'right-0'
-              }`}
+              className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${sidebarOpen ? 'right-80' : 'right-0'
+                }`}
               title={sidebarOpen ? 'Hide notes' : 'Show notes'}
             >
               <div className="flex items-center space-x-2">
@@ -203,9 +209,8 @@ function Home() {
             </button>
 
             {/* Collapsible Sidebar */}
-            <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${
-              sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-            }`}>
+            <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}>
               <NotesSidebarContainer
                 notes={notes}
                 onDeleteNote={handleDeleteNote}

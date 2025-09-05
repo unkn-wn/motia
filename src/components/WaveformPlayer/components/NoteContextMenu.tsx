@@ -97,7 +97,7 @@ export const NoteContextMenu: React.FC = () => {
   return (
     <div
       ref={ref}
-      className="fixed z-50 bg-neutral-800/95 backdrop-blur-sm rounded-md border border-neutral-700 shadow-lg p-1 select-none"
+      className="fixed z-50 bg-neutral-800 rounded-md border border-neutral-700 shadow-lg p-1 select-none"
       style={position}
       onContextMenu={(e) => e.preventDefault()}
       onMouseLeave={() => { setHovered(null); hoveredRef.current = null; }}
@@ -106,7 +106,7 @@ export const NoteContextMenu: React.FC = () => {
         onMouseEnter={() => { setHovered('edit'); hoveredRef.current = 'edit'; }}
         onMouseLeave={() => { setHovered(null); hoveredRef.current = null; }}
         onClick={handleEdit}
-        className={`flex items-center gap-2 px-3 py-2 rounded text-neutral-200 ${hovered === 'edit' ? 'bg-neutral-700' : 'hover:bg-neutral-700'}`}
+        className={`flex items-center w-full gap-2 px-3 py-2 rounded text-neutral-200 ${hovered === 'edit' ? 'bg-neutral-700' : 'hover:bg-neutral-700'}`}
         title="Edit"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
@@ -116,7 +116,7 @@ export const NoteContextMenu: React.FC = () => {
         onMouseEnter={() => { setHovered('delete'); hoveredRef.current = 'delete'; }}
         onMouseLeave={() => { setHovered(null); hoveredRef.current = null; }}
         onClick={handleDelete}
-        className={`flex items-center gap-2 px-3 py-2 rounded text-red-300 ${hovered === 'delete' ? 'bg-red-700/50' : 'hover:bg-red-700/50'}`}
+        className={`flex items-center w-full gap-2 px-3 py-2 rounded text-red-300 ${hovered === 'delete' ? 'bg-red-700/50' : 'hover:bg-red-700/50'}`}
         title="Delete"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" /></svg>

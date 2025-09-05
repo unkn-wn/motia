@@ -21,7 +21,7 @@ export const WaveformCanvas: React.FC = () => {
   const { handleMouseDown, handleMouseMove, handleWheel } = useMouseInteractions();
   const { handlePointerDown, handlePointerMove, handlePointerUp } = usePointerInteractions();
   const { handleDrawingStart } = useDrawingInteractions();
-  const { setContextMenu } = useWaveformContext();
+  const { setContextMenu, setIsPanning } = useWaveformContext();
   // Right-click hold timer state
   const holdTimerRef = useRef<number | null>(null);
   const rightButtonDownRef = useRef(false);
@@ -91,11 +91,13 @@ export const WaveformCanvas: React.FC = () => {
     if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
     holdTimerRef.current = window.setTimeout(() => {
       if (rightButtonDownRef.current) {
+        // If panning is still flagged, clear it before opening menu
+        if (isPanning) setIsPanning(false);
         const pos = lastRCDownPosRef.current || { x: e.clientX, y: e.clientY };
         setContextMenu({ isOpen: true, x: pos.x, y: pos.y, noteId: clickedNote.id });
       }
-    }, 280); // ~300ms hold
-  }, [canvasRef, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, setContextMenu]);
+    }, 100); // 100ms hold right click to open menu
+  }, [canvasRef, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, setContextMenu, isPanning, setIsPanning]);
 
   // Cancel hold if right button released anywhere
   useEffect(() => {

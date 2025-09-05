@@ -90,12 +90,14 @@ export const useGlobalMouseHandlers = () => {
     if (dragging || isDrawing || isPanning) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       document.addEventListener('mouseup', handleGlobalMouseUp as EventListener);
+    document.addEventListener('contextmenu', handleGlobalMouseUp as EventListener, { capture: true } as AddEventListenerOptions);
       document.addEventListener('pointermove', handleGlobalMouseMove as EventListener, { passive: true } as AddEventListenerOptions);
       document.addEventListener('pointerup', handleGlobalMouseUp as EventListener);
 
       return () => {
   document.removeEventListener('mousemove', handleGlobalMouseMove);
   document.removeEventListener('mouseup', handleGlobalMouseUp as EventListener);
+  document.removeEventListener('contextmenu', handleGlobalMouseUp as EventListener);
   document.removeEventListener('pointermove', handleGlobalMouseMove as EventListener);
   document.removeEventListener('pointerup', handleGlobalMouseUp as EventListener);
       };

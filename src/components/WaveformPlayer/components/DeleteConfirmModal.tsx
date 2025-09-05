@@ -3,12 +3,14 @@ import { useWaveformContext } from '@contexts/WaveformContext';
 
 export const DeleteConfirmModal: React.FC = () => {
   const { deleteConfirmNoteId, setDeleteConfirmNoteId, onDeleteNote } = useWaveformContext();
-  if (!deleteConfirmNoteId) return null;
 
   const cancel = () => setDeleteConfirmNoteId(null);
-  const confirm = () => { if (onDeleteNote) onDeleteNote(deleteConfirmNoteId); cancel(); };
+  const confirm = () => { if (onDeleteNote && deleteConfirmNoteId) onDeleteNote(deleteConfirmNoteId); cancel(); };
 
+  // Always call hooks in the same order; gate effect logic by state
   useEffect(() => {
+    if (!deleteConfirmNoteId) return; // no modal open, no listeners
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -17,7 +19,9 @@ export const DeleteConfirmModal: React.FC = () => {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [deleteConfirmNoteId]);
+
+  if (!deleteConfirmNoteId) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
