@@ -35,7 +35,6 @@ interface AudioActions {
 
   // Wavesurfer ref management
   setWavesurferRef: (ref: WaveSurfer | null) => void;
-  getWavesurferRef: () => WaveSurfer | null;
 }
 
 type AudioContextType = AudioState & AudioActions;
@@ -162,10 +161,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
     wavesurferRef.current = ref;
   }, []);
 
-  const getWavesurferRef = useCallback(() => {
-    return wavesurferRef.current;
-  }, []);
-
   // Memoize the context value to prevent unnecessary rerenders
   const contextValue: AudioContextType = useMemo(() => ({
     // State
@@ -192,7 +187,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
     setDuration,
     setWaveformData,
     setWavesurferRef,
-    getWavesurferRef,
   }), [
     // Only include state values that should trigger rerenders
     // Functions are excluded since they should be stable with useCallback
@@ -215,7 +209,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
     setDuration,
     setWaveformData,
     setWavesurferRef,
-    getWavesurferRef,
   ]);
 
   return (

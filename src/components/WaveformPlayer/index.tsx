@@ -45,7 +45,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 }, ref) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  // No local wavesurfer ref needed; the instance is stored in AudioContext via setWavesurferRef
 
   // Use audio context for shared state
   const {
@@ -102,6 +102,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   useEffect(() => {
     if (!waveformRef.current) return;
 
+  // Show loading overlay via duration===0 until wavesurfer is ready
+
     // Create a hidden wavesurfer for audio processing
     const hiddenDiv = document.createElement('div');
     hiddenDiv.style.position = 'absolute';
@@ -120,7 +122,6 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       interact: false,
     });
 
-    wavesurferRef.current = wavesurfer;
     setWavesurferRef(wavesurfer);
 
     // Load audio file
@@ -128,7 +129,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     wavesurfer.load(audioUrl);
 
     // Event listeners
-    wavesurfer.on('ready', () => {
+  wavesurfer.on('ready', () => {
       const audioDuration = wavesurfer.getDuration();
       setDuration(audioDuration);
 
@@ -178,7 +179,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       setIsPlaying(false);
     });
 
-    return () => {
+  return () => {
       wavesurfer.destroy();
       document.body.removeChild(hiddenDiv);
       URL.revokeObjectURL(audioUrl);
@@ -236,7 +237,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   }, [canvasRef, duration, currentTime, onAddNote, setDragOccurred]);
 
   const handleRecenterToPlayhead = useCallback(() => {
-    if (!wavesurferRef.current || !canvasRef.current) return;
+    if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const canvasHeight = canvas.height;
@@ -346,10 +347,20 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       {/* Main content area with waveform */}
       <div className="flex h-screen pb-12">
         {/* Canvas Waveform Container */}
-        <div className="flex-1 overflow-hidden bg-neutral-900 relative">
+        <div className="flex-1 overflow-hidden bg-neutral-900 relative rounded-2xl">
           <div className="absolute inset-0">
             <WaveformPlayerContent />
             <div ref={waveformRef} className="hidden" />
+            {/* Loading overlay - shows until audio duration known */}
+            {duration === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
+                <div className="flex items-center space-x-3 text-neutral-200 text-sm">
+                  <div className="h-2 w-2 rounded-full bg-neutral-300 animate-bounce [animation-delay:-0.2s]" />
+                  <div className="h-2 w-2 rounded-full bg-neutral-300 animate-bounce" />
+                  <div className="h-2 w-2 rounded-full bg-neutral-300 animate-bounce [animation-delay:0.2s]" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

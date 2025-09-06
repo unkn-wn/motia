@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
 import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton } from '@utils/shortcutsUtils';
+import { NOTE_COLORS, getColorPickerStyle, type NoteColor } from '@utils/colorUtils';
 import { history } from '@utils/history';
 import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
 import { XIcon, SettingsIcon, RotateCcwIcon } from '@assets/icons';
@@ -25,6 +26,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   const [enterBehavior, setEnterBehaviorState] = useState<EditorEnterBehavior>(getPreferences().editorEnterBehavior);
   const [panButton, setPanButtonState] = useState<PanMouseButton>(getPreferences().panMouseButton);
   const [historyMax, setHistoryMaxState] = useState<number>(getPreferences().historyMax);
+  const [defaultNoteColor, setDefaultNoteColor] = useState<NoteColor>(getPreferences().defaultNoteColor);
 
   // Keep local state in sync when panel opens
   useEffect(() => {
@@ -33,6 +35,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
       setEnterBehaviorState(prefs.editorEnterBehavior);
   setPanButtonState(prefs.panMouseButton);
   setHistoryMaxState(prefs.historyMax);
+  setDefaultNoteColor(prefs.defaultNoteColor);
     }
   }, [isOpen]);
 
@@ -209,6 +212,21 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                   className="bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm text-neutral-200 w-20"
                   title="Maximum number of undo steps to keep (1-200)"
                 />
+              </div>
+
+              <div className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg">
+                <div className="text-sm font-medium text-neutral-200">Default note color</div>
+                <div className="flex items-center space-x-2">
+                  {NOTE_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => { setDefaultNoteColor(color); setPreferences({ defaultNoteColor: color }); }}
+                      className={`w-6 h-6 rounded-full border-2 cursor-pointer ${defaultNoteColor === color ? 'border-neutral-200' : 'border-neutral-500'}`}
+                      style={{ backgroundColor: getColorPickerStyle(color) }}
+                      title={color}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
             {/* Minimal divider between preferences and shortcuts */}

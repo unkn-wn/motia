@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import FileUploader from '@components/FileUploader';
+import HeroBanner from '@components/HeroBanner';
 import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
 import AudioControls from '@components/AudioControlsContainer';
 import NotesSidebarContainer from '@components/NotesSidebar/NotesSidebarContainer';
@@ -22,7 +23,7 @@ function Home() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
 
   // Keep a live ref of notes for History getters
@@ -44,12 +45,16 @@ function Home() {
     setIsLoading(true);
     // Simulate processing time
     await new Promise(resolve => setTimeout(resolve, 1000));
-    setAudioFile(file);
-    setIsLoading(false);
+  // Flip loading off first so the uploader can show success pulse
+  setIsLoading(false);
+  // Give the pulse a brief moment to render before switching views
+  setTimeout(() => setAudioFile(file), 220);
   }, []);
 
   const handleAddNote = useCallback((time: number, canvasX: number, canvasY: number) => {
-    const newNote = createNote(time, canvasX, canvasY, '', 'blue');
+    const prefs = getPreferences();
+    const color = prefs.defaultNoteColor ?? 'blue';
+    const newNote = createNote(time, canvasX, canvasY, '', color);
     setNotes(prev => [...prev, newNote]);
     history.pushAddNote(newNote);
   }, []);
@@ -223,11 +228,13 @@ function Home() {
       />
 
       {!audioFile ? (
-        <div className="h-screen flex items-center justify-center p-6">
-          <FileUploader
-            onFileSelect={handleFileSelect}
-            isLoading={isLoading}
-          />
+        <div className="h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.08]">
+            <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-gradient-to-br from-white/10 to-transparent blur-3xl" />
+            <div className="absolute -bottom-24 -right-24 w-80 h-80 rounded-full bg-gradient-to-tl from-white/10 to-transparent blur-3xl" />
+          </div>
+          <HeroBanner />
+          <FileUploader onFileSelect={handleFileSelect} isLoading={isLoading} />
         </div>
       ) : (
         <AudioProvider

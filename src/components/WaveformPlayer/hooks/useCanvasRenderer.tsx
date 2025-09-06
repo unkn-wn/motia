@@ -349,7 +349,9 @@ export const useCanvasRenderer = () => {
       for (let i = 0; i < waveformData.length; i++) {
         const amplitude = waveformData[i];
         const y = i * barHeight;
-        const barWidth = amplitude * waveformWidth * 0.8;
+        // Make peaks larger with a mild gain and clamp
+        const amplitudeScaled = Math.min(1, amplitude * 1.8);
+        const barWidth = amplitudeScaled * waveformWidth;
         const x = waveformX + (waveformWidth - barWidth) / 2;
         const isPlayed = i / waveformData.length < progress;
         ctx.fillStyle = isPlayed ? '#a3a3a3' : '#404040';

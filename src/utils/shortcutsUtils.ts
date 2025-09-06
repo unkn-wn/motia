@@ -156,16 +156,20 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 export type EditorEnterBehavior = 'newline' | 'save';
 export type PanMouseButton = 'Left' | 'Middle' | 'Right';
 
+import type { NoteColor } from '@utils/colorUtils';
+
 export interface Preferences {
   editorEnterBehavior: EditorEnterBehavior;
   panMouseButton: PanMouseButton;
   historyMax: number;
+  defaultNoteColor: NoteColor;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   editorEnterBehavior: 'save',
   panMouseButton: 'Left',
   historyMax: 30,
+  defaultNoteColor: 'blue',
 };
 
 let preferences: Preferences = { ...DEFAULT_PREFERENCES };
