@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useWaveformContext } from '@contexts/WaveformContext';
 import { useDrawingInteractions } from './useDrawingInteractions';
 import { optimizeDrawingPoints } from '@utils/drawingUtils';
+import { history } from '@utils/history';
 
 export const useGlobalMouseHandlers = () => {
   const {
@@ -20,6 +21,7 @@ export const useGlobalMouseHandlers = () => {
   } = useWaveformContext();
 
   const { handleDrawingEnd } = useDrawingInteractions();
+  const strokeEndGuardRef = useRef(false);
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent | PointerEvent) => {
@@ -66,7 +68,7 @@ export const useGlobalMouseHandlers = () => {
       }
     };
 
-    const handleGlobalMouseUp = (e?: MouseEvent | PointerEvent) => {
+  const handleGlobalMouseUp = (e?: MouseEvent | PointerEvent) => {
       // Avoid double-processing on desktop
       if (e && 'pointerType' in e && e.pointerType === 'mouse') return;
       // Handle panning
@@ -76,13 +78,23 @@ export const useGlobalMouseHandlers = () => {
 
       // Handle note dragging
       if (dragging) {
-  setDragging(null);
-  setTimeout(() => setDragOccurred(false), 10);
+        // Finalize history coalesced drag
+        history.endMove(dragging.id, { x: dragging.initialCanvasX + ((e?.clientX ?? dragging.startX) - dragging.startX) / transform.scale, y: dragging.initialCanvasY + ((e?.clientY ?? dragging.startY) - dragging.startY) / transform.scale });
+        setDragging(null);
+        setTimeout(() => setDragOccurred(false), 10);
       }
 
       // Handle drawing - this is critical for stopping drawing
       if (isDrawing) {
-  handleDrawingEnd();
+        // Guard against duplicate events (mouseup + pointerup + contextmenu)
+        if (strokeEndGuardRef.current) return;
+        strokeEndGuardRef.current = true;
+        try {
+          handleDrawingEnd();
+        } finally {
+          // Release guard shortly after to allow next stroke
+          setTimeout(() => { strokeEndGuardRef.current = false; }, 0);
+        }
       }
     };
 

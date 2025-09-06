@@ -67,13 +67,13 @@ export const usePointerInteractions = () => {
       return;
     }
 
-    if (isDrawingMode) {
+  if (isDrawingMode) {
       handleDrawingStart(canvasX, canvasY);
       return;
     }
 
     // Begin panning on primary touch
-    if (e.isPrimary) {
+  if (e.isPrimary) {
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
       setIsFollowingPlayhead(false);

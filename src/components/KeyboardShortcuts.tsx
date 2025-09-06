@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
 import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton } from '@utils/shortcutsUtils';
+import { history } from '@utils/history';
 import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
 import { XIcon, SettingsIcon, RotateCcwIcon } from '@assets/icons';
 
@@ -23,6 +24,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   const [keyError, setKeyError] = useState<string>('');
   const [enterBehavior, setEnterBehaviorState] = useState<EditorEnterBehavior>(getPreferences().editorEnterBehavior);
   const [panButton, setPanButtonState] = useState<PanMouseButton>(getPreferences().panMouseButton);
+  const [historyMax, setHistoryMaxState] = useState<number>(getPreferences().historyMax);
 
   // Keep local state in sync when panel opens
   useEffect(() => {
@@ -30,6 +32,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
       const prefs = getPreferences();
       setEnterBehaviorState(prefs.editorEnterBehavior);
   setPanButtonState(prefs.panMouseButton);
+  setHistoryMaxState(prefs.historyMax);
     }
   }, [isOpen]);
 
@@ -132,6 +135,8 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                 const prefs = getPreferences();
                 setEnterBehaviorState(prefs.editorEnterBehavior);
                 setPanButtonState(prefs.panMouseButton);
+                setHistoryMaxState(prefs.historyMax);
+                history.setMax(prefs.historyMax);
               }}
               className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
               title="Reset to defaults"
@@ -183,6 +188,27 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg">
+                <div className="text-sm font-medium text-neutral-200">Undo history size</div>
+                <input
+                  type="number"
+                  value={Number.isFinite(historyMax) ? historyMax : 30}
+                  onChange={(e) => {
+                  const num = Math.floor(Number(e.target.value));
+                  const val = Number.isNaN(num) ? 30 : Math.max(1, Math.min(200, num));
+                  setHistoryMaxState(val);
+                  setPreferences({ historyMax: val });
+                  history.setMax(val);
+                  }}
+                  min={1}
+                  max={200}
+                  step={1}
+                  placeholder="30"
+                  className="bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm text-neutral-200 w-20"
+                  title="Maximum number of undo steps to keep (1-200)"
+                />
               </div>
             </div>
             {/* Minimal divider between preferences and shortcuts */}
@@ -239,14 +265,14 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-2 border-t border-neutral-700/50 bg-neutral-900/50">
+        {/* <div className="p-2 border-t border-neutral-700/50 bg-neutral-900/50">
           <p className="text-xs text-neutral-500 text-center">
             {editingId ?
               'Press any key to assign. ESC to cancel.' :
               'Click key to edit. ESC to close.'
             }
           </p>
-        </div>
+        </div> */}
       </div>
     </div>
   );

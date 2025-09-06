@@ -159,11 +159,13 @@ export type PanMouseButton = 'Left' | 'Middle' | 'Right';
 export interface Preferences {
   editorEnterBehavior: EditorEnterBehavior;
   panMouseButton: PanMouseButton;
+  historyMax: number;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   editorEnterBehavior: 'save',
   panMouseButton: 'Left',
+  historyMax: 30,
 };
 
 let preferences: Preferences = { ...DEFAULT_PREFERENCES };

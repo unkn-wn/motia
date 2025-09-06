@@ -41,11 +41,14 @@ export interface WaveformContextValue {
   setDrawingStartPos: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
   drawingSession: DrawingSession | null;
   setDrawingSession: React.Dispatch<React.SetStateAction<DrawingSession | null>>;
+  drawingNoteId: string | null;
+  setDrawingNoteId: React.Dispatch<React.SetStateAction<string | null>>;
   onAddNote: (time: number, canvasX: number, canvasY: number) => void;
   onUpdateNote: (id: string, content: string) => void;
   onDeleteNote: (id: string) => void;
   onMoveNote?: (id: string, canvasX: number, canvasY: number) => void;
-  onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => void;
+  onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => string;
+  onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   NOTE_LABEL_HIDE_THRESHOLD: number;
   contextMenu: {

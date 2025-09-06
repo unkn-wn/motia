@@ -41,7 +41,18 @@ export const useCanvasRenderer = () => {
   (ctx: CanvasRenderingContext2D, note: Note) => {
       if (!note.drawing || !note.drawing.compressed) return;
       try {
-        const cacheKey = `${note.id}:${note.drawing.compressed.length}`;
+        // Build a stable cache key that changes whenever the compressed payload changes.
+        // Using just length fails when session compression keeps array length at 1.
+        let rev = note.drawing.compressedSize;
+        if (rev == null) {
+          // Fallback: compute a lightweight revision from JSON length
+          try {
+            rev = JSON.stringify(note.drawing.compressed).length;
+          } catch {
+            rev = Date.now();
+          }
+        }
+        const cacheKey = `${note.id}:${rev}`;
     const cached = decompressedCacheRef.current.get(note.id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let decompressed: any[];
@@ -74,24 +85,9 @@ export const useCanvasRenderer = () => {
     []
   );
 
-  // Draw current drawing session (in-progress) and live stroke
+  // Draw only the live stroke; completed strokes are saved to note and rendered via renderDrawingsOnCanvas
   const renderCurrentDrawing = useCallback(
     (ctx: CanvasRenderingContext2D) => {
-      // Completed strokes in session (world coords already)
-      if (drawingSession && drawingSession.strokes.length > 0) {
-        for (const stroke of drawingSession.strokes) {
-          const pts = stroke.points;
-          if (pts.length < 2) continue;
-          ctx.strokeStyle = stroke.color || '#9ca3af';
-          ctx.lineWidth = stroke.strokeWidth || 2;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.beginPath();
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-          ctx.stroke();
-        }
-      }
       // Live stroke
       if (isDrawing && currentStroke.length > 0) {
         ctx.strokeStyle = '#6b7079';

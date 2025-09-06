@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useWaveformContext } from '@contexts/WaveformContext';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
+import { history } from '@utils/history';
 import { getPreferences } from '@utils/shortcutsUtils';
 
 export const useMouseInteractions = () => {
@@ -44,10 +45,15 @@ export const useMouseInteractions = () => {
         initialCanvasX: clickedNote.canvasX,
         initialCanvasY: clickedNote.canvasY
       });
+      // Start a coalesced move entry for history
+      history.beginMove(clickedNote.id, { x: clickedNote.canvasX, y: clickedNote.canvasY });
       return;
     }
 
-    // Drawing start is handled elsewhere; don’t block here
+    // Drawing start is handled in WaveformCanvas; when in drawing mode, block panning for Left only
+    if (isDrawingMode && buttonLabel === 'Left') {
+      return;
+    }
 
     // Start panning only when the pressed mouse button matches preference
     if (buttonLabel === desired) {

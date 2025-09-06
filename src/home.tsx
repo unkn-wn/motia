@@ -8,7 +8,8 @@ import FloatingDock from '@components/FloatingDock';
 import { AudioProvider } from '@contexts/AudioContext';
 import type { Note } from '@types';
 import { createNote } from '@utils/notesUtils';
-import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences } from '@utils/shortcutsUtils';
+import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping, getPreferences } from '@utils/shortcutsUtils';
+import { history } from '@utils/history';
 import { ChevronLeftIcon, ChevronRightIcon } from '@assets/icons';
 import './style.css';
 
@@ -16,12 +17,28 @@ function Home() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
+  const notesRef = useRef<Note[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
+
+  // Keep a live ref of notes for History getters
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+
+  // Register History accessors once
+  useEffect(() => {
+    history.registerNotesAccess(() => notesRef.current, (n: Note[]) => setNotes(n));
+    // Apply history cap from preferences on load
+    const prefs = getPreferences();
+    if (prefs?.historyMax) {
+      history.setMax(prefs.historyMax);
+    }
+  }, []);
 
   const handleFileSelect = useCallback(async (file: File) => {
     setIsLoading(true);
@@ -34,6 +51,7 @@ function Home() {
   const handleAddNote = useCallback((time: number, canvasX: number, canvasY: number) => {
     const newNote = createNote(time, canvasX, canvasY, '', 'blue');
     setNotes(prev => [...prev, newNote]);
+    history.pushAddNote(newNote);
   }, []);
 
   const handleAddNoteAtCurrentTime = useCallback(() => {
@@ -58,6 +76,19 @@ function Home() {
     newNote.type = 'drawing';
     newNote.drawing = drawing;
     setNotes(prev => [...prev, newNote]);
+    history.pushAddNote(newNote);
+    return newNote.id;
+  }, []);
+
+  const handleUpdateDrawing = useCallback((id: string, drawing: Note['drawing']) => {
+    const prevNote = notesRef.current.find(n => n.id === id);
+    const prevDrawing = prevNote?.drawing ?? null;
+    const nextDrawing = drawing;
+    // If equivalent JSON, no-op
+    if (JSON.stringify(prevDrawing) === JSON.stringify(nextDrawing)) return;
+  // Replace the entire note object to change identity and ensure downstream caches key by compressedSize
+  setNotes(prev => prev.map(n => n.id === id ? { ...n, drawing: { ...nextDrawing } } as Note : n));
+    history.pushUpdateDrawing(id, prevDrawing as Note['drawing'], nextDrawing);
   }, []);
 
   // Keyboard shortcuts handlers
@@ -113,12 +144,20 @@ function Home() {
     window.addEventListener('keydown', keyboardHandler);
     return () => window.removeEventListener('keydown', keyboardHandler);
   }, [shortcuts, handleAddNoteAtCurrentTime]); const handleUpdateNote = useCallback((id: string, content: string) => {
+    const prevNote = notesRef.current.find(n => n.id === id);
+    const prevContent = prevNote?.content ?? '';
+    if (prevContent === content) return; // no-op
     setNotes(prev => prev.map(note =>
       note.id === id ? { ...note, content } : note
     ));
+    history.pushUpdateNoteContent(id, prevContent, content);
   }, []);
 
   const handleDeleteNote = useCallback((id: string) => {
+    const snap = notesRef.current.find(n => n.id === id);
+    if (snap) {
+      history.pushDeleteNote(snap);
+    }
     setNotes(prev => prev.filter(note => note.id !== id));
   }, []);
 
@@ -135,9 +174,37 @@ function Home() {
   }, []);
 
   const handleChangeNoteColor = useCallback((id: string, color: string) => {
+    const prevNote = notesRef.current.find(n => n.id === id);
+    const prevColor = prevNote?.color ?? color;
+    if (prevColor === color) return; // no-op
     setNotes(prev => prev.map(note =>
       note.id === id ? { ...note, color } : note
     ));
+    history.pushChangeNoteColor(id, prevColor, color);
+  }, []);
+
+  // Global Undo/Redo (Ctrl/Cmd+Z, Ctrl+Shift+Z only)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isUserTyping()) return;
+      const isMeta = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (!isMeta) return;
+  // Redo: Ctrl+Shift+Z only
+  if (key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        history.redo();
+        return;
+      }
+      // Undo: Ctrl+Z
+      if (key === 'z') {
+        e.preventDefault();
+        history.undo();
+      }
+    };
+  const opts = { capture: true } as AddEventListenerOptions;
+  window.addEventListener('keydown', onKeyDown, opts);
+  return () => window.removeEventListener('keydown', onKeyDown as EventListener, opts);
   }, []);
 
   const handleCurrentTimeChange = useCallback((time: number) => {
@@ -177,6 +244,7 @@ function Home() {
               onMoveNote={handleMoveNote}
               isDrawingMode={isDrawingMode}
               onAddDrawing={handleAddDrawing}
+              onUpdateDrawing={handleUpdateDrawing}
             />
 
             {/* Audio Controls - now outside WaveformPlayer */}

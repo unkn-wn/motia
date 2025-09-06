@@ -17,7 +17,8 @@ export interface WaveformPlayerProps {
   onMoveNote?: (id: string, canvasX: number, canvasY: number) => void;
   // Drawing props
   isDrawingMode?: boolean;
-  onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => void;
+  onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => string;
+  onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
 }
 
 export interface WaveformPlayerRef {
@@ -39,7 +40,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   onDeleteNote,
   onMoveNote,
   isDrawingMode = false,
-  onAddDrawing
+  onAddDrawing,
+  onUpdateDrawing
 }, ref) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -91,6 +93,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
   const [drawingStartPos, setDrawingStartPos] = useState<{ x: number; y: number } | null>(null);
   const [drawingSession, setDrawingSession] = useState<DrawingSession | null>(null);
+  const [drawingNoteId, setDrawingNoteId] = useState<string | null>(null);
 
   // Note interaction constants
   const NOTE_LABEL_HIDE_THRESHOLD = 0;
@@ -312,6 +315,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     setDrawingStartPos,
     drawingSession,
     setDrawingSession,
+  drawingNoteId,
+  setDrawingNoteId,
 
     // Event handlers
     onAddNote,
@@ -319,6 +324,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     onDeleteNote,
     onMoveNote,
     onAddDrawing,
+  onUpdateDrawing,
 
     // Refs
     canvasRef,
