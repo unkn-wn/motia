@@ -1,5 +1,5 @@
 import React, { memo, useSyncExternalStore } from 'react';
-import { usePlaybackContext } from '@contexts/AudioControlsContext';
+import { usePlaybackContext } from '@contexts/objects/AudioControlsContextObject';
 import { isPlayingStore } from './state';
 import {
   PlayIcon,

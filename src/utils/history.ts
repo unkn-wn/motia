@@ -13,6 +13,7 @@ class HistoryManager {
   private stack: HistoryEntry[] = [];
   private pointer = -1; // points to last applied entry
   private max = 200;
+  private listeners = new Set<() => void>();
 
   // Notes state executors registered by Home
   private getNotes: (() => Note[]) | null = null;
@@ -26,6 +27,7 @@ class HistoryManager {
   clear() {
     this.stack = [];
     this.pointer = -1;
+  this.emit();
   }
 
   canUndo() { return this.pointer >= 0; }
@@ -36,6 +38,7 @@ class HistoryManager {
     const entry = this.stack[this.pointer];
     entry.undo();
     this.pointer -= 1;
+  this.emit();
     return true;
   }
 
@@ -44,6 +47,7 @@ class HistoryManager {
     const entry = this.stack[this.pointer + 1];
     entry.do();
     this.pointer += 1;
+  this.emit();
     return true;
   }
 
@@ -58,6 +62,7 @@ class HistoryManager {
     }
     // Always point to the last applied entry
     this.pointer = this.stack.length - 1;
+  this.emit();
   }
 
   // Helpers to push common note actions
@@ -122,7 +127,14 @@ class HistoryManager {
       this.stack.splice(0, overflow);
       this.pointer = Math.min(this.pointer, this.stack.length - 1);
     }
+    this.emit();
   }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+  private emit() { this.listeners.forEach((l) => l()); }
 }
 
 export const history = new HistoryManager();

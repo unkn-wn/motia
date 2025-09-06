@@ -5,8 +5,8 @@ import { InlineNoteEditor } from './InlineNoteEditor';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { useCanvasRenderer } from '../hooks/useCanvasRenderer';
 import { useGlobalMouseHandlers } from '../hooks/useGlobalMouseHandlers';
-import { useAudio } from '@contexts/AudioContext';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useAudio } from '@contexts/objects/AudioContextObject';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 
 export const WaveformPlayerContent: React.FC = () => {
   const { renderCanvas } = useCanvasRenderer();

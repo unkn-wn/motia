@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 
 export const NoteContextMenu: React.FC = () => {
   const { contextMenu, setContextMenu, setEditingNote, setEditContent, notes, setDeleteConfirmNoteId } = useWaveformContext();

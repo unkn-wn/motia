@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { LogInIcon, UserPlusIcon, XIcon, CheckIcon, EyeIcon, EyeOffIcon } from '@/assets/icons';
-import { useAuth } from '@/contexts/FirebaseAuthContext';
+import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';
+import { getAuthErrorMessage } from '@utils/firebaseErrors';
 
 type Mode = 'signin' | 'signup';
 
@@ -11,17 +12,18 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin', onClose }) => {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, upgradeAnonymous, user } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMode(initialMode), [initialMode]);
-  useEffect(() => { if (!open) { setEmail(''); setPassword(''); setLoading(false); setDone(false); } }, [open]);
+  useEffect(() => { if (!open) { setEmail(''); setPassword(''); setLoading(false); setDone(false); setError(null); } }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && open) onClose(); };
@@ -34,13 +36,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
     e.preventDefault();
     setLoading(true);
     try {
-      if (mode === 'signin') await signIn(email, password);
-      else await signUp(email, password);
+      setError(null);
+      if (user?.isAnonymous && mode === 'signup') {
+        // Upgrade anonymous account by linking credentials
+        await upgradeAnonymous(email, password);
+      } else if (mode === 'signin') {
+        await signIn(email, password);
+      } else {
+        await signUp(email, password);
+      }
       setDone(true);
       setTimeout(onClose, 650);
-    } catch (err) {
-      // TODO: surface specific errors
-      console.error(err);
+    } catch (error) {
+      setError(getAuthErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -61,6 +69,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
           <h2 className="mt-3 text-xl font-semibold text-neutral-100">{mode === 'signin' ? 'Welcome back' : 'Create account'}</h2>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
+          {error && (
+            <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/60 rounded-md px-3 py-2">
+              {error}
+            </div>
+          )}
           <label className="block">
             <span className="block text-sm text-neutral-300">Email</span>
             <input

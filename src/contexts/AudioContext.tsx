@@ -1,52 +1,8 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect, createContext, useContext } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { isPlayingStore, volumeStore } from '@components/AudioControls/state';
-
-interface AudioState {
-  isPlaying: boolean;
-  currentTime: number;
-  duration: number;
-  volume: number;
-  waveformData: number[];
-}
-
-interface AudioActions {
-  // Playback controls
-  playPause: () => void;
-  skipBack: () => void;
-  skipForward: () => void;
-  seekToTime: (time: number) => void;
-
-  // Volume controls
-  setVolume: (volume: number) => void;
-  volumeUp: () => void;
-  volumeDown: () => void;
-
-  // Waveform controls
-  recenterToPlayhead?: () => void;
-  setRecenterToPlayhead: (fn: () => void) => void;
-
-  // Internal setters for wavesurfer integration
-  setIsPlaying: (playing: boolean) => void;
-  setCurrentTime: (time: number) => void;
-  setDuration: (duration: number) => void;
-  setWaveformData: (data: number[]) => void;
-
-  // Wavesurfer ref management
-  setWavesurferRef: (ref: WaveSurfer | null) => void;
-}
-
-type AudioContextType = AudioState & AudioActions;
-
-// Collocated context + hook
-export const AudioContext = createContext<AudioContextType | null>(null);
-
-export const useAudio = () => {
-  const ctx = useContext(AudioContext);
-  if (!ctx) throw new Error('useAudio must be used within AudioProvider');
-  return ctx;
-};
+import { AudioContext, type AudioContextType } from './objects/AudioContextObject';
 
 
 interface AudioProviderProps {
@@ -87,12 +43,12 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
   const setIsPlayingInternal = useCallback((playing: boolean) => {
     setIsPlaying(playing);
     onPlayStateChangeRef.current?.(playing);
-  }, [onPlayStateChangeRef]);
+  }, []);
 
   const setCurrentTimeInternal = useCallback((time: number) => {
     setCurrentTime(time);
     onCurrentTimeChangeRef.current?.(time);
-  }, [onCurrentTimeChangeRef]);
+  }, []);
 
   // Playback controls - now stable
   const playPause = useCallback(() => {

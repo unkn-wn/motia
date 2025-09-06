@@ -1,4 +1,4 @@
-import { createContext } from 'react';
+import { createContext, useContext } from 'react';
 import type { Note } from '@types';
 
 export interface NotesContextType {
@@ -11,3 +11,9 @@ export interface NotesContextType {
 }
 
 export const NotesContext = createContext<NotesContextType | null>(null);
+
+export const useNotes = () => {
+  const ctx = useContext(NotesContext);
+  if (!ctx) throw new Error('useNotes must be used within a NotesProvider');
+  return ctx;
+};

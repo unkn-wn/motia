@@ -3,7 +3,7 @@ import HeroBanner from './HeroBanner';
 import FileUploader from './FileUploader';
 import { LogInIcon, UserPlusIcon } from '@/assets/icons';
 import HeroBackdrop, { type HeroBackdropHandle } from './HeroBackdrop';
-import { useAuth } from '@/contexts/FirebaseAuthContext';
+import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';
 
 interface HomeHeroProps {
   onUpload: (file: File) => void;
@@ -51,7 +51,7 @@ const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, 
           onClick={onOpenSignin}
           onMouseEnter={() => backdropRef.current?.shuffle()}
           onFocus={() => backdropRef.current?.shuffle()}
-          className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-900/60 hover:bg-neutral-800 text-neutral-100 px-3 py-2 border border-neutral-800 overflow-hidden"
+          className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-900/60 hover:bg-neutral-800 text-neutral-100 px-3 py-2 border border-neutral-800 overflow-hidden cursor-pointer"
         >
           <LogInIcon className="w-5 h-5" />
           <span className="text-sm">Sign in</span>
@@ -61,11 +61,11 @@ const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, 
           onClick={onOpenSignup}
           onMouseEnter={() => backdropRef.current?.shuffle()}
           onFocus={() => backdropRef.current?.shuffle()}
-          className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 border border-neutral-700 shadow overflow-hidden"
+          className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 border border-neutral-700 shadow overflow-hidden cursor-pointer"
         >
           <UserPlusIcon className="w-5 h-5" />
           <span className="text-sm">Create account</span>
-          <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-emerald-400/80 to-transparent group-hover:w-full group-focus-visible:w-full transition-[width] duration-300" />
+          <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-blue-400/80 to-transparent group-hover:w-full group-focus-visible:w-full transition-[width] duration-300" />
         </button>
       </div>
     </div>

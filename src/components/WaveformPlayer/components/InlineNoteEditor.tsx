@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { isNoteEditSubmitCombo, isNoteEditCancelKey, getPreferences } from '@utils/shortcutsUtils';
 
 export const InlineNoteEditor: React.FC = () => {

@@ -30,7 +30,16 @@ export type {
 } from './notes';
 
 // Color types (re-export from utils)
-export type { NoteColor } from '../utils/colorUtils';
+export type { NoteColor } from '@utils/colorUtils';
 
 // Keyboard shortcut types (re-export from utils)
-export type { KeyboardShortcut } from '../utils/shortcutsUtils';
+export type { KeyboardShortcut } from '@utils/shortcutsUtils';
+
+// Firestore document shapes
+export type {
+  UserProfileDoc,
+  UserSettingsDoc,
+  ProjectMetaDoc,
+  ProjectNotesDoc,
+
+} from './firebase';

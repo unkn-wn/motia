@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { compressDrawingAdaptive } from '@utils/drawingUtils';
 import { decompressSession } from '@utils/advancedCompression';
 import type { DrawingSession } from '@types';
@@ -45,11 +45,6 @@ export const useDrawingInteractions = () => {
   }, [isDrawingMode, onAddDrawing, setIsDrawing, setDrawingStartPos, setCurrentStroke, setDrawingSession]);
 
   const handleDrawingEnd = useCallback(() => {
-    // console.log('Drawing end called', {
-    //   currentStrokeLength: currentStroke.length,
-    //   hasDrawingStartPos: !!drawingStartPos,
-    //   sessionStrokeCount: drawingSession?.strokes.length || 0
-    // });
 
     // Always clear drawing state first
     setIsDrawing(false);

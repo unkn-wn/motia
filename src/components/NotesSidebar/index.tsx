@@ -1,5 +1,5 @@
 import React, { memo, useRef, useEffect, useCallback } from 'react';
-import { useNotes } from '@contexts/NotesContext';
+import { useNotes } from '@contexts/objects/NotesContextObject';
 import { getDefaultShortcutKey, formatKeyDisplay } from '@utils/shortcutsUtils';
 import NoteItem from './NoteItem';
 import { setNoteItemActions } from './noteItemActions';

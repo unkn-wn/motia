@@ -1,8 +1,8 @@
-import React, { useMemo, useCallback, type ReactNode, useContext } from 'react';
+import React, { useMemo, useCallback, type ReactNode } from 'react';
 import type { Note } from '@types';
 import { sortNotesByTime } from '@utils/notesUtils';
 import { useActiveNote } from '@components/NotesSidebar/useActiveNote';
-import { NotesContext, type NotesContextType } from './NotesContextObject';
+import { NotesContext, type NotesContextType } from './objects/NotesContextObject';
 
 interface NotesProviderProps {
   children: ReactNode;
@@ -69,8 +69,4 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({
   );
 };
 
-export const useNotes = () => {
-  const ctx = useContext(NotesContext);
-  if (!ctx) throw new Error('useNotes must be used within a NotesProvider');
-  return ctx;
-};
+// hook moved to NotesContextObject.ts

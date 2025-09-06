@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
 import { useDrawingInteractions } from './useDrawingInteractions';

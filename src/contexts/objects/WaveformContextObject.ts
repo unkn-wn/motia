@@ -1,4 +1,4 @@
-import { createContext } from 'react';
+import { createContext, useContext } from 'react';
 import type { Note, CanvasTransform } from '@types';
 import type { DrawingSession, DrawingPoint } from '@types';
 
@@ -67,5 +67,10 @@ export interface WaveformContextValue {
   setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const WaveformContext = createContext<WaveformContextValue | null>(null);
-export default WaveformContext;
+export const WaveformContext = createContext<WaveformContextValue | null>(null);
+
+export const useWaveformContext = () => {
+  const ctx = useContext(WaveformContext);
+  if (!ctx) throw new Error('useWaveformContext must be used within a WaveformProvider');
+  return ctx;
+};

@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useSyncExternalStore } from 'react';
-import { useVolumeContext } from '@contexts/AudioControlsContext';
+import { useVolumeContext } from '@contexts/objects/AudioControlsContextObject';
 import { volumeStore } from './state';
 import { Volume2Icon } from '@assets/icons';
 

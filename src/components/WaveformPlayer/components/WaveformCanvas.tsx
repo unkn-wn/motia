@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { useMouseInteractions } from '../hooks/useMouseInteractions';
 import { usePointerInteractions } from '../hooks/usePointerInteractions';
 import { useDrawingInteractions } from '../hooks/useDrawingInteractions';
 import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFromCanvasY, getWaveformDimensions } from '@utils/canvasUtils';
-import { useAudio } from '@contexts/AudioContext';
+import { useAudio } from '@contexts/objects/AudioContextObject';
 
 export const WaveformCanvas: React.FC = () => {
   const {

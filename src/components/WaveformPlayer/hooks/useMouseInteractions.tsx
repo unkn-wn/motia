@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
 import { history } from '@utils/history';
 import { getPreferences } from '@utils/shortcutsUtils';

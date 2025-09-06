@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import { useAudio } from '@contexts/AudioContext';
+import { useAudio } from '@contexts/objects/AudioContextObject';
 import type { Note, CanvasTransform } from '@types';
 import type { DrawingPoint, DrawingSession } from '@types';
 
@@ -154,8 +154,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
           setWaveformData(filteredData);
         }
-      } catch (error) {
-        console.warn('Could not extract waveform data:', error);
+  } catch {
         // Fallback: create dummy waveform data
         const dummyData = Array.from({ length: 1000 }, () => Math.random() * 0.5);
         setWaveformData(dummyData);

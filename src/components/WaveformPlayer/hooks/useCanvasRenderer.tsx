@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
-import { useAudio } from '@contexts/AudioContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
+import { useAudio } from '@contexts/objects/AudioContextObject';
 import { decompressSession } from '@utils/advancedCompression';
 import { getColorCode } from '@utils/colorUtils';
 import type { Note } from '@types';
@@ -10,7 +10,6 @@ export const useCanvasRenderer = () => {
     transform,
     notes,
     isDrawingMode,
-    drawingSession,
     currentStroke,
     isDrawing,
     NOTE_LABEL_HIDE_THRESHOLD,
@@ -100,7 +99,7 @@ export const useCanvasRenderer = () => {
         ctx.stroke();
       }
     },
-    [drawingSession, isDrawing, currentStroke]
+  [isDrawing, currentStroke]
   );
 
   // Draw all drawing notes
@@ -304,7 +303,7 @@ export const useCanvasRenderer = () => {
     if (!canvas) return;
 
     // Prune caches for removed notes
-    const idSet = new Set(notes.map((n) => n.id));
+  const idSet = new Set(notes.map((n: Note) => n.id));
     for (const key of decompressedCacheRef.current.keys()) {
       if (!idSet.has(key)) decompressedCacheRef.current.delete(key);
     }

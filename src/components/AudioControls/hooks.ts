@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { useAudio } from '@contexts/AudioContext';
-import { usePlaybackContext, useVolumeContext } from '@contexts/AudioControlsContext';
+import { useAudio } from '@contexts/objects/AudioContextObject';
+import { usePlaybackContext, useVolumeContext } from '@contexts/objects/AudioControlsContextObject';
 import { isPlayingStore, volumeStore } from './state';
 
 // Specialized hooks that only trigger rerenders for specific state changes

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
 import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
 import AudioControls from '@components/AudioControlsContainer';
 import NotesSidebarContainer from '@components/NotesSidebar/NotesSidebarContainer';
@@ -7,15 +7,18 @@ import FloatingDock from '@components/FloatingDock';
 import { AudioProvider } from '@contexts/AudioContext';
 import HomeHero from '@components/Home/HomeHero';
 import AuthModal from '@components/Home/AuthModal';
-import { AuthProvider } from '@/contexts/FirebaseAuthContext';
+import { useAuth } from '@contexts/objects/FirebaseAuthContextObject';
 import type { Note } from '@types';
 import { createNote } from '@utils/notesUtils';
 import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping, getPreferences } from '@utils/shortcutsUtils';
 import { history } from '@utils/history';
-import { ChevronLeftIcon, ChevronRightIcon } from '@assets/icons';
+import { ChevronLeftIcon, ChevronRightIcon, CheckIcon } from '@assets/icons';
 import './style.css';
+import { createProject } from '@/lib/db';
+import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 
 function Home() {
+  const { user } = useAuth();
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -28,6 +31,7 @@ function Home() {
   const [signInOpen, setSignInOpen] = useState(false);
   const [signUpOpen, setSignUpOpen] = useState(false);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
 
   // Keep a live ref of notes for History getters
   useEffect(() => {
@@ -46,13 +50,23 @@ function Home() {
 
   const handleFileSelect = useCallback(async (file: File) => {
     setIsLoading(true);
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  // Flip loading off first so the uploader can show success pulse
-  setIsLoading(false);
-  // Give the pulse a brief moment to render before switching views
-  setTimeout(() => setAudioFile(file), 220);
-  }, []);
+    try {
+      // Small UX delay
+      await new Promise(resolve => setTimeout(resolve, 600));
+      setAudioFile(file);
+      // Create a Firestore project for this session if signed in
+      if (user) {
+        const pid = await createProject(user.uid, {
+          audio: { name: file.name, size: file.size, type: file.type },
+        });
+        setProjectId(pid);
+      } else {
+        setProjectId(null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   const handleAddNote = useCallback((time: number, canvasX: number, canvasY: number) => {
     const prefs = getPreferences();
@@ -191,6 +205,10 @@ function Home() {
     history.pushChangeNoteColor(id, prevColor, color);
   }, []);
 
+  // Stable Undo/Redo handlers to avoid re-rendering consumers every tick
+  const handleUndo = useCallback(() => { history.undo(); }, []);
+  const handleRedo = useCallback(() => { history.redo(); }, []);
+
   // Global Undo/Redo (Ctrl/Cmd+Z, Ctrl+Shift+Z only)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -219,6 +237,21 @@ function Home() {
     setCurrentTime(time);
   }, []);
 
+  // Subscribe to history for stable canUndo/canRedo without re-rendering each tick
+  const historyFlags = useSyncExternalStore(
+    history.subscribe.bind(history),
+    () => (history.canUndo() ? 1 : 0) | (history.canRedo() ? 2 : 0)
+  );
+  const canUndo = (historyFlags & 1) !== 0;
+  const canRedo = (historyFlags & 2) !== 0;
+
+  // Autosave notes to Firestore when possible
+  const { saving, lastSavedAt } = useFirestoreAutosave({
+    uid: user?.uid,
+    projectId,
+    notes,
+  });
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Keyboard Shortcuts Panel */}
@@ -229,8 +262,8 @@ function Home() {
         onUpdateShortcut={handleUpdateShortcut}
         onResetShortcuts={handleResetShortcuts}
       />
-      {!audioFile ? (
-        <AuthProvider>
+  {!audioFile ? (
+        <>
           <HomeHero
             onUpload={handleFileSelect}
             uploading={isLoading}
@@ -239,12 +272,31 @@ function Home() {
           />
           <AuthModal open={signInOpen} mode="signin" onClose={() => setSignInOpen(false)} />
           <AuthModal open={signUpOpen} mode="signup" onClose={() => setSignUpOpen(false)} />
-        </AuthProvider>
+        </>
       ) : (
         <AudioProvider
           onCurrentTimeChange={handleCurrentTimeChange}
         >
           <div className="relative h-screen overflow-hidden">
+            {/* Autosave indicator (top-left) */}
+            <div className="fixed top-3 left-3 z-40 group select-none">
+              <div
+                className={`h-6 w-6 rounded-full grid place-items-center shadow-md ${saving ? 'bg-neutral-700 animate-pulse' : 'bg-neutral-800'} border border-neutral-600`}
+                aria-live="polite"
+                // aria-label={saving ? 'Saving…' : (lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : 'Idle')}
+                title={lastSavedAt ? `Last saved ${lastSavedAt.toLocaleTimeString()}` : 'Not saved yet'}
+              >
+                {saving ? (
+                  <div className="h-3 w-3 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <CheckIcon className="w-3.5 h-3.5 text-neutral-300" />
+                )}
+              </div>
+              {/* hover popover */}
+              <div className="pointer-events-none absolute left-0 mt-1 px-2 py-1 rounded-md text-xs bg-neutral-800/95 text-neutral-200 border border-neutral-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                {saving ? 'Saving…' : (lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : 'Not saved yet')}
+              </div>
+            </div>
             <WaveformPlayer
               ref={waveformPlayerRef}
               audioFile={audioFile}
@@ -268,10 +320,10 @@ function Home() {
               canAddNote={!!audioFile}
               isDrawingMode={isDrawingMode}
               onToggleDrawingMode={handleToggleDrawingMode}
-              onUndo={() => history.undo()}
-              onRedo={() => history.redo()}
-              canUndo={history.canUndo()}
-              canRedo={history.canRedo()}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              canUndo={canUndo}
+              canRedo={canRedo}
             />
 
             {/* Sidebar Toggle Button - positioned on the side and moves with panel */}

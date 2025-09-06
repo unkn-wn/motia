@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { useDrawingInteractions } from './useDrawingInteractions';
 import { optimizeDrawingPoints } from '@utils/drawingUtils';
 import { history } from '@utils/history';

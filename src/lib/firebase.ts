@@ -56,7 +56,6 @@ Potential data model (not implemented yet):
     - meta: { title, createdAt, updatedAt, audioFileMeta, duration, ... }
     - notes: [ { id, time, canvasX, canvasY, content, color, type } ]
     - drawings: [ { id, noteId, time, compressed: { method, bytes, size, sessionMeta }, strokes[] } ]
-    - history (optional): capped stack for undo, or recomputable from events
 
 Auth flow:
 - Anonymous or email/pass (later Google). Start anonymous, upgrade on sign-in.

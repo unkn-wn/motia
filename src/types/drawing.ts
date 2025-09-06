@@ -17,7 +17,7 @@ export interface DrawingData {
   // Raw strokes (for rendering and backward compatibility)
   strokes?: DrawingStroke[];
   // Compressed data (for storage)
-  compressed?: unknown[];
+  compressed?: unknown[] | string;
   bounds: { width: number; height: number };
   // Storage metrics
   originalSize?: number;

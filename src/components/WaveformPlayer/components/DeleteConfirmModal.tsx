@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
-import { useWaveformContext } from '@contexts/WaveformContext';
+import React, { useEffect, useCallback } from 'react';
+import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 
 export const DeleteConfirmModal: React.FC = () => {
   const { deleteConfirmNoteId, setDeleteConfirmNoteId, onDeleteNote } = useWaveformContext();
 
-  const cancel = () => setDeleteConfirmNoteId(null);
+  const cancel = useCallback(() => setDeleteConfirmNoteId(null), [setDeleteConfirmNoteId]);
   const confirm = () => { if (onDeleteNote && deleteConfirmNoteId) onDeleteNote(deleteConfirmNoteId); cancel(); };
 
   // Always call hooks in the same order; gate effect logic by state
@@ -19,7 +19,7 @@ export const DeleteConfirmModal: React.FC = () => {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [deleteConfirmNoteId]);
+  }, [deleteConfirmNoteId, cancel]);
 
   if (!deleteConfirmNoteId) return null;
 

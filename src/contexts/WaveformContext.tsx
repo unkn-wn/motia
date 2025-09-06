@@ -1,7 +1,8 @@
-import React, { createContext, useContext } from 'react';
+import React from 'react';
 import type { ReactNode } from 'react';
 import type { Note, CanvasTransform } from '@types';
 import type { DrawingSession, DrawingPoint } from '@types';
+import { WaveformContext } from './objects/WaveformContextObject';
 
 export interface WaveformContextValue {
   transform: CanvasTransform;
@@ -71,12 +72,7 @@ export interface WaveformContextValue {
   setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-export const WaveformContext = createContext<WaveformContextValue | null>(null);
-export const useWaveformContext = () => {
-  const ctx = useContext(WaveformContext);
-  if (!ctx) throw new Error('useWaveformContext must be used within a WaveformProvider');
-  return ctx;
-};
+// context and hook moved to WaveformContextObject.tsx
 
 interface WaveformProviderProps {
   children: ReactNode;
