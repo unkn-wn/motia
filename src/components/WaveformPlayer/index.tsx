@@ -272,7 +272,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     skipForward: skipForward,
     addNoteAtCurrentTime: () => {
       const syntheticEvent = {
-        stopPropagation: () => {},
+        stopPropagation: () => { },
       } as React.MouseEvent;
       handleAddNoteAtCurrentTime(syntheticEvent);
     },
@@ -315,8 +315,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     setDrawingStartPos,
     drawingSession,
     setDrawingSession,
-  drawingNoteId,
-  setDrawingNoteId,
+    drawingNoteId,
+    setDrawingNoteId,
 
     // Event handlers
     onAddNote,
@@ -324,21 +324,21 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     onDeleteNote,
     onMoveNote,
     onAddDrawing,
-  onUpdateDrawing,
+    onUpdateDrawing,
 
     // Refs
     canvasRef,
 
     // Constants
-  NOTE_LABEL_HIDE_THRESHOLD,
+    NOTE_LABEL_HIDE_THRESHOLD,
 
-  // Context menu
-  contextMenu,
-  setContextMenu,
+    // Context menu
+    contextMenu,
+    setContextMenu,
 
-  // Delete confirmation
-  deleteConfirmNoteId,
-  setDeleteConfirmNoteId,
+    // Delete confirmation
+    deleteConfirmNoteId,
+    setDeleteConfirmNoteId,
   };
 
   return (

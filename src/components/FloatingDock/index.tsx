@@ -2,6 +2,8 @@ import { memo } from 'react';
 import AddNoteButton from './AddNoteButton';
 import DrawingModeButton from './DrawingModeButton';
 import ShortcutsButton from './ShortcutsButton';
+import UndoButton from './UndoButton';
+import RedoButton from './RedoButton';
 
 interface FloatingDockProps {
   onAddNote: () => void;
@@ -9,6 +11,10 @@ interface FloatingDockProps {
   canAddNote: boolean;
   isDrawingMode: boolean;
   onToggleDrawingMode: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 // Main FloatingDock - isolated from currentTime updates
@@ -19,6 +25,10 @@ const FloatingDock = memo<FloatingDockProps>(({
   canAddNote,
   isDrawingMode,
   onToggleDrawingMode,
+  onUndo,
+  onRedo,
+  canUndo = true,
+  canRedo = true,
 }) => {
   return (
     <div
@@ -37,6 +47,15 @@ const FloatingDock = memo<FloatingDockProps>(({
       )}
 
       <div className='border-t-2 border-neutral-600/20 rounded-full' />
+
+      {/* Undo/Redo Buttons */}
+      {(onUndo || onRedo) && (
+        <div className="flex flex-col space-y-3">
+          {onUndo && <UndoButton onUndo={onUndo} disabled={!canUndo} />}
+          {onRedo && <RedoButton onRedo={onRedo} disabled={!canRedo} />}
+          <div className='border-t-2 border-neutral-600/20 rounded-full' />
+        </div>
+      )}
 
       {/* Keyboard Shortcuts Button */}
       <ShortcutsButton onShowShortcuts={onShowShortcuts} />

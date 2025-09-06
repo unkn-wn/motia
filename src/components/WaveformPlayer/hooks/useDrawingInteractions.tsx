@@ -13,14 +13,14 @@ export const useDrawingInteractions = () => {
     setCurrentStroke,
     drawingStartPos,
     setDrawingStartPos,
-  drawingSession,
+    drawingSession,
     setDrawingSession,
-  drawingNoteId,
-  setDrawingNoteId,
-  onAddDrawing,
-  onUpdateDrawing,
-  canvasRef,
-  notes
+    drawingNoteId,
+    setDrawingNoteId,
+    onAddDrawing,
+    onUpdateDrawing,
+    canvasRef,
+    notes
   } = useWaveformContext();
 
   const handleDrawingStart = useCallback((canvasX: number, canvasY: number) => {

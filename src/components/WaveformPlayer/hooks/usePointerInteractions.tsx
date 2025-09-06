@@ -17,8 +17,8 @@ export const usePointerInteractions = () => {
     setIsPanning,
     setLastPanPoint,
     setIsFollowingPlayhead,
-  notes,
-  NOTE_LABEL_HIDE_THRESHOLD
+    notes,
+    NOTE_LABEL_HIDE_THRESHOLD
   } = useWaveformContext();
 
   // Track active pointers for pinch/drag
@@ -67,13 +67,13 @@ export const usePointerInteractions = () => {
       return;
     }
 
-  if (isDrawingMode) {
+    if (isDrawingMode) {
       handleDrawingStart(canvasX, canvasY);
       return;
     }
 
     // Begin panning on primary touch
-  if (e.isPrimary) {
+    if (e.isPrimary) {
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
       setIsFollowingPlayhead(false);
@@ -105,7 +105,7 @@ export const usePointerInteractions = () => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-  // Note dragging is handled by global handlers (pointermove on document)
+    // Note dragging is handled by global handlers (pointermove on document)
 
     // Pinch-zoom when two pointers are active
     if (pointers.current.size === 2 && initialPinch.current) {
@@ -126,7 +126,7 @@ export const usePointerInteractions = () => {
     }
 
     // Otherwise, panning for single pointer
-  if (isPanning) {
+    if (isPanning) {
       e.preventDefault();
       const deltaX = e.movementX || (e.clientX - lastPanPoint.x);
       const deltaY = e.movementY || (e.clientY - lastPanPoint.y);
@@ -147,9 +147,9 @@ export const usePointerInteractions = () => {
   }, [setIsPanning, isPanning]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-  // If a touch pointer is active, ignore wheel to avoid double-zoom on mobile
-  if (pointers.current.size > 0) return;
-  if (e.cancelable) e.preventDefault();
+    // If a touch pointer is active, ignore wheel to avoid double-zoom on mobile
+    if (pointers.current.size > 0) return;
+    if (e.cancelable) e.preventDefault();
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;

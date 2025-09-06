@@ -35,8 +35,8 @@ export const useGlobalMouseHandlers = () => {
         const newCanvasX = dragging.initialCanvasX + deltaX / transform.scale;
         const newCanvasY = dragging.initialCanvasY + deltaY / transform.scale;
 
-  onMoveNote(dragging.id, newCanvasX, newCanvasY);
-  setDragOccurred(true);
+        onMoveNote(dragging.id, newCanvasX, newCanvasY);
+        setDragOccurred(true);
       }
 
       // Handle drawing
@@ -68,7 +68,7 @@ export const useGlobalMouseHandlers = () => {
       }
     };
 
-  const handleGlobalMouseUp = (e?: MouseEvent | PointerEvent) => {
+    const handleGlobalMouseUp = (e?: MouseEvent | PointerEvent) => {
       // Avoid double-processing on desktop
       if (e && 'pointerType' in e && e.pointerType === 'mouse') return;
       // Handle panning
@@ -102,16 +102,16 @@ export const useGlobalMouseHandlers = () => {
     if (dragging || isDrawing || isPanning) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       document.addEventListener('mouseup', handleGlobalMouseUp as EventListener);
-    document.addEventListener('contextmenu', handleGlobalMouseUp as EventListener, { capture: true } as AddEventListenerOptions);
+      document.addEventListener('contextmenu', handleGlobalMouseUp as EventListener, { capture: true } as AddEventListenerOptions);
       document.addEventListener('pointermove', handleGlobalMouseMove as EventListener, { passive: true } as AddEventListenerOptions);
       document.addEventListener('pointerup', handleGlobalMouseUp as EventListener);
 
       return () => {
-  document.removeEventListener('mousemove', handleGlobalMouseMove);
-  document.removeEventListener('mouseup', handleGlobalMouseUp as EventListener);
-  document.removeEventListener('contextmenu', handleGlobalMouseUp as EventListener);
-  document.removeEventListener('pointermove', handleGlobalMouseMove as EventListener);
-  document.removeEventListener('pointerup', handleGlobalMouseUp as EventListener);
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        document.removeEventListener('mouseup', handleGlobalMouseUp as EventListener);
+        document.removeEventListener('contextmenu', handleGlobalMouseUp as EventListener);
+        document.removeEventListener('pointermove', handleGlobalMouseMove as EventListener);
+        document.removeEventListener('pointerup', handleGlobalMouseUp as EventListener);
       };
     }
   }, [

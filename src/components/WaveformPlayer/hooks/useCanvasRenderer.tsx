@@ -38,7 +38,7 @@ export const useCanvasRenderer = () => {
 
   // Draw a drawing note from compressed data (with cache)
   const renderDrawingOnCanvas = useCallback(
-  (ctx: CanvasRenderingContext2D, note: Note) => {
+    (ctx: CanvasRenderingContext2D, note: Note) => {
       if (!note.drawing || !note.drawing.compressed) return;
       try {
         // Build a stable cache key that changes whenever the compressed payload changes.
@@ -53,9 +53,9 @@ export const useCanvasRenderer = () => {
           }
         }
         const cacheKey = `${note.id}:${rev}`;
-    const cached = decompressedCacheRef.current.get(note.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let decompressed: any[];
+        const cached = decompressedCacheRef.current.get(note.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let decompressed: any[];
         if (cached && cached.key === cacheKey) {
           decompressed = cached.strokes;
         } else {
@@ -78,8 +78,8 @@ export const useCanvasRenderer = () => {
           }
           ctx.stroke();
         }
-  } catch {
-  // keep rendering resilient
+      } catch {
+        // keep rendering resilient
       }
     },
     []

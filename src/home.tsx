@@ -257,6 +257,10 @@ function Home() {
               canAddNote={!!audioFile}
               isDrawingMode={isDrawingMode}
               onToggleDrawingMode={handleToggleDrawingMode}
+              onUndo={() => history.undo()}
+              onRedo={() => history.redo()}
+              canUndo={history.canUndo()}
+              canRedo={history.canRedo()}
             />
 
             {/* Sidebar Toggle Button - positioned on the side and moves with panel */}

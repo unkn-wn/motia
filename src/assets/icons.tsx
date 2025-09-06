@@ -19,7 +19,9 @@ import {
   Check,
   Keyboard,
   RotateCcw,
-  Upload
+  Upload,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 
 /**
@@ -131,3 +133,14 @@ export const RotateCcwIcon = memo(({ className = "w-4 h-4" }: { className?: stri
   <RotateCcw className={className} />
 ));
 RotateCcwIcon.displayName = 'RotateCcwIcon';
+
+// Undo / Redo Icons
+export const UndoIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <Undo2 className={className} />
+));
+UndoIcon.displayName = 'UndoIcon';
+
+export const RedoIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <Redo2 className={className} />
+));
+RedoIcon.displayName = 'RedoIcon';

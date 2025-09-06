@@ -7,50 +7,20 @@ import type {
   DrawingStroke,
   CompressionResult,
   CompressedStroke
-} from '../types/drawing';
+} from '@types';
+import { compressStrokeAdvancedAdaptive } from './advancedCompression';
 
-// Local compressed representations to avoid any
-interface DeltaCompressedStroke {
-  start: [number, number];
-  deltas: [number, number][];
-  color: string;
-  strokeWidth: number;
-}
 
-interface IntegerCompressedStroke {
-  points: [number, number][];
-  color: string;
-  strokeWidth: number;
-  scale: number;
-}
-
-// Import advanced compression methods
-import {
-  compressStrokeAdvancedAdaptive,
-  decompressStrokeAdvancedAdaptive
-} from './advancedCompression';
-
-/**
- * Optimizes drawing points by removing redundant points to prevent memory issues
- * Uses Douglas-Peucker algorithm for line simplification
- */
 export const optimizeDrawingPoints = (points: DrawingPoint[], tolerance: number = 1.0): DrawingPoint[] => {
   if (points.length <= 2) return points;
-
   return douglasPeucker(points, tolerance);
 };
 
-/**
- * Douglas-Peucker line simplification algorithm
- */
 function douglasPeucker(points: DrawingPoint[], tolerance: number): DrawingPoint[] {
   if (points.length <= 2) return points;
-
-  // Find the point with the maximum distance from the line segment
   let maxDistance = 0;
   let maxIndex = 0;
   const end = points.length - 1;
-
   for (let i = 1; i < end; i++) {
     const distance = perpendicularDistance(points[i], points[0], points[end]);
     if (distance > maxDistance) {
@@ -58,18 +28,12 @@ function douglasPeucker(points: DrawingPoint[], tolerance: number): DrawingPoint
       maxIndex = i;
     }
   }
-
-  // If max distance is greater than tolerance, recursively simplify
   if (maxDistance > tolerance) {
     const left = douglasPeucker(points.slice(0, maxIndex + 1), tolerance);
     const right = douglasPeucker(points.slice(maxIndex), tolerance);
-
-    // Combine results, removing duplicate point at junction
     return [...left.slice(0, -1), ...right];
-  } else {
-    // All points between start and end are within tolerance - return just start and end
-    return [points[0], points[end]];
   }
+  return [points[0], points[end]];
 }
 
 /**
@@ -110,143 +74,14 @@ function perpendicularDistance(point: DrawingPoint, lineStart: DrawingPoint, lin
 }
 
 /**
- * Compresses drawing strokes for efficient storage
- */
-export const compressDrawingStrokes = (strokes: DrawingStroke[]): DrawingStroke[] => {
-  return strokes.map(stroke => ({
-    ...stroke,
-    points: optimizeDrawingPoints(stroke.points, 2.0) // Slightly higher tolerance for storage
-  }));
-};
-
-/**
  * Calculates the memory footprint of drawing data in bytes (approximate)
  */
 export const calculateDrawingMemoryFootprint = (strokes: DrawingStroke[]): number => {
   let totalPoints = 0;
-  strokes.forEach(stroke => {
-    totalPoints += stroke.points.length;
-  });
-
-  // Each point has x, y (8 bytes each as numbers), plus stroke metadata
-  const pointsSize = totalPoints * 16; // 16 bytes per point
-  const strokeMetadataSize = strokes.length * 50; // Approximate metadata per stroke
-
+  strokes.forEach(stroke => { totalPoints += stroke.points.length; });
+  const pointsSize = totalPoints * 16; // approx bytes per point
+  const strokeMetadataSize = strokes.length * 50; // approx metadata
   return pointsSize + strokeMetadataSize;
-};
-
-/**
- * Validates if drawing data is within memory limits
- */
-export const isDrawingWithinMemoryLimits = (strokes: DrawingStroke[], maxMemoryKB: number = 100): boolean => {
-  const memoryBytes = calculateDrawingMemoryFootprint(strokes);
-  return memoryBytes <= (maxMemoryKB * 1024);
-};
-
-/**
- * Efficient Storage Solutions for Drawing Data
- */
-
-/**
- * Delta compression - stores only the differences between points
- * Much more efficient for typical drawing patterns
- */
-export const compressStrokeWithDeltas = (stroke: DrawingStroke) => {
-  if (stroke.points.length <= 1) return stroke;
-
-  const [start, ...rest] = stroke.points;
-  const deltas: [number, number][] = [];
-
-  let prevX = start.x;
-  let prevY = start.y;
-
-  for (const point of rest) {
-    // Round deltas to reduce precision slightly for better compression
-    const deltaX = Math.round((point.x - prevX) * 10) / 10;
-    const deltaY = Math.round((point.y - prevY) * 10) / 10;
-    deltas.push([deltaX, deltaY]);
-    prevX = point.x;
-    prevY = point.y;
-  }
-
-  return {
-    start: [Math.round(start.x * 10) / 10, Math.round(start.y * 10) / 10],
-    deltas,
-    color: stroke.color,
-    strokeWidth: stroke.strokeWidth
-  };
-};
-
-/**
- * Reconstruct stroke from delta compression
- */
-export const decompressStrokeFromDeltas = (compressed: DeltaCompressedStroke): DrawingStroke => {
-  const points: DrawingPoint[] = [];
-  const [startX, startY] = compressed.start;
-
-  points.push({ x: startX, y: startY });
-
-  let currentX = startX;
-  let currentY = startY;
-
-  for (const [deltaX, deltaY] of compressed.deltas) {
-    currentX += deltaX;
-    currentY += deltaY;
-    points.push({ x: currentX, y: currentY });
-  }
-
-  return {
-    points,
-    color: compressed.color,
-    strokeWidth: compressed.strokeWidth
-  };
-};
-
-/**
- * Integer coordinate compression - reduces floating point precision
- */
-export const compressStrokeToIntegers = (stroke: DrawingStroke, scale: number = 10) => {
-  return {
-    // Store as scaled integers to reduce size
-    points: stroke.points.map(p => [
-      Math.round(p.x * scale),
-      Math.round(p.y * scale)
-    ]),
-    color: stroke.color,
-    strokeWidth: stroke.strokeWidth,
-    scale
-  };
-};
-
-/**
- * Reconstruct stroke from integer compression
- */
-export const decompressStrokeFromIntegers = (compressed: IntegerCompressedStroke): DrawingStroke => {
-  const scale = compressed.scale ?? 10;
-  return {
-    points: compressed.points.map(([x, y]: [number, number]) => ({
-      x: x / scale,
-      y: y / scale
-    })),
-    color: compressed.color,
-    strokeWidth: compressed.strokeWidth
-  };
-};
-
-/**
- * Adaptive compression - chooses best method based on actual size reduction
- * Now uses advanced compression techniques for much better results
- */
-export const compressStrokeAdaptive = (stroke: DrawingStroke): CompressedStroke => {
-  return compressStrokeAdvancedAdaptive(stroke);
-};
-
-/**
- * Decompress adaptively compressed stroke
- * Now uses advanced decompression methods
- */
-export const decompressStrokeAdaptive = (compressed: CompressedStroke): DrawingStroke => {
-  return decompressStrokeAdvancedAdaptive(compressed);
 };
 
 /**-

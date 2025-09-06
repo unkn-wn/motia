@@ -219,10 +219,10 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
   ]);
 
   return (
-  <AudioContext.Provider value={contextValue}>
-  {children}
-  {/* Synchronize external stores for fine-grained subscribers */}
-  <AudioProviderEffects isPlaying={isPlaying} volume={volume} />
+    <AudioContext.Provider value={contextValue}>
+      {children}
+      {/* Synchronize external stores for fine-grained subscribers */}
+      <AudioProviderEffects isPlaying={isPlaying} volume={volume} />
     </AudioContext.Provider>
   );
 };
