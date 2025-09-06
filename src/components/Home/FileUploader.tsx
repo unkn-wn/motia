@@ -36,26 +36,44 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelect, isLoading }) 
 
   return (
     <div className="flex flex-col items-center justify-center animate-fade-in-up">
-      <label className="cursor-pointer group">
+      <label
+        className="cursor-pointer group focus:outline-none"
+        role="button"
+        tabIndex={isLoading ? -1 : 0}
+        aria-disabled={isLoading}
+        aria-busy={isLoading}
+        aria-label="Upload audio file"
+        title="Upload audio file"
+        onKeyDown={(e) => {
+          if (isLoading) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            (e.currentTarget as HTMLLabelElement).click();
+          }
+        }}
+      >
         <input
           type="file"
           accept="audio/*"
           onChange={handleFileInput}
-          className="hidden"
+          className="sr-only"
+          tabIndex={-1}
           disabled={isLoading}
         />
         <div
-          className={`relative flex items-center justify-center rounded-full transition-all duration-300 shadow-xl animate-float-soft ${isLoading ? 'w-20 h-20 bg-neutral-800/60' : 'w-24 h-24 bg-neutral-800 hover:bg-neutral-700/50'
+          className={`relative flex items-center justify-center rounded-full transition-all duration-300 shadow-xl animate-float-soft ${isLoading
+            ? 'w-20 h-20 bg-neutral-800/60'
+            : 'w-24 h-24 bg-neutral-800 group-focus-visible:ring-2 group-focus-visible:ring-green-400 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-neutral-900'
             }`}
         >
           {/* Animated ring */}
           <div
             ref={ringRef}
             className={`absolute inset-0 rounded-full border-2 ${isLoading
-                ? 'border-neutral-600 border-t-transparent animate-spin'
-                : justFinished
-                  ? 'border-green-400/70 animate-ring-out'
-                  : 'border-neutral-700/60 group-hover:border-neutral-500/70'
+              ? 'border-neutral-600 border-t-transparent animate-spin'
+              : justFinished
+                ? 'border-green-400/70 animate-ring-out'
+                : 'border-neutral-700/60 group-hover:border-neutral-500/70'
               }`}
           />
           {/* Inner icon / loader */}

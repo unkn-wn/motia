@@ -1,3 +1,14 @@
+## Environment variables
+
+This project uses Vite env files for Firebase configuration.
+
+1. Copy `.env.example` to `.env.local` and fill in values.
+2. Vite exposes variables prefixed with `VITE_` to the client code.
+
+Files:
+- `.env.example` – template with variable names.
+- `.env.local` – your local values (not committed).
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

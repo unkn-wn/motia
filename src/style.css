@@ -3,7 +3,7 @@
 /* CSS Variables for Dark Theme */
 :root {
   --bg-primary: #171717;
-  --bg-secondary: #292524;
+  --bg-secondary: #242424;
   --bg-tertiary: #525252;
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
@@ -84,7 +84,7 @@ input[type="range"]::-moz-range-thumb {
   0% { opacity: 0; transform: translateY(8px) scale(0.98); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-.animate-fade-in-up { animation: fade-in-up 500ms ease-out both; }
+.animate-fade-in-up { animation: fade-in-up 300ms ease-out both; }
 
 @keyframes float-soft {
   0% { transform: translateY(0px) }

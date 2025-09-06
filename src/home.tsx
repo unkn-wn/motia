@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import FileUploader from '@components/FileUploader';
-import HeroBanner from '@components/HeroBanner';
 import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
 import AudioControls from '@components/AudioControlsContainer';
 import NotesSidebarContainer from '@components/NotesSidebar/NotesSidebarContainer';
 import KeyboardShortcuts from '@components/KeyboardShortcuts';
 import FloatingDock from '@components/FloatingDock';
 import { AudioProvider } from '@contexts/AudioContext';
+import HomeHero from '@components/Home/HomeHero';
+import AuthModal from '@components/Home/AuthModal';
+import { AuthProvider } from '@/contexts/FirebaseAuthContext';
 import type { Note } from '@types';
 import { createNote } from '@utils/notesUtils';
 import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping, getPreferences } from '@utils/shortcutsUtils';
@@ -24,6 +25,8 @@ function Home() {
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [signUpOpen, setSignUpOpen] = useState(false);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
 
   // Keep a live ref of notes for History getters
@@ -148,7 +151,7 @@ function Home() {
 
     window.addEventListener('keydown', keyboardHandler);
     return () => window.removeEventListener('keydown', keyboardHandler);
-  }, [shortcuts, handleAddNoteAtCurrentTime]); const handleUpdateNote = useCallback((id: string, content: string) => {
+  }, [shortcuts, handleAddNoteAtCurrentTime, handleToggleDrawingMode, handleToggleSidebar]); const handleUpdateNote = useCallback((id: string, content: string) => {
     const prevNote = notesRef.current.find(n => n.id === id);
     const prevContent = prevNote?.content ?? '';
     if (prevContent === content) return; // no-op
@@ -226,16 +229,17 @@ function Home() {
         onUpdateShortcut={handleUpdateShortcut}
         onResetShortcuts={handleResetShortcuts}
       />
-
       {!audioFile ? (
-        <div className="h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 opacity-[0.08]">
-            <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-gradient-to-br from-white/10 to-transparent blur-3xl" />
-            <div className="absolute -bottom-24 -right-24 w-80 h-80 rounded-full bg-gradient-to-tl from-white/10 to-transparent blur-3xl" />
-          </div>
-          <HeroBanner />
-          <FileUploader onFileSelect={handleFileSelect} isLoading={isLoading} />
-        </div>
+        <AuthProvider>
+          <HomeHero
+            onUpload={handleFileSelect}
+            uploading={isLoading}
+            onOpenSignin={() => setSignInOpen(true)}
+            onOpenSignup={() => setSignUpOpen(true)}
+          />
+          <AuthModal open={signInOpen} mode="signin" onClose={() => setSignInOpen(false)} />
+          <AuthModal open={signUpOpen} mode="signup" onClose={() => setSignUpOpen(false)} />
+        </AuthProvider>
       ) : (
         <AudioProvider
           onCurrentTimeChange={handleCurrentTimeChange}
@@ -300,7 +304,7 @@ function Home() {
               />
             </div>
           </div>
-        </AudioProvider>
+  </AudioProvider>
       )}
     </div>
   );

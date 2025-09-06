@@ -18,11 +18,15 @@ import {
   X,
   Check,
   Keyboard,
+  LogIn,
+  UserPlus,
+  Wand2,
   RotateCcw,
   Upload,
   Undo2,
   Redo2
 } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 /**
  * Memoized Lucide icon components to prevent unnecessary rerenders
@@ -129,6 +133,21 @@ export const KeyboardIcon = memo(({ className = "w-5 h-5" }: { className?: strin
 ));
 KeyboardIcon.displayName = 'KeyboardIcon';
 
+export const LogInIcon = memo(({ className = "w-6 h-6" }: { className?: string }) => (
+  <LogIn className={className} />
+));
+LogInIcon.displayName = 'LogInIcon';
+
+export const UserPlusIcon = memo(({ className = "w-6 h-6" }: { className?: string }) => (
+  <UserPlus className={className} />
+));
+UserPlusIcon.displayName = 'UserPlusIcon';
+
+export const Wand2Icon = memo(({ className = "w-6 h-6" }: { className?: string }) => (
+  <Wand2 className={className} />
+));
+Wand2Icon.displayName = 'Wand2Icon';
+
 export const RotateCcwIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
   <RotateCcw className={className} />
 ));
@@ -144,3 +163,14 @@ export const RedoIcon = memo(({ className = "w-4 h-4" }: { className?: string })
   <Redo2 className={className} />
 ));
 RedoIcon.displayName = 'RedoIcon';
+
+// Visibility Icons
+export const EyeIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <Eye className={className} />
+));
+EyeIcon.displayName = 'EyeIcon';
+
+export const EyeOffIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <EyeOff className={className} />
+));
+EyeOffIcon.displayName = 'EyeOffIcon';
