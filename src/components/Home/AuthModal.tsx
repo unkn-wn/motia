@@ -63,16 +63,27 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="block">
             <span className="block text-sm text-neutral-300">Email</span>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required className="mt-1 w-full rounded-lg bg-neutral-800/80 border border-neutral-700 px-3 py-2 text-neutral-100 outline-none focus:border-neutral-500 focus:bg-neutral-800" placeholder="you@domain.com" />
+            <input
+              name="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              required
+              autoComplete='email'
+              className="mt-1 w-full rounded-lg bg-neutral-800/80 border border-neutral-700 px-3 py-2 text-neutral-100 outline-none focus:border-neutral-500 focus:bg-neutral-800"
+              placeholder="you@domain.com"
+            />
           </label>
           <label className="block">
             <span className="block text-sm text-neutral-300">Password</span>
             <div className="mt-1 relative">
               <input
+                name="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type={showPassword ? 'text' : 'password'}
                 required
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 className="w-full rounded-lg bg-neutral-800/80 border border-neutral-700 px-3 py-2 pr-9 text-neutral-100 outline-none focus:border-neutral-500 focus:bg-neutral-800"
                 placeholder="••••••••"
               />
