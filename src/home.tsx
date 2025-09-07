@@ -1,10 +1,13 @@
-import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore, useMemo } from 'react';
 import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
 import AudioControls from '@components/AudioControlsContainer';
 import NotesSidebarContainer from '@components/NotesSidebar/NotesSidebarContainer';
 import KeyboardShortcuts from '@components/KeyboardShortcuts';
 import FloatingDock from '@components/FloatingDock';
+import ProfileModal from '@components/Profile/ProfileModal';
 import { AudioProvider } from '@contexts/AudioContext';
+import FullscreenOverlay from '@/components/FullscreenOverlay';
+import RelinkBanner from '@/components/RelinkBanner';
 import HomeHero from '@components/Home/HomeHero';
 import AuthModal from '@components/Home/AuthModal';
 import { useAuth } from '@contexts/objects/FirebaseAuthContextObject';
@@ -14,11 +17,15 @@ import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetA
 import { history } from '@utils/history';
 import { ChevronLeftIcon, ChevronRightIcon, CheckIcon } from '@assets/icons';
 import './style.css';
-import { createProject } from '@/lib/db';
+import { createProject, fetchProjectMeta, fetchProjectNotes } from '@/lib/db';
+import { getLocalAudio, saveLocalAudio } from '@/lib/localAudio';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 
 function Home() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
+  const params = useParams({ strict: false }) as { projectId?: string };
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -30,8 +37,50 @@ function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [signUpOpen, setSignUpOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const handleOpenProfile = useCallback(() => setProfileOpen(true), []);
   const waveformPlayerRef = useRef<WaveformPlayerRef>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [loadingProject, setLoadingProject] = useState(false);
+  const relinkInputRef = useRef<HTMLInputElement>(null!);
+  const [loadingWaveform, setLoadingWaveform] = useState(false);
+  // Load project only if user is signed in and owns it; otherwise redirect home
+  useEffect(() => {
+    const fromRoute = params.projectId;
+    let aborted = false;
+    (async () => {
+      // First: if routing to a project, require auth to settle before anything
+      if (fromRoute && authLoading) return;
+
+      if (!fromRoute) {
+        setProjectId(null);
+        return;
+      }
+      if (!user) {
+        navigate({ to: '/' });
+        return;
+      }
+      setLoadingProject(true);
+      try {
+        const meta = await fetchProjectMeta(user.uid, fromRoute);
+        if (!meta) {
+          if (!aborted) navigate({ to: '/' });
+          return;
+        }
+        const loadedNotes = await fetchProjectNotes(user.uid, fromRoute);
+        if (aborted) return;
+        setProjectId(fromRoute);
+        if (loadedNotes) setNotes(loadedNotes);
+        // Try to rehydrate audio from local IndexedDB cache
+        const cached = await getLocalAudio(fromRoute);
+        if (!aborted && cached) setAudioFile(cached);
+      } finally {
+        if (!aborted) setLoadingProject(false);
+      }
+    })();
+    return () => { aborted = true; };
+  }, [user, authLoading, params.projectId]);
+
 
   // Keep a live ref of notes for History getters
   useEffect(() => {
@@ -53,24 +102,28 @@ function Home() {
     try {
       // Small UX delay
       await new Promise(resolve => setTimeout(resolve, 600));
-      setAudioFile(file);
-      // Create a Firestore project for this session if signed in
       if (user) {
+        // Create a Firestore project and persist audio locally for this device
         const pid = await createProject(user.uid, {
           audio: { name: file.name, size: file.size, type: file.type },
         });
+        await saveLocalAudio(pid, file);
+        setAudioFile(file);
         setProjectId(pid);
+        navigate({ to: '/project/$projectId', params: { projectId: pid } });
       } else {
+        // Anonymous/local session, keep file in memory and stay on home
         setProjectId(null);
+        setAudioFile(file);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, navigate]);
 
   const handleAddNote = useCallback((time: number, canvasX: number, canvasY: number) => {
     const prefs = getPreferences();
-    const color = prefs.defaultNoteColor ?? 'blue';
+    const color = prefs?.defaultNoteColor ?? 'blue';
     const newNote = createNote(time, canvasX, canvasY, '', color);
     setNotes(prev => [...prev, newNote]);
     history.pushAddNote(newNote);
@@ -108,8 +161,8 @@ function Home() {
     const nextDrawing = drawing;
     // If equivalent JSON, no-op
     if (JSON.stringify(prevDrawing) === JSON.stringify(nextDrawing)) return;
-  // Replace the entire note object to change identity and ensure downstream caches key by compressedSize
-  setNotes(prev => prev.map(n => n.id === id ? { ...n, drawing: { ...nextDrawing } } as Note : n));
+    // Replace the entire note object to change identity and ensure downstream caches key by compressedSize
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, drawing: { ...nextDrawing } } as Note : n));
     history.pushUpdateDrawing(id, prevDrawing as Note['drawing'], nextDrawing);
   }, []);
 
@@ -165,7 +218,9 @@ function Home() {
 
     window.addEventListener('keydown', keyboardHandler);
     return () => window.removeEventListener('keydown', keyboardHandler);
-  }, [shortcuts, handleAddNoteAtCurrentTime, handleToggleDrawingMode, handleToggleSidebar]); const handleUpdateNote = useCallback((id: string, content: string) => {
+  }, [shortcuts, handleAddNoteAtCurrentTime, handleToggleDrawingMode, handleToggleSidebar]);
+
+  const handleUpdateNote = useCallback((id: string, content: string) => {
     const prevNote = notesRef.current.find(n => n.id === id);
     const prevContent = prevNote?.content ?? '';
     if (prevContent === content) return; // no-op
@@ -209,6 +264,17 @@ function Home() {
   const handleUndo = useCallback(() => { history.undo(); }, []);
   const handleRedo = useCallback(() => { history.redo(); }, []);
 
+  // Sign out wrapper that also clears current project/audio state
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    // Clear app state on logout so no project remains loaded
+    setProjectId(null);
+    setAudioFile(null);
+    setNotes([]);
+    // Route back to home
+    navigate({ to: '/' });
+  }, [signOut]);
+
   // Global Undo/Redo (Ctrl/Cmd+Z, Ctrl+Shift+Z only)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -216,8 +282,8 @@ function Home() {
       const isMeta = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (!isMeta) return;
-  // Redo: Ctrl+Shift+Z only
-  if (key === 'z' && e.shiftKey) {
+      // Redo: Ctrl+Shift+Z only
+      if (key === 'z' && e.shiftKey) {
         e.preventDefault();
         history.redo();
         return;
@@ -228,9 +294,9 @@ function Home() {
         history.undo();
       }
     };
-  const opts = { capture: true } as AddEventListenerOptions;
-  window.addEventListener('keydown', onKeyDown, opts);
-  return () => window.removeEventListener('keydown', onKeyDown as EventListener, opts);
+    const opts = { capture: true } as AddEventListenerOptions;
+    window.addEventListener('keydown', onKeyDown, opts);
+    return () => window.removeEventListener('keydown', onKeyDown as EventListener, opts);
   }, []);
 
   const handleCurrentTimeChange = useCallback((time: number) => {
@@ -252,8 +318,28 @@ function Home() {
     notes,
   });
 
+  // Relink audio handlers for project routes when audio is missing locally
+  const handleRelinkClick = useCallback(() => {
+    relinkInputRef.current?.click();
+  }, []);
+  const handleRelinkSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !projectId) return;
+    setIsLoading(true);
+    try {
+      await saveLocalAudio(projectId, file);
+      setAudioFile(file);
+    } finally {
+      setIsLoading(false);
+      if (relinkInputRef.current) relinkInputRef.current.value = '';
+    }
+  }, [projectId]);
+
+  const showGlobalProjectOverlay = useMemo(() => params.projectId && (authLoading || loadingProject || loadingWaveform), [params.projectId, authLoading, loadingProject, loadingWaveform]);
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {showGlobalProjectOverlay && <FullscreenOverlay message="Loading project…" />}
       {/* Keyboard Shortcuts Panel */}
       <KeyboardShortcuts
         isOpen={showShortcuts}
@@ -262,22 +348,95 @@ function Home() {
         onUpdateShortcut={handleUpdateShortcut}
         onResetShortcuts={handleResetShortcuts}
       />
-  {!audioFile ? (
-        <>
-          <HomeHero
-            onUpload={handleFileSelect}
-            uploading={isLoading}
-            onOpenSignin={() => setSignInOpen(true)}
-            onOpenSignup={() => setSignUpOpen(true)}
-          />
-          <AuthModal open={signInOpen} mode="signin" onClose={() => setSignInOpen(false)} />
-          <AuthModal open={signUpOpen} mode="signup" onClose={() => setSignUpOpen(false)} />
-        </>
+      {!audioFile ? (
+        params.projectId ? (
+          <AudioProvider onCurrentTimeChange={handleCurrentTimeChange}>
+            <div className="relative h-screen overflow-hidden">
+              <RelinkBanner isLoading={isLoading} onRelinkClick={handleRelinkClick} fileInputRef={relinkInputRef} onFileSelected={handleRelinkSelected} />
+
+              {/* Notes and UI still render against a default waveform */}
+              <WaveformPlayer
+                ref={waveformPlayerRef}
+                audioFile={null}
+                fallbackDurationSec={60}
+                onLoadingChange={setLoadingWaveform}
+                onAddNote={handleAddNote}
+                notes={notes}
+                onUpdateNote={handleUpdateNote}
+                onDeleteNote={handleDeleteNote}
+                onMoveNote={handleMoveNote}
+                isDrawingMode={isDrawingMode}
+                onAddDrawing={handleAddDrawing}
+                onUpdateDrawing={handleUpdateDrawing}
+              />
+              <AudioControls />
+              <FloatingDock
+                onAddNote={handleAddNoteAtCurrentTime}
+                onShowShortcuts={handleShowShortcuts}
+                canAddNote={true}
+                isDrawingMode={isDrawingMode}
+                onToggleDrawingMode={handleToggleDrawingMode}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onOpenProfile={handleOpenProfile}
+              />
+              {/* Sidebar toggle + Notes sidebar remain available */}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${sidebarOpen ? 'right-80' : 'right-0'
+                  }`}
+                title={sidebarOpen ? 'Hide notes' : 'Show notes'}
+              >
+                <div className="flex items-center space-x-2">
+                  {sidebarOpen ? (
+                    <ChevronRightIcon className="w-4 h-4" />
+                  ) : (
+                    <ChevronLeftIcon className="w-4 h-4" />
+                  )}
+                  <span className="text-sm font-medium">{notes.filter(note => note.type !== 'drawing').length}</span>
+                </div>
+              </button>
+              <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}>
+                <NotesSidebarContainer
+                  notes={notes}
+                  onDeleteNote={handleDeleteNote}
+                  onJumpToTime={handleJumpToTime}
+                  onChangeNoteColor={handleChangeNoteColor}
+                  onUpdateNote={handleUpdateNote}
+                  currentTime={currentTime}
+                />
+              </div>
+            </div>
+          </AudioProvider>
+        ) : (
+          <>
+            <HomeHero
+              onUpload={handleFileSelect}
+              uploading={isLoading}
+              onOpenSignin={() => setSignInOpen(true)}
+              onOpenSignup={() => setSignUpOpen(true)}
+              onSignOut={handleSignOut}
+            />
+            <AuthModal open={signInOpen} mode="signin" onClose={() => setSignInOpen(false)} />
+            <AuthModal open={signUpOpen} mode="signup" onClose={() => setSignUpOpen(false)} />
+          </>
+        )
       ) : (
         <AudioProvider
           onCurrentTimeChange={handleCurrentTimeChange}
         >
           <div className="relative h-screen overflow-hidden">
+            {loadingProject && (
+              <div className="absolute inset-0 z-50 grid place-items-center bg-neutral-900/70 text-neutral-200">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
+                  <span>Loading project…</span>
+                </div>
+              </div>
+            )}
             {/* Autosave indicator (top-left) */}
             <div className="fixed top-3 left-3 z-40 group select-none">
               <div
@@ -300,6 +459,7 @@ function Home() {
             <WaveformPlayer
               ref={waveformPlayerRef}
               audioFile={audioFile}
+              onLoadingChange={setLoadingWaveform}
               onAddNote={handleAddNote}
               notes={notes}
               onUpdateNote={handleUpdateNote}
@@ -324,6 +484,7 @@ function Home() {
               onRedo={handleRedo}
               canUndo={canUndo}
               canRedo={canRedo}
+              onOpenProfile={handleOpenProfile}
             />
 
             {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
@@ -356,8 +517,10 @@ function Home() {
               />
             </div>
           </div>
-  </AudioProvider>
+        </AudioProvider>
       )}
+      {/* Profile Modal lives at root to overlay */}
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

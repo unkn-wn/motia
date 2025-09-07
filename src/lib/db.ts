@@ -8,6 +8,7 @@ import {
   setDoc,
   Timestamp,
 } from 'firebase/firestore';
+// No Firebase Storage usage in free-plan setup
 import type { Note } from '@types';
 import type { Preferences, KeyboardShortcut } from '@utils/shortcutsUtils';
 import type {
@@ -141,6 +142,10 @@ export async function updateProjectAudioDuration(
   );
 }
 
+// --- Storage ---
+// Removed: uploadProjectAudio (Firebase Storage)
+
+
 // --- Notes ---
 export async function saveProjectNotes(
   uid: string,
@@ -168,4 +173,47 @@ export async function saveProjectNotes(
     { notes: safeNotes, updatedAt: serverTimestamp() as Timestamp } as unknown as ProjectNotesDoc,
     { merge: true }
   );
+}
+
+// --- Reads ---
+export async function fetchProjectMeta(
+  uid: string,
+  projectId: string
+): Promise<ProjectMetaDoc | null> {
+  const snap = await getDoc(userProjectDoc(uid, projectId));
+  return snap.exists() ? (snap.data() as ProjectMetaDoc) : null;
+}
+
+function hydrateNotes(raw: any): Note[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((n) => {
+    const out: any = { ...n };
+    // createdAt may be a Firestore Timestamp
+    if (out.createdAt && typeof out.createdAt?.toDate === 'function') {
+      out.createdAt = out.createdAt.toDate();
+    }
+    // drawing.compressed may be a JSON string
+    if (out.drawing && typeof out.drawing.compressed === 'string') {
+      try {
+        out.drawing = {
+          ...out.drawing,
+          compressed: JSON.parse(out.drawing.compressed),
+        };
+      } catch {
+        // leave as-is if parse fails
+      }
+    }
+    return out as Note;
+  });
+}
+
+export async function fetchProjectNotes(
+  uid: string,
+  projectId: string
+): Promise<Note[] | null> {
+  const snap = await getDoc(userProjectNotesDoc(uid, projectId));
+  if (!snap.exists()) return null;
+  const data = snap.data() as ProjectNotesDoc;
+  const notes = hydrateNotes((data as any).notes);
+  return notes;
 }

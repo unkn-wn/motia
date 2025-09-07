@@ -5,6 +5,7 @@ import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAnalytics, isSupported as analyticsIsSupported, type Analytics } from 'firebase/analytics';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+// Storage not used: free plan alternative uses local IndexedDB
 
 // Your web app's Firebase configuration (loaded from Vite env)
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional

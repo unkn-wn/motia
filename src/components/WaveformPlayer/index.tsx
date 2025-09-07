@@ -9,7 +9,9 @@ import { WaveformProvider } from '@contexts/WaveformContext';
 import { WaveformPlayerContent } from './components/WaveformPlayerContent';
 
 export interface WaveformPlayerProps {
-  audioFile: File;
+  audioFile: File | null;
+  fallbackDurationSec?: number;
+  onLoadingChange?: (loading: boolean) => void;
   onAddNote: (time: number, canvasX: number, canvasY: number) => void;
   notes: Note[];
   onUpdateNote: (id: string, content: string) => void;
@@ -34,6 +36,8 @@ export interface WaveformPlayerRef {
 
 const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   audioFile,
+  fallbackDurationSec,
+  onLoadingChange,
   onAddNote,
   notes,
   onUpdateNote,
@@ -98,12 +102,25 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   // Note interaction constants
   const NOTE_LABEL_HIDE_THRESHOLD = 0;
 
-  // Initialize WaveSurfer
+  // Initialize WaveSurfer when an audio file is present; otherwise synthesize a fallback waveform
   useEffect(() => {
     if (!waveformRef.current) return;
 
-  // Show loading overlay via duration===0 until wavesurfer is ready
+    // If no audio file, synthesize duration and dummy waveform; ensure controls are no-op
+    if (!audioFile) {
+      const dur = Math.max(10, Math.floor(fallbackDurationSec ?? 60));
+      setDuration(dur);
+      // Create deterministic-looking dummy data based on duration
+      const samples = Math.min(2000, Math.max(500, Math.floor(dur * 50)));
+      const dummyData = Array.from({ length: samples }, () => 0.2);
+      setWaveformData(dummyData);
+      setWavesurferRef(null);
+      onLoadingChange?.(false);
+      // No cleanup needed in this branch
+      return;
+    }
 
+    onLoadingChange?.(true);
     // Create a hidden wavesurfer for audio processing
     const hiddenDiv = document.createElement('div');
     hiddenDiv.style.position = 'absolute';
@@ -124,66 +141,47 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
     setWavesurferRef(wavesurfer);
 
-    // Load audio file
     const audioUrl = URL.createObjectURL(audioFile);
     wavesurfer.load(audioUrl);
 
-    // Event listeners
-  wavesurfer.on('ready', () => {
+    wavesurfer.on('ready', () => {
       const audioDuration = wavesurfer.getDuration();
       setDuration(audioDuration);
 
-      // Extract waveform data for custom rendering
       try {
         const decodedData = wavesurfer.getDecodedData();
         if (decodedData) {
           const data = decodedData.getChannelData(0);
           const duration = wavesurfer.getDuration();
-          // Scale samples based on duration (more samples for longer audio)
           const samples = Math.min(2000, Math.max(500, Math.floor(duration * 50)));
           const blockSize = Math.floor(data.length / samples);
-          const filteredData = [];
-
+          const filteredData = [] as number[];
           for (let i = 0; i < samples; i++) {
             let sum = 0;
-            for (let j = 0; j < blockSize; j++) {
-              sum += Math.abs(data[i * blockSize + j] || 0);
-            }
+            for (let j = 0; j < blockSize; j++) sum += Math.abs(data[i * blockSize + j] || 0);
             filteredData.push(sum / blockSize);
           }
-
           setWaveformData(filteredData);
         }
-  } catch {
-        // Fallback: create dummy waveform data
-        const dummyData = Array.from({ length: 1000 }, () => Math.random() * 0.5);
+      } catch {
+        const dummyData = Array.from({ length: 1000 }, () => 0.2);
         setWaveformData(dummyData);
       }
+      onLoadingChange?.(false);
     });
 
-    wavesurfer.on('audioprocess', () => {
-      const time = wavesurfer.getCurrentTime();
-      setCurrentTime(time);
-    });
+    wavesurfer.on('audioprocess', () => setCurrentTime(wavesurfer.getCurrentTime()));
+    wavesurfer.on('interaction', () => setCurrentTime(wavesurfer.getCurrentTime()));
+    wavesurfer.on('play', () => setIsPlaying(true));
+    wavesurfer.on('pause', () => setIsPlaying(false));
 
-    wavesurfer.on('interaction', () => {
-      const time = wavesurfer.getCurrentTime();
-      setCurrentTime(time);
-    });
-
-    wavesurfer.on('play', () => {
-      setIsPlaying(true);
-    });
-    wavesurfer.on('pause', () => {
-      setIsPlaying(false);
-    });
-
-  return () => {
+    return () => {
       wavesurfer.destroy();
       document.body.removeChild(hiddenDiv);
       URL.revokeObjectURL(audioUrl);
+      onLoadingChange?.(false);
     };
-  }, [audioFile, setDuration, setWaveformData, setCurrentTime, setIsPlaying, setWavesurferRef]);
+  }, [audioFile, fallbackDurationSec, setDuration, setWaveformData, setCurrentTime, setIsPlaying, setWavesurferRef, onLoadingChange]);
 
   // Keep transformRef in sync with transform state
   useEffect(() => {
@@ -350,16 +348,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
           <div className="absolute inset-0">
             <WaveformPlayerContent />
             <div ref={waveformRef} className="hidden" />
-            {/* Loading overlay - shows until audio duration known */}
-            {duration === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[1px]">
-                <div className="flex items-center space-x-3 text-neutral-200 text-sm">
-                  <div className="h-2 w-2 rounded-full bg-neutral-300 animate-bounce [animation-delay:-0.2s]" />
-                  <div className="h-2 w-2 rounded-full bg-neutral-300 animate-bounce" />
-                  <div className="h-2 w-2 rounded-full bg-neutral-300 animate-bounce [animation-delay:0.2s]" />
-                </div>
-              </div>
-            )}
+            {/* Fullscreen loading overlay handled at the page level */}
           </div>
         </div>
       </div>

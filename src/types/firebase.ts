@@ -25,6 +25,11 @@ export type ProjectMetaDoc = {
     size?: number;
     type?: string;
     durationSec?: number;
+    storagePath?: string; // gs:// or path like users/{uid}/projects/{projectId}/audio
+  };
+  waveform?: {
+    samples?: number[]; // decimated peaks for quick paint
+    sampleRate?: number; // optional context of samples array density
   };
 };
 

@@ -26,7 +26,7 @@ import {
   Undo2,
   Redo2
 } from 'lucide-react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, User } from 'lucide-react';
 
 /**
  * Memoized Lucide icon components to prevent unnecessary rerenders
@@ -174,3 +174,9 @@ export const EyeOffIcon = memo(({ className = "w-4 h-4" }: { className?: string 
   <EyeOff className={className} />
 ));
 EyeOffIcon.displayName = 'EyeOffIcon';
+
+// User Icon
+export const UserIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
+  <User className={className} />
+));
+UserIcon.displayName = 'UserIcon';

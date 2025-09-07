@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import HeroBanner from './HeroBanner';
 import FileUploader from './FileUploader';
 import { LogInIcon, UserPlusIcon } from '@/assets/icons';
@@ -10,13 +10,15 @@ interface HomeHeroProps {
   uploading: boolean;
   onOpenSignin: () => void;
   onOpenSignup: () => void;
+  onSignOut?: () => Promise<void> | void;
 }
 
-const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, onOpenSignup }) => {
+const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, onOpenSignup, onSignOut }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const uploaderRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HeroBackdropHandle | null>(null);
-  const { user, signInGuest } = useAuth();
+  const { user, signInGuest, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
 
   const handleUpload = useCallback(async (file: File) => {
     // If not logged in, silently sign in as guest before continuing
@@ -47,26 +49,48 @@ const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, 
 
       {/* Secondary actions */}
       <div className="relative mt-8 flex items-center gap-3 animate-fade-in-up">
-        <button
-          onClick={onOpenSignin}
-          onMouseEnter={() => backdropRef.current?.shuffle()}
-          onFocus={() => backdropRef.current?.shuffle()}
-          className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-900/60 hover:bg-neutral-800 text-neutral-100 px-3 py-2 border border-neutral-800 overflow-hidden cursor-pointer"
-        >
-          <LogInIcon className="w-5 h-5" />
-          <span className="text-sm">Sign in</span>
-          <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-neutral-400/80 to-transparent group-hover:w-full group-focus-visible:w-full transition-[width] duration-300" />
-        </button>
-        <button
-          onClick={onOpenSignup}
-          onMouseEnter={() => backdropRef.current?.shuffle()}
-          onFocus={() => backdropRef.current?.shuffle()}
-          className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 border border-neutral-700 shadow overflow-hidden cursor-pointer"
-        >
-          <UserPlusIcon className="w-5 h-5" />
-          <span className="text-sm">Create account</span>
-          <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-blue-400/80 to-transparent group-hover:w-full group-focus-visible:w-full transition-[width] duration-300" />
-        </button>
+        {user ? (
+          <>
+            <div className="inline-flex items-center gap-2 rounded-lg bg-neutral-900/60 text-neutral-100 px-3 py-2 border border-neutral-800">
+              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden />
+              <span className="text-sm">
+                Signed in as <strong>{user.displayName || user.email || 'Guest'}</strong>
+              </span>
+            </div>
+            <button
+              onClick={async () => { setSigningOut(true); try { if (onSignOut) { await onSignOut(); } else { await signOut(); } } finally { setSigningOut(false); } }}
+              onMouseEnter={() => backdropRef.current?.shuffle()}
+              onFocus={() => backdropRef.current?.shuffle()}
+              className="inline-flex items-center gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 border border-neutral-700 cursor-pointer disabled:opacity-60"
+              disabled={signingOut}
+            >
+              <span className="text-sm">{signingOut ? 'Signing out…' : 'Sign out'}</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={onOpenSignin}
+              onMouseEnter={() => backdropRef.current?.shuffle()}
+              onFocus={() => backdropRef.current?.shuffle()}
+              className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-900/60 hover:bg-neutral-800 text-neutral-100 px-3 py-2 border border-neutral-800 overflow-hidden cursor-pointer"
+            >
+              <LogInIcon className="w-5 h-5" />
+              <span className="text-sm">Sign in</span>
+              <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-neutral-400/80 to-transparent group-hover:w-full group-focus-visible:w-full transition-[width] duration-300" />
+            </button>
+            <button
+              onClick={onOpenSignup}
+              onMouseEnter={() => backdropRef.current?.shuffle()}
+              onFocus={() => backdropRef.current?.shuffle()}
+              className="group relative inline-flex items-center gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 border border-neutral-700 shadow overflow-hidden cursor-pointer"
+            >
+              <UserPlusIcon className="w-5 h-5" />
+              <span className="text-sm">Create account</span>
+              <span className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-blue-400/80 to-transparent group-hover:w-full group-focus-visible:w-full transition-[width] duration-300" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

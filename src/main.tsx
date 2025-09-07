@@ -1,12 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import Home from './home.tsx'
 import { AuthProvider } from '@/contexts/FirebaseAuthContext'
+import { RouterProvider } from '@tanstack/react-router'
+import { router } from './router'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
-      <Home />
+      <RouterProvider router={router} />
     </AuthProvider>
   </StrictMode>,
 )

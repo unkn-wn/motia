@@ -2,6 +2,7 @@ import { memo } from 'react';
 import AddNoteButton from './AddNoteButton';
 import DrawingModeButton from './DrawingModeButton';
 import ShortcutsButton from './ShortcutsButton';
+import ProfileButton from './ProfileButton.tsx';
 import UndoButton from './UndoButton';
 import RedoButton from './RedoButton';
 
@@ -15,6 +16,7 @@ interface FloatingDockProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  onOpenProfile?: () => void;
 }
 
 // Main FloatingDock - isolated from currentTime updates
@@ -29,10 +31,11 @@ const FloatingDock = memo<FloatingDockProps>(({
   onRedo,
   canUndo = true,
   canRedo = true,
+  onOpenProfile,
 }) => {
   return (
     <div
-      className="fixed bottom-1/2 left-6 z-30 flex flex-col space-y-3 bg-neutral-800 border-2 border-neutral-600/20 p-1 rounded-full shadow-lg"
+      className="fixed top-1/12 left-6 z-30 flex flex-col space-y-3 bg-neutral-800 border-2 border-neutral-600/20 p-1 rounded-full shadow-lg"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Add Note Button - only show when audio is loaded */}
@@ -59,6 +62,11 @@ const FloatingDock = memo<FloatingDockProps>(({
 
       {/* Keyboard Shortcuts Button */}
       <ShortcutsButton onShowShortcuts={onShowShortcuts} />
+
+      {/* Profile Button */}
+      {onOpenProfile && (
+        <ProfileButton onOpenProfile={onOpenProfile} />
+      )}
     </div>
   );
 });
