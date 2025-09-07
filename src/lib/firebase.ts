@@ -47,23 +47,3 @@ export async function getAnalyticsIfSupported(): Promise<Analytics | undefined> 
 }
 
 export { app, auth, firestore };
-
-/*
-Potential data model (not implemented yet):
-- users/{uid}
-  - profile: { email, displayName, createdAt, ... }
-  - settings: { historyMax, defaultNoteColor, editorEnterBehavior, panMouseButton, shortcuts, ... }
-  - projects/{projectId}
-    - meta: { title, createdAt, updatedAt, audioFileMeta, duration, ... }
-    - notes: [ { id, time, canvasX, canvasY, content, color, type } ]
-    - drawings: [ { id, noteId, time, compressed: { method, bytes, size, sessionMeta }, strokes[] } ]
-
-Auth flow:
-- Anonymous or email/pass (later Google). Start anonymous, upgrade on sign-in.
-
-Persistence plan:
-- Create on first save: users/{uid}/projects/{projectId}
-- Batch write notes/drawings on change or debounce; store compressed JSON as-is.
-- Settings live under users/{uid}/settings and sync on change.
-- Optional cloud functions for cleanup/migration later.
-*/

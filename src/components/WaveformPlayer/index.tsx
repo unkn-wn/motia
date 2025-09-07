@@ -10,7 +10,6 @@ import { WaveformPlayerContent } from './components/WaveformPlayerContent';
 
 export interface WaveformPlayerProps {
   audioFile: File | null;
-  fallbackDurationSec?: number;
   onLoadingChange?: (loading: boolean) => void;
   onAddNote: (time: number, canvasX: number, canvasY: number) => void;
   notes: Note[];
@@ -36,7 +35,6 @@ export interface WaveformPlayerRef {
 
 const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   audioFile,
-  fallbackDurationSec,
   onLoadingChange,
   onAddNote,
   notes,
@@ -106,17 +104,14 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   useEffect(() => {
     if (!waveformRef.current) return;
 
-    // If no audio file, synthesize duration and dummy waveform; ensure controls are no-op
+    // NO AUDIO FILE - random placeholder waveform
     if (!audioFile) {
-      const dur = Math.max(10, Math.floor(fallbackDurationSec ?? 60));
-      setDuration(dur);
-      // Create deterministic-looking dummy data based on duration
-      const samples = Math.min(2000, Math.max(500, Math.floor(dur * 50)));
-      const dummyData = Array.from({ length: samples }, () => 0.2);
+      setDuration(10);
+      const samples = 350;
+      const dummyData = Array.from({ length: samples }, () => 0.15);
       setWaveformData(dummyData);
       setWavesurferRef(null);
       onLoadingChange?.(false);
-      // No cleanup needed in this branch
       return;
     }
 
@@ -181,7 +176,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
       URL.revokeObjectURL(audioUrl);
       onLoadingChange?.(false);
     };
-  }, [audioFile, fallbackDurationSec, setDuration, setWaveformData, setCurrentTime, setIsPlaying, setWavesurferRef, onLoadingChange]);
+  }, [audioFile, setDuration, setWaveformData, setCurrentTime, setIsPlaying, setWavesurferRef, onLoadingChange]);
 
   // Keep transformRef in sync with transform state
   useEffect(() => {

@@ -4,7 +4,7 @@ import AudioControls from '@components/AudioControlsContainer';
 import NotesSidebarContainer from '@components/NotesSidebar/NotesSidebarContainer';
 import KeyboardShortcuts from '@components/KeyboardShortcuts';
 import FloatingDock from '@components/FloatingDock';
-import ProfileModal from '@components/Profile/ProfileModal';
+import ProfileModal from '@/components/ProfileModal';
 import { AudioProvider } from '@contexts/AudioContext';
 import FullscreenOverlay from '@/components/FullscreenOverlay';
 import RelinkBanner from '@/components/RelinkBanner';
@@ -18,12 +18,13 @@ import { history } from '@utils/history';
 import { ChevronLeftIcon, ChevronRightIcon, CheckIcon } from '@assets/icons';
 import './style.css';
 import { createProject, fetchProjectMeta, fetchProjectNotes } from '@/lib/db';
+import { auth } from '@/lib/firebase';
 import { getLocalAudio, saveLocalAudio } from '@/lib/localAudio';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 
 function Home() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading, signOut, signInGuest, lastMigratedProjectId, clearMigrationRedirect } = useAuth();
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { projectId?: string };
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -45,6 +46,14 @@ function Home() {
   const relinkInputRef = useRef<HTMLInputElement>(null!);
   const [loadingWaveform, setLoadingWaveform] = useState(false);
   // Load project only if user is signed in and owns it; otherwise redirect home
+  useEffect(() => {
+    // If we just migrated from anon -> signed-in, route to the restored project
+    if (user && lastMigratedProjectId) {
+      navigate({ to: '/project/$projectId', params: { projectId: lastMigratedProjectId } });
+      clearMigrationRedirect?.();
+    }
+  }, [user, lastMigratedProjectId]);
+
   useEffect(() => {
     const fromRoute = params.projectId;
     let aborted = false;
@@ -102,24 +111,30 @@ function Home() {
     try {
       // Small UX delay
       await new Promise(resolve => setTimeout(resolve, 600));
-      if (user) {
-        // Create a Firestore project and persist audio locally for this device
-        const pid = await createProject(user.uid, {
-          audio: { name: file.name, size: file.size, type: file.type },
-        });
-        await saveLocalAudio(pid, file);
-        setAudioFile(file);
-        setProjectId(pid);
-        navigate({ to: '/project/$projectId', params: { projectId: pid } });
-      } else {
-        // Anonymous/local session, keep file in memory and stay on home
+      // Ensure we have an authenticated user (anonymous or signed-in)
+      let uid = user?.uid ?? null;
+      if (!uid) {
+        await signInGuest();
+        uid = auth.currentUser?.uid ?? null;
+      }
+      if (!uid) {
+        // Fallback: keep local only if auth failed for some reason
         setProjectId(null);
         setAudioFile(file);
+        return;
       }
+      // Create a Firestore project and persist audio locally for this device
+      const pid = await createProject(uid, {
+        audio: { name: file.name, size: file.size, type: file.type },
+      });
+      await saveLocalAudio(pid, file);
+      setAudioFile(file);
+      setProjectId(pid);
+      navigate({ to: '/project/$projectId', params: { projectId: pid } });
     } finally {
       setIsLoading(false);
     }
-  }, [user, navigate]);
+  }, [user, navigate, signInGuest]);
 
   const handleAddNote = useCallback((time: number, canvasX: number, canvasY: number) => {
     const prefs = getPreferences();
@@ -358,7 +373,6 @@ function Home() {
               <WaveformPlayer
                 ref={waveformPlayerRef}
                 audioFile={null}
-                fallbackDurationSec={60}
                 onLoadingChange={setLoadingWaveform}
                 onAddNote={handleAddNote}
                 notes={notes}

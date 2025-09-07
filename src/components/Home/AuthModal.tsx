@@ -41,7 +41,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
         // Upgrade anonymous account by linking credentials
         await upgradeAnonymous(email, password);
       } else if (mode === 'signin') {
-        await signIn(email, password);
+        await signIn(email, password, !!user?.isAnonymous);
       } else {
         await signUp(email, password);
       }
@@ -60,7 +60,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 backdrop-blur-sm" onClick={onClose} />
-      <div ref={dialogRef} className="relative w-full max-w-sm rounded-2xl bg-neutral-900/95 border border-neutral-800 shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5 animate-fade-in-up backdrop-blur-sm">
+      <div ref={dialogRef} className="relative w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5 animate-fade-in-up">
         <button onClick={onClose} className="absolute top-3 right-3 text-neutral-400 hover:text-neutral-200 cursor-pointer" aria-label="Close auth dialog">
           <XIcon className="w-5 h-5" />
         </button>

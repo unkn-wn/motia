@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import {
   onAuthStateChanged,
@@ -10,13 +10,15 @@ import {
   EmailAuthProvider,
   type User,
 } from 'firebase/auth';
-import { ensureUser, fetchUserSettings, saveUserSettings, markUserUpgraded } from '@/lib/db';
+import { ensureUser, fetchUserSettings, saveUserSettings, markUserUpgraded, listUserProjectIds, fetchProjectMeta, fetchProjectNotes, updateProjectMeta, saveProjectNotes, createProject, deleteUserData } from '@/lib/db';
 import { DEFAULT_PREFERENCES, setPreferences } from '@utils/shortcutsUtils';
 import { AuthContext, type AuthContextValue } from './objects/FirebaseAuthContextObject';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [migrationBusy, setMigrationBusy] = useState(false);
+  const [lastMigratedProjectId, setLastMigratedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -26,8 +28,96 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsub();
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  // Track the last anonymous UID in case we need to migrate on sign-in
+  const lastAnonUidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (user?.isAnonymous) {
+      lastAnonUidRef.current = user.uid;
+    }
+  }, [user?.isAnonymous, user?.uid]);
+
+  // SIGN IN FUNCTION - migrates data if signing in from anonymous
+  const signIn = useCallback(async (email: string, password: string, fromAnon?: boolean) => {
+    if (!fromAnon) {
+      await signInWithEmailAndPassword(auth, email, password);
+      return;
+    }
+
+    // If currently anonymous, backup anon project and clean up before switching auth
+    const prevAnonUid = lastAnonUidRef.current;
+    let pendingMigration: null | { projectId: string; meta: any; notes: any[] | null } = null;
+    try {
+      if (prevAnonUid) {
+        const ids = await listUserProjectIds(prevAnonUid);
+        if (ids.length > 0) {
+          const projectId = ids[0];
+          const meta = await fetchProjectMeta(prevAnonUid, projectId);
+          const notes = await fetchProjectNotes(prevAnonUid, projectId);
+          if (meta) {
+            pendingMigration = { projectId, meta, notes: notes ?? null };
+            // Persist a backup across navigation just in case sign-in flow reloads
+            sessionStorage.setItem('pendingMigrationV1', JSON.stringify({ projectId, meta, notes: notes ?? null }));
+            sessionStorage.setItem('pendingMigrationFromUid', prevAnonUid);
+
+            await deleteUserData(prevAnonUid);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error migrating anonymous user data (restore)', error);
+    }
+
     await signInWithEmailAndPassword(auth, email, password);
+
+    // After sign-in, restore backup into the new account
+    setTimeout(async () => {
+      try {
+        const current = auth.currentUser;
+        if (!current) return;
+
+        // Prefer in-memory backup; fallback to sessionStorage
+        if (!pendingMigration) {
+          try {
+            const raw = sessionStorage.getItem('pendingMigrationV1');
+            if (raw) pendingMigration = JSON.parse(raw);
+          } catch { }
+        }
+        if (!pendingMigration) {
+          lastAnonUidRef.current = null;
+          return;
+        }
+
+        setMigrationBusy(true);
+        const { projectId, meta, notes } = pendingMigration;
+
+        // Avoid accidental overwrite if destination already has this ID
+        const existing = await fetchProjectMeta(current.uid, projectId);
+        let destProjectId = projectId;
+        if (existing) {
+          destProjectId = await createProject(current.uid, {
+            title: meta.title,
+            audio: meta.audio,
+          });
+        } else {
+          await updateProjectMeta(current.uid, projectId, meta);
+        }
+        if (notes && notes.length) {
+          await saveProjectNotes(current.uid, destProjectId, notes as any);
+        }
+
+        // Clear backup
+        try {
+          sessionStorage.removeItem('pendingMigrationV1');
+          sessionStorage.removeItem('pendingMigrationFromUid');
+        } catch { }
+        lastAnonUidRef.current = null;
+        setLastMigratedProjectId(destProjectId);
+      } catch (error) {
+        console.error('Error migrating anonymous user data (restore)', error);
+      } finally {
+        setMigrationBusy(false);
+      }
+    }, 0);
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
@@ -74,7 +164,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })();
   }, [user]);
 
-  const value = useMemo<AuthContextValue>(() => ({ user, loading, signIn, signUp, upgradeAnonymous, signInGuest, signOut }), [user, loading, signIn, signUp, upgradeAnonymous, signInGuest, signOut]);
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    loading,
+    signIn,
+    signUp,
+    upgradeAnonymous,
+    signInGuest,
+    signOut,
+    migrationBusy,
+    lastMigratedProjectId,
+    clearMigrationRedirect: () => setLastMigratedProjectId(null),
+  }), [user, loading, signIn, signUp, upgradeAnonymous, signInGuest, signOut, migrationBusy, lastMigratedProjectId]);
 
   return (
     <AuthContext.Provider value={value}>

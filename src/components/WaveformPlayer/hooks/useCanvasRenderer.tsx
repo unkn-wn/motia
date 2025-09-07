@@ -99,7 +99,7 @@ export const useCanvasRenderer = () => {
         ctx.stroke();
       }
     },
-  [isDrawing, currentStroke]
+    [isDrawing, currentStroke]
   );
 
   // Draw all drawing notes
@@ -303,7 +303,7 @@ export const useCanvasRenderer = () => {
     if (!canvas) return;
 
     // Prune caches for removed notes
-  const idSet = new Set(notes.map((n: Note) => n.id));
+    const idSet = new Set(notes.map((n: Note) => n.id));
     for (const key of decompressedCacheRef.current.keys()) {
       if (!idSet.has(key)) decompressedCacheRef.current.delete(key);
     }

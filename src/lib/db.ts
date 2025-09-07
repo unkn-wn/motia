@@ -2,14 +2,19 @@ import { firestore } from '@/lib/firebase';
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   setDoc,
   Timestamp,
+  writeBatch,
+  query,
 } from 'firebase/firestore';
 // No Firebase Storage usage in free-plan setup
 import type { Note } from '@types';
+import { auth } from './firebase';
 import type { Preferences, KeyboardShortcut } from '@utils/shortcutsUtils';
 import type {
   UserProfileDoc,
@@ -216,4 +221,93 @@ export async function fetchProjectNotes(
   const data = snap.data() as ProjectNotesDoc;
   const notes = hydrateNotes((data as any).notes);
   return notes;
+}
+
+// --- Migration ---
+/**
+ * Move an existing project (meta + notes) from one user to another, preserving projectId.
+ * Efficient single-batch write+delete. If overwrite=false and destination exists, it will throw.
+ */
+export async function moveProjectBetweenUsers(
+  fromUid: string,
+  toUid: string,
+  projectId: string,
+  opts: { overwrite?: boolean; deleteSource?: boolean } = {}
+): Promise<void> {
+  const overwrite = opts.overwrite ?? false;
+  const deleteSource = opts.deleteSource ?? true;
+
+  const srcMetaRef = userProjectDoc(fromUid, projectId);
+  const srcNotesRef = userProjectNotesDoc(fromUid, projectId);
+  const dstMetaRef = userProjectDoc(toUid, projectId);
+  const dstNotesRef = userProjectNotesDoc(toUid, projectId);
+
+  const [srcMetaSnap, srcNotesSnap, dstMetaSnap] = await Promise.all([
+    getDoc(srcMetaRef),
+    getDoc(srcNotesRef),
+    getDoc(dstMetaRef),
+  ]);
+
+  if (!srcMetaSnap.exists()) {
+    throw new Error(`Source project not found: users/${fromUid}/projects/${projectId}`);
+  }
+  if (!overwrite && dstMetaSnap.exists()) {
+    throw new Error(`Destination already has project ${projectId}`);
+  }
+
+  const meta = srcMetaSnap.data() as ProjectMetaDoc;
+  const notesDoc = srcNotesSnap.exists() ? (srcNotesSnap.data() as ProjectNotesDoc) : null;
+
+  const batch = writeBatch(firestore);
+  // Preserve createdAt; refresh updatedAt
+  batch.set(dstMetaRef, { ...meta, updatedAt: serverTimestamp() as Timestamp } as ProjectMetaDoc, { merge: false });
+  if (notesDoc) {
+    batch.set(
+      dstNotesRef,
+      { ...notesDoc, updatedAt: serverTimestamp() as Timestamp } as ProjectNotesDoc,
+      { merge: false }
+    );
+  }
+  if (deleteSource) {
+    batch.delete(srcMetaRef);
+    if (srcNotesSnap.exists()) batch.delete(srcNotesRef);
+  }
+  await batch.commit();
+}
+
+export async function listUserProjectIds(uid: string): Promise<string[]> {
+  const col = userProjectsCol(uid);
+  const qs = await getDocs(query(col));
+  return qs.docs.map((d) => d.id);
+}
+
+
+// --- Cleanup ---
+export async function deleteUserDoc(uid: string): Promise<void> {
+  await deleteDoc(userDoc(uid));
+}
+
+/**
+ * Delete all Firestore data for a user: projects (meta + notes) and the user doc.
+ * Use with caution. Client must be authenticated as this uid per security rules.
+ */
+export async function deleteUserData(uid: string): Promise<void> {
+  // Delete all projects and their notes
+  const ids = await listUserProjectIds(uid);
+  for (const projectId of ids) {
+    try {
+      await deleteDoc(userProjectNotesDoc(uid, projectId));
+    } catch {/* ignore if missing */}
+    try {
+      await deleteDoc(userProjectDoc(uid, projectId));
+    } catch {/* ignore if missing */}
+    try {
+      await deleteDoc(userSettingsDoc(uid));
+    } catch {/* ignore if missing */}
+  }
+  // Finally delete the user profile doc
+  try {
+    await deleteUserDoc(uid);
+    await auth.currentUser?.delete();
+  } catch {/* ignore if missing */}
 }
