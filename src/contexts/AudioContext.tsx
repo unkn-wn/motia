@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import { isPlayingStore, volumeStore } from '@components/AudioControls/state';
-import { AudioContext, type AudioContextType } from './objects/AudioContextObject';
+import { isPlayingStore, volumeStore, currentTimeStore, durationStore } from '@components/AudioControls/state';
+import { AudioContext, type AudioContextType, AudioActionsContext, type AudioActionsOnly } from './objects/AudioContextObject';
 
 
 interface AudioProviderProps {
@@ -167,11 +167,36 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
     setWavesurferRef,
   ]);
 
+  const actionsValue: AudioActionsOnly = useMemo(() => ({
+    playPause,
+    skipBack,
+    skipForward,
+    seekToTime,
+    setVolume,
+    volumeUp,
+    volumeDown,
+    recenterToPlayhead,
+    setRecenterToPlayhead,
+  }), [
+    playPause,
+    skipBack,
+    skipForward,
+    seekToTime,
+    setVolume,
+    volumeUp,
+    volumeDown,
+    recenterToPlayhead,
+    setRecenterToPlayhead,
+  ]);
+
   return (
     <AudioContext.Provider value={contextValue}>
-      {children}
+      <AudioActionsContext.Provider value={actionsValue}>
+        {children}
+      </AudioActionsContext.Provider>
       {/* Synchronize external stores for fine-grained subscribers */}
       <AudioProviderEffects isPlaying={isPlaying} volume={volume} />
+      <AudioTimeEffects currentTime={currentTime} duration={duration} />
     </AudioContext.Provider>
   );
 };
@@ -183,9 +208,21 @@ export const AudioProviderEffects: React.FC<{
 }> = ({ isPlaying, volume }) => {
   useEffect(() => {
     isPlayingStore.set(isPlaying);
-  }, [isPlaying]);
-  useEffect(() => {
     volumeStore.set(volume);
-  }, [volume]);
+  }, [isPlaying, volume]);
+  return null;
+};
+
+// Mirror currentTime/duration for decoupled consumers (e.g., progress bar)
+export const AudioTimeEffects: React.FC<{
+  currentTime: number;
+  duration: number;
+}> = ({ currentTime, duration }) => {
+  useEffect(() => {
+    currentTimeStore.set(currentTime);
+  }, [currentTime]);
+  useEffect(() => {
+    durationStore.set(duration);
+  }, [duration]);
   return null;
 };

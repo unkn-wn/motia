@@ -3,17 +3,19 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { isNoteEditSubmitCombo, isNoteEditCancelKey, getPreferences } from '@utils/shortcutsUtils';
 
 export const InlineNoteEditor: React.FC = () => {
-  const { editingNote, setEditingNote, editContent, setEditContent, notes, transform, onUpdateNote } = useWaveformContext();
+  const { editingNote, setEditingNote, editContent, setEditContent, notes, transform, onUpdateNote, canvasRef } = useWaveformContext();
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
   const pos = useMemo(() => {
     if (!editingNote) return null;
     const note = notes.find(n => n.id === editingNote);
     if (!note) return null;
-    const left = note.canvasX * transform.scale + transform.offsetX;
+    const rectW = canvasRef.current?.getBoundingClientRect().width ?? 0;
+    // Match canvas render mapping: screenX = rect.width/2 + offsetX + scale * worldX
+    const left = rectW / 2 + transform.offsetX + note.canvasX * transform.scale;
     const top = note.canvasY * transform.scale + transform.offsetY;
     return { left, top };
-  }, [editingNote, notes, transform]);
+  }, [editingNote, notes, transform, canvasRef]);
 
   useEffect(() => {
     if (editingNote) {

@@ -189,26 +189,38 @@ export async function fetchProjectMeta(
   return snap.exists() ? (snap.data() as ProjectMetaDoc) : null;
 }
 
-function hydrateNotes(raw: any): Note[] {
+function hydrateNotes(raw: unknown): Note[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((n) => {
-    const out: any = { ...n };
+  return raw.map((n: unknown) => {
+    const obj = (typeof n === 'object' && n !== null) ? (n as Record<string, unknown>) : {};
+    const out: Record<string, unknown> = { ...obj };
     // createdAt may be a Firestore Timestamp
-    if (out.createdAt && typeof out.createdAt?.toDate === 'function') {
-      out.createdAt = out.createdAt.toDate();
+    const maybeTs = out.createdAt as unknown;
+    if (
+      maybeTs &&
+      typeof maybeTs === 'object' &&
+      typeof (maybeTs as { toDate?: unknown }).toDate === 'function'
+    ) {
+      out.createdAt = (maybeTs as { toDate: () => Date }).toDate();
     }
     // drawing.compressed may be a JSON string
-    if (out.drawing && typeof out.drawing.compressed === 'string') {
+    const maybeDrawing = out.drawing as unknown;
+    if (
+      maybeDrawing &&
+      typeof maybeDrawing === 'object' &&
+      typeof (maybeDrawing as { compressed?: unknown }).compressed === 'string'
+    ) {
       try {
+        const d = maybeDrawing as { compressed: string } & Record<string, unknown>;
         out.drawing = {
-          ...out.drawing,
-          compressed: JSON.parse(out.drawing.compressed),
+          ...d,
+          compressed: JSON.parse(d.compressed),
         };
       } catch {
         // leave as-is if parse fails
       }
     }
-    return out as Note;
+    return out as unknown as Note;
   });
 }
 
@@ -219,7 +231,7 @@ export async function fetchProjectNotes(
   const snap = await getDoc(userProjectNotesDoc(uid, projectId));
   if (!snap.exists()) return null;
   const data = snap.data() as ProjectNotesDoc;
-  const notes = hydrateNotes((data as any).notes);
+  const notes = hydrateNotes(data.notes as unknown);
   return notes;
 }
 
@@ -281,6 +293,12 @@ export async function listUserProjectIds(uid: string): Promise<string[]> {
   return qs.docs.map((d) => d.id);
 }
 
+export async function listUserProjects(uid: string): Promise<Array<{ id: string; meta: ProjectMetaDoc }>> {
+  const col = userProjectsCol(uid);
+  const qs = await getDocs(query(col));
+  return qs.docs.map((d) => ({ id: d.id, meta: d.data() as ProjectMetaDoc }));
+}
+
 
 // --- Cleanup ---
 export async function deleteUserDoc(uid: string): Promise<void> {
@@ -297,17 +315,17 @@ export async function deleteUserData(uid: string): Promise<void> {
   for (const projectId of ids) {
     try {
       await deleteDoc(userProjectNotesDoc(uid, projectId));
-    } catch {/* ignore if missing */}
+    } catch {/* ignore if missing */ }
     try {
       await deleteDoc(userProjectDoc(uid, projectId));
-    } catch {/* ignore if missing */}
+    } catch {/* ignore if missing */ }
     try {
       await deleteDoc(userSettingsDoc(uid));
-    } catch {/* ignore if missing */}
+    } catch {/* ignore if missing */ }
   }
   // Finally delete the user profile doc
   try {
     await deleteUserDoc(uid);
     await auth.currentUser?.delete();
-  } catch {/* ignore if missing */}
+  } catch {/* ignore if missing */ }
 }

@@ -105,7 +105,7 @@ export const useMouseInteractions = () => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const mouseX = e.clientX - rect.left;
+    const mouseX = (e.clientX - rect.left) - rect.width / 2;
     const mouseY = e.clientY - rect.top;
 
     setTransform(prev => {

@@ -45,9 +45,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // If currently anonymous, backup anon project and clean up before switching auth
     const prevAnonUid = lastAnonUidRef.current;
-    let pendingMigration: null | { projectId: string; meta: any; notes: any[] | null } = null;
+
+    type Backup = { projectId: string; meta: import('@types').ProjectMetaDoc; notes: import('@types').Note[] | null };
+    let pendingMigration: Backup | null = null;
     try {
       if (prevAnonUid) {
+        setMigrationBusy(true);
+
         const ids = await listUserProjectIds(prevAnonUid);
         if (ids.length > 0) {
           const projectId = ids[0];
@@ -56,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (meta) {
             pendingMigration = { projectId, meta, notes: notes ?? null };
             // Persist a backup across navigation just in case sign-in flow reloads
-            sessionStorage.setItem('pendingMigrationV1', JSON.stringify({ projectId, meta, notes: notes ?? null }));
+            sessionStorage.setItem('pendingMigrationV1', JSON.stringify({ projectId, meta, notes: notes ?? null } satisfies Backup));
             sessionStorage.setItem('pendingMigrationFromUid', prevAnonUid);
 
             await deleteUserData(prevAnonUid);
@@ -64,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (error) {
-      console.error('Error migrating anonymous user data (restore)', error);
+      console.error('Error migrating anonymous user data (backup)', error);
     }
 
     await signInWithEmailAndPassword(auth, email, password);
@@ -79,37 +83,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!pendingMigration) {
           try {
             const raw = sessionStorage.getItem('pendingMigrationV1');
-            if (raw) pendingMigration = JSON.parse(raw);
-          } catch { }
+            if (raw) pendingMigration = JSON.parse(raw) as Backup;
+          } catch (e) {
+            console.warn('Failed to parse pendingMigrationV1 from storage', e);
+          }
         }
         if (!pendingMigration) {
           lastAnonUidRef.current = null;
           return;
         }
 
-        setMigrationBusy(true);
         const { projectId, meta, notes } = pendingMigration;
 
         // Avoid accidental overwrite if destination already has this ID
         const existing = await fetchProjectMeta(current.uid, projectId);
         let destProjectId = projectId;
         if (existing) {
+          const audio = meta.audio && meta.audio.name && meta.audio.size !== undefined && meta.audio.type
+            ? { name: meta.audio.name, size: meta.audio.size, type: meta.audio.type, durationSec: meta.audio.durationSec }
+            : { name: 'audio', size: 0, type: 'application/octet-stream' };
           destProjectId = await createProject(current.uid, {
             title: meta.title,
-            audio: meta.audio,
+            audio,
           });
         } else {
           await updateProjectMeta(current.uid, projectId, meta);
         }
         if (notes && notes.length) {
-          await saveProjectNotes(current.uid, destProjectId, notes as any);
+          await saveProjectNotes(current.uid, destProjectId, notes);
         }
 
         // Clear backup
         try {
           sessionStorage.removeItem('pendingMigrationV1');
           sessionStorage.removeItem('pendingMigrationFromUid');
-        } catch { }
+        } catch (e) {
+          console.warn('Failed clearing migration storage keys', e);
+        }
         lastAnonUidRef.current = null;
         setLastMigratedProjectId(destProjectId);
       } catch (error) {

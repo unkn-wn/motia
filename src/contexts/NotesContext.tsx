@@ -68,5 +68,3 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({
     </NotesContext.Provider>
   );
 };
-
-// hook moved to NotesContextObject.ts

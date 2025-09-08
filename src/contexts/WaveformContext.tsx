@@ -72,8 +72,6 @@ export interface WaveformContextValue {
   setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-// context and hook moved to WaveformContextObject.tsx
-
 interface WaveformProviderProps {
   children: ReactNode;
   value: WaveformContextValue;

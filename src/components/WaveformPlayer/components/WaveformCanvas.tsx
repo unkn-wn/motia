@@ -82,9 +82,16 @@ export const WaveformCanvas: React.FC = () => {
 
     const rect = canvasRef.current.getBoundingClientRect();
     const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
-    const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, false);
+    const clickedNote = findNoteAtPosition(
+      canvasX,
+      canvasY,
+      notes,
+      transform.scale,
+      NOTE_LABEL_HIDE_THRESHOLD,
+      true // exclude drawings: only text notes can open context menu
+    );
 
-    // Only allow menu for notes
+    // Only allow menu for non-drawing notes
     if (!clickedNote) return;
 
     // Open after a short hold; cancel if mouseup happens first

@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { useAudio } from '@contexts/objects/AudioContextObject';
+import { useAudioActions } from '@contexts/objects/AudioContextObject';
 import { usePlaybackContext, useVolumeContext } from '@contexts/objects/AudioControlsContextObject';
-import { isPlayingStore, volumeStore } from './state';
+import { isPlayingStore, volumeStore, currentTimeStore, durationStore } from './state';
 
 // Specialized hooks that only trigger rerenders for specific state changes
 
@@ -33,11 +33,13 @@ export const useVolumeState = () => {
 
 // For components that need time updates (these will rerender frequently)
 export const useTimeState = () => {
-  const context = useAudio();
+  const currentTime = useSyncExternalStore(currentTimeStore.subscribe, currentTimeStore.getSnapshot);
+  const duration = useSyncExternalStore(durationStore.subscribe, durationStore.getSnapshot);
+  const { seekToTime } = useAudioActions();
 
   return useMemo(() => ({
-    currentTime: context.currentTime,
-    duration: context.duration,
-    seekToTime: context.seekToTime,
-  }), [context.currentTime, context.duration, context.seekToTime]);
+    currentTime,
+    duration,
+    seekToTime,
+  }), [currentTime, duration, seekToTime]);
 };

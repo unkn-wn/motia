@@ -1,12 +1,12 @@
 import { useMemo, type ReactNode } from 'react';
-import { useAudio } from '@contexts/objects/AudioContextObject';
+import { useAudioActions } from '@contexts/objects/AudioContextObject';
 import { PlaybackContext, type PlaybackContextType, VolumeContext, type VolumeContextType } from './objects/AudioControlsContextObject';
 
 // Separate contexts for different concerns to enable selective subscriptions
 
 // Playback state context - only isPlaying and playback functions
 export const PlaybackProvider = ({ children }: { children: ReactNode }) => {
-  const { playPause, skipBack, skipForward, recenterToPlayhead } = useAudio();
+  const { playPause, skipBack, skipForward, recenterToPlayhead } = useAudioActions();
 
   // Memoize to change identity only when needed
   const value: PlaybackContextType = useMemo(() => ({
@@ -25,7 +25,7 @@ export const PlaybackProvider = ({ children }: { children: ReactNode }) => {
 
 // Volume state context - only volume and volume functions
 export const VolumeProvider = ({ children }: { children: ReactNode }) => {
-  const { setVolume } = useAudio();
+  const { setVolume } = useAudioActions();
 
   // Memoize to change identity only when needed
   const value: VolumeContextType = useMemo(() => ({

@@ -35,3 +35,16 @@ export const useAudio = () => {
   if (!ctx) throw new Error('useAudio must be used within AudioProvider');
   return ctx;
 };
+
+// A narrow context that exposes only stable action functions to avoid frequent re-renders
+export type AudioActionsOnly = Pick<AudioActions,
+  'playPause' | 'skipBack' | 'skipForward' | 'seekToTime' | 'setVolume' | 'volumeUp' | 'volumeDown' | 'recenterToPlayhead' | 'setRecenterToPlayhead'
+>;
+
+export const AudioActionsContext = createContext<AudioActionsOnly | null>(null);
+
+export const useAudioActions = () => {
+  const ctx = useContext(AudioActionsContext);
+  if (!ctx) throw new Error('useAudioActions must be used within AudioProvider');
+  return ctx;
+};

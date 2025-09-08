@@ -86,7 +86,8 @@ export const screenToCanvasCoords = (
   const y = screenY - rect.top;
 
   return {
-    canvasX: (x - transform.offsetX) / transform.scale,
+    // Account for base centering translate (rect.width / 2)
+    canvasX: ((x - rect.width / 2) - transform.offsetX) / transform.scale,
     canvasY: (y - transform.offsetY) / transform.scale
   };
 };
@@ -158,13 +159,14 @@ export const findNoteAtPosition = (
  * Calculates waveform dimensions and position
  */
 export const getWaveformDimensions = (
-  canvasWidth: number,
+  _canvasWidth: number,
   canvasHeight: number,
   duration: number
 ) => {
   const waveformHeight = Math.max(canvasHeight * 3, duration * 100);
   const waveformWidth = 120;
-  const waveformX = (canvasWidth - waveformWidth) / 2;
+  // World-space center at X=0; left edge is -width/2
+  const waveformX = -waveformWidth / 2;
 
   return {
     waveformHeight,

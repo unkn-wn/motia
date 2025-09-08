@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
@@ -26,12 +26,7 @@ export const usePointerInteractions = () => {
   const initialPinch = useRef<{ distance: number; midpointX: number; midpointY: number; initialScale: number } | null>(null);
   const { handleDrawingStart } = useDrawingInteractions();
 
-  useEffect(() => {
-    // ensure touch-action CSS disables browser gestures on the canvas
-    if (canvasRef.current) {
-      canvasRef.current.style.touchAction = 'none';
-    }
-  }, [canvasRef]);
+  // touch-action is handled by CSS (touch-none on canvas). No effect needed.
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     // Ignore mouse here; desktop uses existing mouse handlers
@@ -88,7 +83,8 @@ export const usePointerInteractions = () => {
       const m = midpoint(pts[0], pts[1]);
       initialPinch.current = {
         distance: dist,
-        midpointX: m.x - rect2.left,
+        // Pivot in world space: account for base centering (rect.width/2)
+        midpointX: (m.x - rect2.left) - rect2.width / 2,
         midpointY: m.y - rect2.top,
         initialScale: transform.scale
       };
@@ -153,7 +149,7 @@ export const usePointerInteractions = () => {
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const mouseX = e.clientX - rect.left;
+    const mouseX = (e.clientX - rect.left) - rect.width / 2;
     const mouseY = e.clientY - rect.top;
     setTransform(prev => {
       const newScale = Math.max(0.1, Math.min(3, prev.scale * scaleFactor));

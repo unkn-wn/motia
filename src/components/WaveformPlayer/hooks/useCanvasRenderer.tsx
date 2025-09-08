@@ -26,10 +26,11 @@ export const useCanvasRenderer = () => {
 
   // Layout helpers
   const getWaveformDims = useCallback(
-    (width: number, height: number) => {
+    (_width: number, height: number) => {
       const waveformHeight = Math.max(height * 3, duration * 100);
       const waveformWidth = 120;
-      const waveformX = (width - waveformWidth) / 2;
+      // World-space center at X=0; left edge is -width/2
+      const waveformX = -waveformWidth / 2;
       return { waveformHeight, waveformWidth, waveformX };
     },
     [duration]
@@ -330,8 +331,10 @@ export const useCanvasRenderer = () => {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    // Apply world transform to all scene elements so panning/zoom affects everything
+    // Apply base screen-centering first (keeps world X=0 at screen center regardless of viewport width)
+    // Then apply world transform so panning/zoom affects everything
     ctx.save();
+    ctx.translate(width / 2, 0);
     ctx.translate(transform.offsetX, transform.offsetY);
     ctx.scale(transform.scale, transform.scale);
 

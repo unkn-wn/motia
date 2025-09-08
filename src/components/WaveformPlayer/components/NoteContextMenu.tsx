@@ -83,6 +83,8 @@ export const NoteContextMenu: React.FC = () => {
   if (!contextMenu.isOpen || !contextMenu.noteId) return null;
   const note = notes.find(n => n.id === contextMenu.noteId);
   if (!note) return null;
+  // Disallow context menu for drawings entirely
+  if (note.type === 'drawing') return null;
 
   const handleEdit = () => {
     setEditingNote(note.id);

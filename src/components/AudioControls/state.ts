@@ -27,3 +27,5 @@ class SimpleStore<T> {
 
 export const isPlayingStore = new SimpleStore<boolean>(false);
 export const volumeStore = new SimpleStore<number>(0.5);
+export const currentTimeStore = new SimpleStore<number>(0);
+export const durationStore = new SimpleStore<number>(0);

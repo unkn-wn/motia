@@ -178,10 +178,14 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     };
   }, [audioFile, setDuration, setWaveformData, setCurrentTime, setIsPlaying, setWavesurferRef, onLoadingChange]);
 
-  // Keep transformRef in sync with transform state
-  useEffect(() => {
-    transformRef.current = transform;
-  }, [transform]);
+  // Helper: set transform and keep transformRef in sync without a separate effect
+  const setTransformSafe = useCallback((update: React.SetStateAction<CanvasTransform>) => {
+    setTransform((prev) => {
+      const next = typeof update === 'function' ? (update as (p: CanvasTransform) => CanvasTransform)(prev) : update;
+      transformRef.current = next;
+      return next;
+    });
+  }, []);
 
   // Follow playhead effect - continuously update transform when following is enabled
   useEffect(() => {
@@ -197,12 +201,12 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     const targetPlayheadY = timeProgress * scaledWaveformHeight;
     const playheadPositionY = canvasHeight * 0.33; // Position at 33% from top
 
-    setTransform(prev => ({
+    setTransformSafe(prev => ({
       offsetX: prev.offsetX, // Don't change X position
       offsetY: playheadPositionY - targetPlayheadY, // Keep playhead centered
       scale: prev.scale // Maintain current zoom level
     }));
-  }, [currentTime, duration, transform.scale, isFollowingPlayhead, canvasRef, setTransform]);
+  }, [currentTime, duration, transform.scale, isFollowingPlayhead, canvasRef, setTransformSafe]);
 
   const handleAddNoteAtCurrentTime = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -210,10 +214,10 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
     const rect = canvasRef.current.getBoundingClientRect();
 
-    // Position note further to the right of the waveform in canvas space
+    // With world-centered waveform (center at X=0), place note to the right of waveform
     const waveformWidth = 120;
-    const waveformX = (rect.width - waveformWidth) / 2;
-    const noteCanvasX = waveformX + waveformWidth + 150;
+    const waveformRightX = waveformWidth / 2;
+    const noteCanvasX = waveformRightX + 150;
 
     // Calculate Y position based on current playback time
     const waveformHeight = Math.max(rect.height * 3, duration * 100);
@@ -241,7 +245,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     const targetPlayheadY = timeProgress * scaledWaveformHeight;
     const playheadPositionY = canvasHeight * 0.33; // Position at 33% from top
 
-    setTransform(prev => ({
+  setTransformSafe(prev => ({
       offsetX: prev.offsetX, // Don't change X position - preserve user's horizontal view
       offsetY: playheadPositionY - targetPlayheadY, // Position playhead at desired Y position
       scale: prev.scale // Maintain current zoom level
@@ -249,7 +253,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
     // Enable playhead following mode
     setIsFollowingPlayhead(true);
-  }, [currentTime, duration, transform.scale, setTransform, setIsFollowingPlayhead]);
+  }, [currentTime, duration, transform.scale, setTransformSafe, setIsFollowingPlayhead]);
 
   // Register the recenter function with the context
   useEffect(() => {

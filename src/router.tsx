@@ -1,10 +1,8 @@
-import React from 'react';
-import { Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
 import Home from './home';
+import ProjectsList from '@components/ProjectsList';
 
-const Root: React.FC = () => <Outlet />;
-
-const rootRoute = createRootRoute({ component: Root });
+const rootRoute = createRootRoute({ component: Outlet });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -18,7 +16,13 @@ const projectRoute = createRoute({
   component: Home,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, projectRoute]);
+const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects',
+  component: ProjectsList,
+});
+
+const routeTree = rootRoute.addChildren([indexRoute, projectRoute, projectsRoute]);
 
 export const router = createRouter({ routeTree });
 

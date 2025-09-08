@@ -47,7 +47,7 @@ export const useGlobalMouseHandlers = () => {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const canvasX = (x - transform.offsetX) / transform.scale;
+        const canvasX = ((x - rect.width / 2) - transform.offsetX) / transform.scale;
         const canvasY = (y - transform.offsetY) / transform.scale;
 
         const lastPoint = currentStroke[currentStroke.length - 1];
