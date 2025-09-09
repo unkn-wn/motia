@@ -9,7 +9,7 @@ const SignInSaveBanner: React.FC = () => {
 
   return (
     <>
-      <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-400/40 text-blue-200 text-sm flex items-center gap-3 shadow">
+      <div className="fixed top-2 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded-md bg-blue-500/10 border border-blue-400/40 text-blue-200 text-sm flex flex-col md:flex-row items-center gap-3 shadow">
         <span>Sign in to save your progress across devices.</span>
         <div className="flex items-center gap-2">
           <button

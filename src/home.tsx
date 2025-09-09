@@ -10,7 +10,7 @@ import FullscreenOverlay from '@/components/FullscreenOverlay';
 import RelinkBanner from '@/components/RelinkBanner';
 import HomeLanding from '@components/Home/HomeLanding';
 import SignInSaveBanner from '@components/SignInSaveBanner';
-import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping } from '@utils/shortcutsUtils';
+import { type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping, getShortcuts, setShortcuts as setGlobalShortcuts } from '@utils/shortcutsUtils';
 import './style.css';
 import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
@@ -22,7 +22,7 @@ import SidebarToggle from '@/components/SidebarToggle';
 function Home() {
   const navigate = useNavigate();
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
+  const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(() => getShortcuts());
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -95,15 +95,22 @@ function Home() {
 
   // Keyboard shortcuts handlers
   const handleUpdateShortcut = useCallback((id: string, newKey: string) => {
-    setShortcuts(prev => prev.map(shortcut =>
-      shortcut.id === id ? { ...shortcut, currentKey: newKey } : shortcut
-    ));
+    setShortcuts(prev => {
+      const next = prev.map(shortcut => shortcut.id === id ? { ...shortcut, currentKey: newKey } : shortcut);
+      setGlobalShortcuts(next);
+      return next;
+    });
   }, []);
 
   const handleResetShortcuts = useCallback(() => {
     const defaults = resetAllShortcutsAndPreferences();
     setShortcuts(defaults);
   }, []);
+
+  // Sync local view with global store after sign-in/settings load
+  useEffect(() => {
+    setShortcuts(getShortcuts());
+  }, [user]);
 
   // Global keyboard event handler
   useEffect(() => {

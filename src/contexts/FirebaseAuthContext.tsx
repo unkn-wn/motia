@@ -11,7 +11,8 @@ import {
   type User,
 } from 'firebase/auth';
 import { ensureUser, fetchUserSettings, saveUserSettings, markUserUpgraded, listUserProjectIds, fetchProjectMeta, fetchProjectNotes, updateProjectMeta, saveProjectNotes, createProject, deleteUserData } from '@/lib/db';
-import { DEFAULT_PREFERENCES, setPreferences } from '@utils/shortcutsUtils';
+import { DEFAULT_PREFERENCES, setPreferences, setShortcutsFromMap, subscribeShortcuts } from '@utils/shortcutsUtils';
+import { shortcutsArrayToMap } from '@/lib/db';
 import { AuthContext, type AuthContextValue } from './objects/FirebaseAuthContextObject';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -168,10 +169,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // ensure defaults exist in Firestore (first login)
           await saveUserSettings(user.uid, { preferences: DEFAULT_PREFERENCES });
         }
+        // Load shortcuts into global store if present
+        if (settings?.shortcuts) {
+          setShortcutsFromMap(settings.shortcuts);
+        }
       } catch {
         // non-fatal: ignore bootstrap errors to avoid noisy logs
       }
     })();
+  }, [user]);
+
+  // Centralized persistence of shortcut changes
+  useEffect(() => {
+    if (!user) return;
+    const unsub = subscribeShortcuts((list) => {
+      // Fire and forget; do not block UI
+      void saveUserSettings(user.uid, { shortcuts: shortcutsArrayToMap(list) });
+    });
+    return () => {
+      unsub();
+    };
   }, [user]);
 
   const value = useMemo<AuthContextValue>(() => ({
@@ -193,5 +210,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
-// hook moved to FirebaseAuthContextObject.ts

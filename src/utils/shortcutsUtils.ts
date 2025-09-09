@@ -178,11 +178,47 @@ export const setPreferences = (partial: Partial<Preferences>) => {
   preferences = { ...preferences, ...partial };
 };
 
+// --- Global Shortcuts Store ---
+let shortcutsStore: KeyboardShortcut[] = DEFAULT_SHORTCUTS.map(s => ({ ...s }));
+const shortcutListeners = new Set<(shortcuts: KeyboardShortcut[]) => void>();
+
+export const getShortcuts = (): KeyboardShortcut[] => shortcutsStore;
+
+export const setShortcuts = (next: KeyboardShortcut[]): void => {
+  // Replace with a defensive copy to avoid external mutations
+  shortcutsStore = next.map(s => ({ ...s }));
+  // Notify listeners
+  shortcutListeners.forEach((fn) => {
+    try { fn(shortcutsStore); } catch {/* ignore listener errors */}
+  });
+};
+
+export const setShortcutsFromMap = (map: Record<string, string>): void => {
+  const used = new Set<string>();
+  const merged = DEFAULT_SHORTCUTS.map(s => {
+    const key = map[s.id];
+    const newKey = key && !used.has(key) ? key : s.currentKey;
+    used.add(newKey);
+    return { ...s, currentKey: newKey } as KeyboardShortcut;
+  });
+  setShortcuts(merged);
+};
+
+export const subscribeShortcuts = (listener: (shortcuts: KeyboardShortcut[]) => void): (() => void) => {
+  shortcutListeners.add(listener);
+  return () => {
+    shortcutListeners.delete(listener);
+  };
+};
+
 // Single reset entrypoint used by UI to reset everything
 export const resetAllShortcutsAndPreferences = (): KeyboardShortcut[] => {
   preferences = { ...DEFAULT_PREFERENCES };
+  // Reset global shortcuts store to defaults
+  const defaults = DEFAULT_SHORTCUTS.map(s => ({ ...s }));
+  setShortcuts(defaults);
   // Return a fresh array copy of defaults so callers can set state
-  return DEFAULT_SHORTCUTS.map(s => ({ ...s }));
+  return defaults;
 };
 
 // Lightweight accessor for UI hints: get default display key by shortcut id
@@ -254,7 +290,7 @@ export const isUserTyping = (): boolean => {
  * Centralized keyboard event handler
  */
 export const createKeyboardHandler = (
-  shortcuts: KeyboardShortcut[],
+  _shortcuts: KeyboardShortcut[],
   handlers: Record<string, () => void>
 ) => {
   return (e: KeyboardEvent) => {
@@ -262,7 +298,8 @@ export const createKeyboardHandler = (
     if (isUserTyping()) return;
 
     // Find matching shortcut by exact key match
-    const shortcut = shortcuts.find(s => s.currentKey === e.key);
+    const list = getShortcuts();
+    const shortcut = list.find(s => s.currentKey === e.key);
     if (!shortcut) return;
 
     // Check if we have a handler for this action

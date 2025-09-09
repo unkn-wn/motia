@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
-import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton } from '@utils/shortcutsUtils';
+import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton, setShortcuts } from '@utils/shortcutsUtils';
 import { NOTE_COLORS, getColorPickerStyle, type NoteColor } from '@utils/colorUtils';
 import { history } from '@utils/history';
 import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
 import { XIcon, SettingsIcon, RotateCcwIcon } from '@assets/icons';
+// persistence is handled centrally in FirebaseAuthContext via subscription
 
 interface KeyboardShortcutsProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   onUpdateShortcut,
   onResetShortcuts
 }) => {
+  // no direct persistence here; state flows up and global store is updated
   const [editingId, setEditingId] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string>('');
   const [enterBehavior, setEnterBehaviorState] = useState<EditorEnterBehavior>(getPreferences().editorEnterBehavior);
@@ -33,9 +35,9 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
     if (isOpen) {
       const prefs = getPreferences();
       setEnterBehaviorState(prefs.editorEnterBehavior);
-  setPanButtonState(prefs.panMouseButton);
-  setHistoryMaxState(prefs.historyMax);
-  setDefaultNoteColor(prefs.defaultNoteColor);
+      setPanButtonState(prefs.panMouseButton);
+      setHistoryMaxState(prefs.historyMax);
+      setDefaultNoteColor(prefs.defaultNoteColor);
     }
   }, [isOpen]);
 
@@ -91,8 +93,10 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
       // Clear error after 2 seconds
       setTimeout(() => setKeyError(''), 2000);
     } else {
-      // Auto-save the shortcut
+      // Auto-save the shortcut: update parent state, update global store, and persist to Firestore
       onUpdateShortcut(editingId, key);
+      const next = shortcuts.map(s => s.id === editingId ? { ...s, currentKey: key } : s);
+      setShortcuts(next);
       setEditingId(null);
       setKeyError('');
     }
@@ -180,7 +184,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
               <div className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg">
                 <div className="text-sm font-medium text-neutral-200">Pan button</div>
                 <div className="inline-flex bg-neutral-900 border border-neutral-700 rounded overflow-hidden">
-                  {(['Left','Middle','Right'] as PanMouseButton[]).map(opt => (
+                  {(['Left', 'Middle', 'Right'] as PanMouseButton[]).map(opt => (
                     <button
                       key={opt}
                       onClick={() => { setPanButtonState(opt); setPreferences({ panMouseButton: opt }); }}
@@ -199,11 +203,11 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                   type="number"
                   value={Number.isFinite(historyMax) ? historyMax : 30}
                   onChange={(e) => {
-                  const num = Math.floor(Number(e.target.value));
-                  const val = Number.isNaN(num) ? 30 : Math.max(1, Math.min(200, num));
-                  setHistoryMaxState(val);
-                  setPreferences({ historyMax: val });
-                  history.setMax(val);
+                    const num = Math.floor(Number(e.target.value));
+                    const val = Number.isNaN(num) ? 30 : Math.max(1, Math.min(200, num));
+                    setHistoryMaxState(val);
+                    setPreferences({ historyMax: val });
+                    history.setMax(val);
                   }}
                   min={1}
                   max={200}
