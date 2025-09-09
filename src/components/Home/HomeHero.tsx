@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useState } from 'react';
 import HeroBanner from './HeroBanner';
-import FileUploader from './FileUploader';
+import FileUploader from '@components/FileUploader';
 import { LogInIcon, UserPlusIcon } from '@/assets/icons';
 import HeroBackdrop, { type HeroBackdropHandle } from './HeroBackdrop';
 import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';

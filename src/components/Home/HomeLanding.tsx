@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import HomeHero from '@components/Home/HomeHero';
+import FileDropzone from '@components/FileDropzone';
 import AuthModal from '@components/Home/AuthModal';
 
 interface Props {
@@ -17,13 +18,15 @@ const HomeLanding: React.FC<Props> = ({ onUpload, uploading, onSignOut }) => {
 
   return (
     <>
-      <HomeHero
-        onUpload={onUpload}
-        uploading={uploading}
-        onOpenSignin={openSignin}
-        onOpenSignup={openSignup}
-        onSignOut={onSignOut}
-      />
+      <FileDropzone onFileSelect={onUpload} isLoading={uploading}>
+        <HomeHero
+          onUpload={onUpload}
+          uploading={uploading}
+          onOpenSignin={openSignin}
+          onOpenSignup={openSignup}
+          onSignOut={onSignOut}
+        />
+      </FileDropzone>
       <AuthModal open={signInOpen} mode="signin" onClose={() => setSignInOpen(false)} />
       <AuthModal open={signUpOpen} mode="signup" onClose={() => setSignUpOpen(false)} />
     </>

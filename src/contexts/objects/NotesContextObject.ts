@@ -1,19 +1,16 @@
 import { createContext, useContext } from 'react';
-import type { Note } from '@types';
 
-export interface NotesContextType {
-  displayNotes: Note[];
-  activeNoteId: string | null;
+export interface NotesActionsContextType {
   onDeleteNote: (id: string) => void;
   onJumpToTime: (time: number) => void;
   onChangeNoteColor: (id: string, color: string) => void;
   onUpdateNote: (id: string, content: string) => void;
 }
 
-export const NotesContext = createContext<NotesContextType | null>(null);
+export const NotesActionsContext = createContext<NotesActionsContextType | null>(null);
 
-export const useNotes = () => {
-  const ctx = useContext(NotesContext);
-  if (!ctx) throw new Error('useNotes must be used within a NotesProvider');
+export const useNotesActions = () => {
+  const ctx = useContext(NotesActionsContext);
+  if (!ctx) throw new Error('useNotesActions must be used within a NotesProvider');
   return ctx;
 };

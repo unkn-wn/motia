@@ -1,17 +1,20 @@
-import React, { memo, useRef, useEffect, useCallback } from 'react';
-import { useNotes } from '@contexts/objects/NotesContextObject';
+import React, { memo, useEffect, useRef } from 'react';
+import { useNotesActions } from '@contexts/objects/NotesContextObject';
 import { getDefaultShortcutKey, formatKeyDisplay } from '@utils/shortcutsUtils';
 import NoteItem from './NoteItem';
 import { setNoteItemActions } from './noteItemActions';
 import { Edit3Icon } from '@assets/icons';
+import { currentTimeStore } from '@components/AudioControls/state';
+import { findActiveNote } from '@utils/notesUtils';
 
-const NotesSidebar: React.FC = memo(() => {
-  const { displayNotes, activeNoteId, onDeleteNote, onJumpToTime, onChangeNoteColor, onUpdateNote } = useNotes();
+interface NotesSidebarProps { displayNotes: import('@types').Note[]; }
+
+const NotesSidebar: React.FC<NotesSidebarProps> = memo(({ displayNotes }) => {
+  const { onDeleteNote, onJumpToTime, onChangeNoteColor, onUpdateNote } = useNotesActions();
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const lastActiveNoteId = useRef<string | null>(null);
-
   // Set up global actions for NoteItem components
-  useEffect(() => {
+  // No dependency on currentTime
+  React.useEffect(() => {
     setNoteItemActions({
       onDeleteNote,
       onJumpToTime,
@@ -20,58 +23,47 @@ const NotesSidebar: React.FC = memo(() => {
     });
   }, [onDeleteNote, onJumpToTime, onChangeNoteColor, onUpdateNote]);
 
-  // Handle active note highlighting via direct DOM manipulation
-  // This prevents ANY React component rerenders when active note changes
-  const updateActiveNoteHighlight = useCallback((newActiveNoteId: string | null) => {
-    if (!sidebarRef.current) return;
-
-    // Remove active class from previously active note
-    if (lastActiveNoteId.current) {
-      const prevActiveElement = sidebarRef.current.querySelector(
-        `[data-note-id="${lastActiveNoteId.current}"]`
-      ) as HTMLElement;
-      if (prevActiveElement) {
-        prevActiveElement.classList.remove('ring-2', 'ring-white/60', 'shadow-lg', 'bg-neutral-800/50');
-      }
-    }
-
-    // Add active class to new active note
-    if (newActiveNoteId) {
-      const newActiveElement = sidebarRef.current.querySelector(
-        `[data-note-id="${newActiveNoteId}"]`
-      ) as HTMLElement;
-      if (newActiveElement) {
-        newActiveElement.classList.add('ring-2', 'ring-white/60', 'shadow-lg', 'bg-neutral-800/50');
-
-        // Always scroll to active note when it changes
-        // Use requestAnimationFrame for better performance
-        requestAnimationFrame(() => {
-          try {
-            newActiveElement.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-              inline: 'nearest'
-            });
-          } catch {
-            // Fallback for older browsers
-            newActiveElement.scrollIntoView(true);
-          }
-        });
-      }
-    }
-
-    lastActiveNoteId.current = newActiveNoteId;
-  }, []);
-
-  // Update active highlighting when activeNoteId changes
-  // This is the ONLY side effect that happens when playhead crosses boundaries
+  // Highlight active note without causing React rerenders
   useEffect(() => {
-    updateActiveNoteHighlight(activeNoteId);
-  }, [activeNoteId, updateActiveNoteHighlight]);
+    let lastActiveId: string | null = null;
+
+    const handleTimeChange = () => {
+      const container = sidebarRef.current;
+      if (!container) return;
+      const time = currentTimeStore.getSnapshot();
+      const active = findActiveNote(displayNotes, time);
+      const newId = active?.id || null;
+      if (newId === lastActiveId) return;
+
+      if (lastActiveId) {
+        const prevEl = container.querySelector(`[data-note-id="${lastActiveId}"]`) as HTMLElement | null;
+        prevEl?.classList.remove('ring-2', 'ring-white/60', 'shadow-lg', 'bg-neutral-800/50');
+      }
+      if (newId) {
+        const newEl = container.querySelector(`[data-note-id="${newId}"]`) as HTMLElement | null;
+        if (newEl) {
+          newEl.classList.add('ring-2', 'ring-white/60', 'shadow-lg', 'bg-neutral-800/50');
+          requestAnimationFrame(() => {
+            try {
+              newEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            } catch {
+              newEl.scrollIntoView(true);
+            }
+          });
+        }
+      }
+      lastActiveId = newId;
+    };
+
+    // initial highlight (in case of paused at time)
+    handleTimeChange();
+    const unsub = currentTimeStore.subscribe(handleTimeChange);
+    return unsub;
+  }, [displayNotes]);
 
   return (
     <div
-      ref={sidebarRef}
+  ref={sidebarRef}
       className="w-80 rounded-xl bg-neutral-900/95 backdrop-blur-sm border-neutral-700 h-5/6 overflow-y-auto shadow-2xl"
     >
       <div className="p-4 space-y-3">
@@ -92,10 +84,10 @@ const NotesSidebar: React.FC = memo(() => {
       </div>
     </div>
   );
-}, () => {
-  // Custom memoization: never rerender the sidebar itself
-  // All changes are handled via DOM manipulation
-  return true; // Always return true to prevent rerenders
+}, (prevProps, nextProps) => {
+  // Only rerender when the stable displayNotes reference changes.
+  // Container/Connected compute a stable array and reuse identity when only position/timeflow change.
+  return prevProps.displayNotes === nextProps.displayNotes;
 });
 
 NotesSidebar.displayName = 'NotesSidebar';

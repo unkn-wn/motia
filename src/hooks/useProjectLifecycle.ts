@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useAuth } from '@contexts/objects/FirebaseAuthContextObject';
 import { auth } from '@/lib/firebase';
-import { createProject, fetchProjectMeta, fetchProjectNotes } from '@/lib/db';
+import { createProject, fetchProjectMeta, fetchProjectNotes, listUserProjectIds } from '@/lib/db';
 import { getLocalAudio, saveLocalAudio } from '@/lib/localAudio';
 import type { Note } from '@types';
 // Autosave is handled by the page to avoid double-instantiation of hooks
@@ -31,13 +31,33 @@ export function useProjectLifecycle(opts: {
     }
   }, [user, lastMigratedProjectId, navigate, clearMigrationRedirect]);
 
-  const shouldRedirectToProjects = !!(
-    user &&
-    !params.projectId &&
-    // Don't redirect while a migration is ongoing or immediately after it
-    !migrationBusy &&
-    !lastMigratedProjectId
-  );
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      if (!user || params.projectId || migrationBusy || lastMigratedProjectId) {
+        setRedirectTo(null);
+        return;
+      }
+      // For anonymous users, if they have exactly one project, redirect to it; otherwise do not redirect
+      if (user.isAnonymous) {
+        try {
+          const ids = await listUserProjectIds(user.uid);
+          if (ids.length === 1) {
+            setRedirectTo(ids[0]);
+          } else {
+            setRedirectTo(null);
+          }
+        } catch {
+          setRedirectTo(null);
+        }
+      } else {
+        // Signed-in users: keep existing behavior redirecting to projects list
+        setRedirectTo('PROJECTS');
+      }
+    })();
+  }, [user, params.projectId, migrationBusy, lastMigratedProjectId]);
+
+  const shouldRedirectToProjects = redirectTo === 'PROJECTS';
 
   // project loader
   useEffect(() => {
@@ -126,6 +146,7 @@ export function useProjectLifecycle(opts: {
     user,
     authLoading,
     shouldRedirectToProjects,
+    redirectTo,
     params,
 
     // project/audio state

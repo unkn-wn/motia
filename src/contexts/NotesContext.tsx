@@ -1,13 +1,10 @@
 import React, { useMemo, useCallback, type ReactNode } from 'react';
 import type { Note } from '@types';
-import { sortNotesByTime } from '@utils/notesUtils';
-import { useActiveNote } from '@components/NotesSidebar/useActiveNote';
-import { NotesContext, type NotesContextType } from './objects/NotesContextObject';
+import { NotesActionsContext } from './objects/NotesContextObject';
 
 interface NotesProviderProps {
   children: ReactNode;
   notes: Note[];
-  currentTime: number;
   onDeleteNote: (id: string) => void;
   onJumpToTime: (time: number) => void;
   onChangeNoteColor: (id: string, color: string) => void;
@@ -16,19 +13,13 @@ interface NotesProviderProps {
 
 export const NotesProvider: React.FC<NotesProviderProps> = ({
   children,
-  notes,
-  currentTime,
   onDeleteNote,
   onJumpToTime,
   onChangeNoteColor,
   onUpdateNote,
 }) => {
-  const displayNotes = useMemo(() => {
-    const textNotes = notes.filter(note => note.type !== 'drawing');
-    return sortNotesByTime(textNotes);
-  }, [notes]);
+  // Display notes are now owned by the consumer; provider exposes actions only to avoid re-renders
 
-  const { activeNoteId } = useActiveNote(notes, currentTime, 16);
 
   const stableOnDeleteNote = useCallback((id: string) => {
     onDeleteNote(id);
@@ -46,25 +37,16 @@ export const NotesProvider: React.FC<NotesProviderProps> = ({
     onUpdateNote(id, content);
   }, [onUpdateNote]);
 
-  const value = useMemo<NotesContextType>(() => ({
-    displayNotes,
-    activeNoteId,
+  const actionsValue = useMemo(() => ({
     onDeleteNote: stableOnDeleteNote,
     onJumpToTime: stableOnJumpToTime,
     onChangeNoteColor: stableOnChangeNoteColor,
     onUpdateNote: stableOnUpdateNote,
-  }), [
-    displayNotes,
-    activeNoteId,
-    stableOnDeleteNote,
-    stableOnJumpToTime,
-    stableOnChangeNoteColor,
-    stableOnUpdateNote,
-  ]);
+  }), [stableOnDeleteNote, stableOnJumpToTime, stableOnChangeNoteColor, stableOnUpdateNote]);
 
   return (
-    <NotesContext.Provider value={value}>
+    <NotesActionsContext.Provider value={actionsValue}>
       {children}
-    </NotesContext.Provider>
+    </NotesActionsContext.Provider>
   );
 };

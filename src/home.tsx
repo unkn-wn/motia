@@ -9,9 +9,10 @@ import { AudioProvider } from '@contexts/AudioContext';
 import FullscreenOverlay from '@/components/FullscreenOverlay';
 import RelinkBanner from '@/components/RelinkBanner';
 import HomeLanding from '@components/Home/HomeLanding';
+import SignInSaveBanner from '@components/SignInSaveBanner';
 import { DEFAULT_SHORTCUTS, type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping } from '@utils/shortcutsUtils';
 import './style.css';
-import { Navigate } from '@tanstack/react-router';
+import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 import { useNotesState } from '@/hooks/useNotesState';
 import { useProjectLifecycle } from '@/hooks/useProjectLifecycle';
@@ -19,6 +20,7 @@ import AutosaveIndicator from '@/components/AutosaveIndicator';
 import SidebarToggle from '@/components/SidebarToggle';
 
 function Home() {
+  const navigate = useNavigate();
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -51,6 +53,7 @@ function Home() {
     user,
     authLoading,
     shouldRedirectToProjects,
+    redirectTo,
     params,
     audioFile,
     projectId,
@@ -81,6 +84,12 @@ function Home() {
   const handleShowShortcuts = useCallback(() => {
     setShowShortcuts(true);
   }, []);
+
+  // Stable Projects navigation for FloatingDock
+  const handleGoProjects = useCallback(() => {
+    if (user?.isAnonymous) return; // respect disabled state
+    navigate({ to: '/projects' });
+  }, [navigate, user?.isAnonymous]);
 
   // drawing handlers come from notes state
 
@@ -194,9 +203,14 @@ function Home() {
   // Memoize text notes count to avoid unnecessary rerenders in toggle
   const textNotesCount = useMemo(() => notes.filter(n => n.type !== 'drawing').length, [notes]);
 
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {shouldRedirectToProjects ? <Navigate to="/projects" /> : null}
+      {redirectTo && redirectTo !== 'PROJECTS' ? (
+        <Navigate to="/project/$projectId" params={{ projectId: redirectTo }} />
+      ) : null}
+      {user?.isAnonymous && <SignInSaveBanner />}
       {showGlobalProjectOverlay && <FullscreenOverlay message="Loading project…" />}
       {/* Keyboard Shortcuts Panel */}
       <KeyboardShortcuts
@@ -238,6 +252,8 @@ function Home() {
                 canUndo={canUndo}
                 canRedo={canRedo}
                 onOpenProfile={handleOpenProfile}
+                onGoHome={handleGoProjects}
+                disableGoHome={!!user?.isAnonymous}
               />
               {/* Sidebar toggle + Notes sidebar remain available */}
               <SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
@@ -297,8 +313,9 @@ function Home() {
               canUndo={canUndo}
               canRedo={canRedo}
               onOpenProfile={handleOpenProfile}
+              onGoHome={handleGoProjects}
+              disableGoHome={!!user?.isAnonymous}
             />
-
             {/* Sidebar Toggle Button - positioned on the side and moves with panel */}
             <SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
 

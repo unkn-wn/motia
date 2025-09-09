@@ -26,7 +26,7 @@ import {
   Undo2,
   Redo2
 } from 'lucide-react';
-import { Eye, EyeOff, User } from 'lucide-react';
+import { Eye, EyeOff, User, Home } from 'lucide-react';
 
 /**
  * Memoized Lucide icon components to prevent unnecessary rerenders
@@ -180,3 +180,9 @@ export const UserIcon = memo(({ className = "w-5 h-5" }: { className?: string })
   <User className={className} />
 ));
 UserIcon.displayName = 'UserIcon';
+
+// Home Icon
+export const HomeIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
+  <Home className={className} />
+));
+HomeIcon.displayName = 'HomeIcon';

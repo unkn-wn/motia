@@ -3,6 +3,7 @@ import AddNoteButton from './AddNoteButton';
 import DrawingModeButton from './DrawingModeButton';
 import ShortcutsButton from './ShortcutsButton';
 import ProfileButton from './ProfileButton.tsx';
+import HomeButton from './HomeButton';
 import UndoButton from './UndoButton';
 import RedoButton from './RedoButton';
 
@@ -17,6 +18,8 @@ interface FloatingDockProps {
   canUndo?: boolean;
   canRedo?: boolean;
   onOpenProfile?: () => void;
+  onGoHome?: () => void;
+  disableGoHome?: boolean;
 }
 
 // Main FloatingDock - isolated from currentTime updates
@@ -32,6 +35,8 @@ const FloatingDock = memo<FloatingDockProps>(({
   canUndo = true,
   canRedo = true,
   onOpenProfile,
+  onGoHome,
+  disableGoHome,
 }) => {
   return (
     <div
@@ -63,9 +68,12 @@ const FloatingDock = memo<FloatingDockProps>(({
       {/* Keyboard Shortcuts Button */}
       <ShortcutsButton onShowShortcuts={onShowShortcuts} />
 
-      {/* Profile Button */}
-      {onOpenProfile && (
-        <ProfileButton onOpenProfile={onOpenProfile} />
+      {/* Settings cluster */}
+      {(onOpenProfile || onGoHome) && (
+        <div className="flex flex-col space-y-3">
+          {onOpenProfile && <ProfileButton onOpenProfile={onOpenProfile} />}
+          {onGoHome && <HomeButton onGoHome={onGoHome} disabled={disableGoHome} />}
+        </div>
       )}
     </div>
   );
