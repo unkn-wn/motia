@@ -39,7 +39,7 @@ export const formatTimeAgo = (date: Date): string => {
   const diffMs = Date.now() - date.getTime();
   if (diffMs < 0) return 'just now';
   const sec = Math.floor(diffMs / 1000);
-  if (sec < 5) return 'just now';
+  if (sec < 3) return 'just now';
   if (sec < 60) return `${sec}s ago`;
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ago`;

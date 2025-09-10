@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LogInIcon, UserPlusIcon, XIcon, CheckIcon, EyeIcon, EyeOffIcon } from '@/assets/icons';
 import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';
 import { getAuthErrorMessage } from '@utils/firebaseErrors';
+import Modal from '@/components/Modal';
 
 type Mode = 'signin' | 'signup';
 
@@ -25,12 +26,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
   useEffect(() => setMode(initialMode), [initialMode]);
   useEffect(() => { if (!open) { setEmail(''); setPassword(''); setLoading(false); setDone(false); setError(null); } }, [open]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && open) onClose(); };
-    const opts: AddEventListenerOptions = { capture: true };
-    window.addEventListener('keydown', onKey, opts);
-    return () => window.removeEventListener('keydown', onKey, opts);
-  }, [open, onClose]);
+  // ESC and overlay close handled by shared Modal
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,13 +51,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
   };
 
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 backdrop-blur-sm" onClick={onClose} />
-      <div ref={dialogRef} className="relative w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-800 shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5 animate-fade-in-up">
-        <button onClick={onClose} className="absolute top-3 right-3 text-neutral-400 hover:text-neutral-200 cursor-pointer" aria-label="Close auth dialog">
+    <Modal open={open} onClose={onClose}>
+      <div ref={dialogRef} className="relative w-full animate-fade-in-up">
+        <button onClick={onClose} className="absolute top-0 right-0 text-neutral-400 hover:text-neutral-200 cursor-pointer" aria-label="Close auth dialog">
           <XIcon className="w-5 h-5" />
         </button>
         <div className="text-center mb-3">
@@ -125,7 +118,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

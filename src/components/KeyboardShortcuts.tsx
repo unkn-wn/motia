@@ -4,7 +4,8 @@ import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouse
 import { NOTE_COLORS, getColorPickerStyle, type NoteColor } from '@utils/colorUtils';
 import { history } from '@utils/history';
 import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
-import { XIcon, SettingsIcon, RotateCcwIcon } from '@assets/icons';
+import { XIcon, RotateCcwIcon } from '@assets/icons';
+import Modal from '@/components/Modal';
 // persistence is handled centrally in FirebaseAuthContext via subscription
 
 interface KeyboardShortcutsProps {
@@ -119,45 +120,37 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   ].filter(cat => cat.shortcuts.length > 0);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in-up"
-      onClick={onClose}
-    >
-      <div
-        className="bg-neutral-900/95 rounded-xl shadow-2xl w-full max-w-md border border-neutral-700/50"
-        data-shortcuts-editing={!!editingId}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between py-2 px-4 border-b border-neutral-700/50">
-          <div className="flex items-center space-x-2">
-            <SettingsIcon className="w-4 h-4 text-neutral-400" />
-            <h2 className="text-sm font-medium text-white">Settings</h2>
-          </div>
-          <div className="flex items-center space-x-1">
-            <button
-              onClick={() => {
-                onResetShortcuts();
-                // Reflect global reset in local UI
-                const prefs = getPreferences();
-                setEnterBehaviorState(prefs.editorEnterBehavior);
-                setPanButtonState(prefs.panMouseButton);
-                setHistoryMaxState(prefs.historyMax);
-                history.setMax(prefs.historyMax);
-              }}
-              className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
-              title="Reset to defaults"
-            >
-              <RotateCcwIcon className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
-            >
-              <XIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Settings"
+      titleRight={(
+        <div className="flex items-center space-x-1">
+          <button
+            onClick={() => {
+              onResetShortcuts();
+              // Reflect global reset in local UI
+              const prefs = getPreferences();
+              setEnterBehaviorState(prefs.editorEnterBehavior);
+              setPanButtonState(prefs.panMouseButton);
+              setHistoryMaxState(prefs.historyMax);
+              history.setMax(prefs.historyMax);
+            }}
+            className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
+            title="Reset to defaults"
+          >
+            <RotateCcwIcon className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
+          >
+            <XIcon className="w-3.5 h-3.5" />
+          </button>
         </div>
+      )}
+    >
+      <div className="bg-neutral-900/95 rounded-xl w-full max-w-md border border-neutral-700/50" data-shortcuts-editing={!!editingId}>
 
         {/* Content */}
         <div className="max-h-96 overflow-y-auto">
@@ -296,7 +289,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
           </p>
         </div> */}
       </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,5 +1,6 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
+import Modal from '@/components/Modal';
 
 export const DeleteConfirmModal: React.FC = () => {
   const { deleteConfirmNoteId, setDeleteConfirmNoteId, onDeleteNote } = useWaveformContext();
@@ -7,31 +8,13 @@ export const DeleteConfirmModal: React.FC = () => {
   const cancel = useCallback(() => setDeleteConfirmNoteId(null), [setDeleteConfirmNoteId]);
   const confirm = () => { if (onDeleteNote && deleteConfirmNoteId) onDeleteNote(deleteConfirmNoteId); cancel(); };
 
-  // Always call hooks in the same order; gate effect logic by state
-  useEffect(() => {
-    if (!deleteConfirmNoteId) return; // no modal open, no listeners
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        cancel();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [deleteConfirmNoteId, cancel]);
-
-  if (!deleteConfirmNoteId) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-[320px] max-w-[90vw] bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl p-4">
-        <div className="text-neutral-100 mb-4">Delete this note?</div>
-        <div className="flex justify-end gap-2">
-          <button onClick={cancel} className="px-3 py-1 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 hover:bg-neutral-700">Cancel</button>
-          <button onClick={confirm} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500">Delete</button>
-        </div>
+    <Modal open={!!deleteConfirmNoteId} onClose={cancel} title="Delete this note?">
+      <p className="mb-2 text-neutral-300">This action cannot be undone.</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={cancel} className="px-3 py-1 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 hover:bg-neutral-700 cursor-pointer">Cancel</button>
+        <button onClick={confirm} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-500 cursor-pointer">Delete</button>
       </div>
-    </div>
+    </Modal>
   );
 };

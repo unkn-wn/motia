@@ -30,6 +30,9 @@ import type {
 function sanitizeForFirestore(value: unknown): unknown {
   if (value === undefined) return null; // avoid undefined
   if (value === null) return null;
+  // Preserve Date and Firestore Timestamp as-is so Firestore can serialize them properly
+  if (value instanceof Date) return value;
+  if (value instanceof Timestamp) return value;
   if (Array.isArray(value)) {
     return value.map((el) => {
       if (Array.isArray(el)) {
@@ -132,6 +135,15 @@ export async function updateProjectMeta(
   patch: Partial<ProjectMetaDoc>
 ): Promise<void> {
   await setDoc(userProjectDoc(uid, projectId), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+// Convenience: rename a project (updates title and updatedAt only)
+export async function renameProject(
+  uid: string,
+  projectId: string,
+  title: string
+): Promise<void> {
+  await setDoc(userProjectDoc(uid, projectId), { title, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export async function updateProjectAudioDuration(
@@ -297,6 +309,16 @@ export async function listUserProjects(uid: string): Promise<Array<{ id: string;
   const col = userProjectsCol(uid);
   const qs = await getDocs(query(col));
   return qs.docs.map((d) => ({ id: d.id, meta: d.data() as ProjectMetaDoc }));
+}
+
+// Delete a single project (meta and notes) efficiently via batch
+export async function deleteProject(uid: string, projectId: string): Promise<void> {
+  const metaRef = userProjectDoc(uid, projectId);
+  const notesRef = userProjectNotesDoc(uid, projectId);
+  const batch = writeBatch(firestore);
+  batch.delete(metaRef);
+  batch.delete(notesRef);
+  await batch.commit();
 }
 
 

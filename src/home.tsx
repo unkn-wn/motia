@@ -7,9 +7,10 @@ import FloatingDock from '@components/FloatingDock';
 import ProfileModal from '@/components/ProfileModal';
 import { AudioProvider } from '@contexts/AudioContext';
 import FullscreenOverlay from '@/components/FullscreenOverlay';
-import RelinkBanner from '@/components/RelinkBanner';
+// Relink handled by TopBanner
+import TopBanner, { RelinkBannerOption, SignInBannerOption } from '@/components/TopBanner';
 import HomeLanding from '@components/Home/HomeLanding';
-import SignInSaveBanner from '@components/SignInSaveBanner';
+// Sign-in handled by TopBanner
 import { type KeyboardShortcut, createKeyboardHandler, resetAllShortcutsAndPreferences, isUserTyping, getShortcuts, setShortcuts as setGlobalShortcuts } from '@utils/shortcutsUtils';
 import './style.css';
 import { Navigate, useNavigate } from '@tanstack/react-router';
@@ -217,7 +218,19 @@ function Home() {
       {redirectTo && redirectTo !== 'PROJECTS' ? (
         <Navigate to="/project/$projectId" params={{ projectId: redirectTo }} />
       ) : null}
-      {user?.isAnonymous && <SignInSaveBanner />}
+      {/* Top banner orchestrator: ensures only one banner shows (Relink > Sign-in) */}
+      <TopBanner
+        options={[
+          RelinkBannerOption({
+            show: !audioFile && !!params.projectId,
+            isLoading,
+            onRelinkClick: handleRelinkClick,
+            fileInputRef: relinkInputRef,
+            onFileSelected: handleRelinkInputChange,
+          }),
+          SignInBannerOption({ show: !!user?.isAnonymous }),
+        ]}
+      />
       {showGlobalProjectOverlay && <FullscreenOverlay message="Loading project…" />}
       {/* Keyboard Shortcuts Panel */}
       <KeyboardShortcuts
@@ -231,7 +244,7 @@ function Home() {
         params.projectId ? (
           <AudioProvider>
             <div className="relative h-screen overflow-hidden">
-              <RelinkBanner isLoading={isLoading} onRelinkClick={handleRelinkClick} fileInputRef={relinkInputRef} onFileSelected={handleRelinkInputChange} />
+              {/* Relink banner handled by TopBanner to avoid overlap */}
 
               {/* Notes and UI still render against a default waveform */}
               <WaveformPlayer
