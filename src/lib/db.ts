@@ -159,6 +159,11 @@ export async function updateProjectAudioDuration(
   );
 }
 
+// Bump only the project's updatedAt timestamp (no other fields changed)
+export async function touchProjectUpdatedAt(uid: string, projectId: string): Promise<void> {
+  await setDoc(userProjectDoc(uid, projectId), { updatedAt: serverTimestamp() } as unknown as ProjectMetaDoc, { merge: true });
+}
+
 // --- Storage ---
 // Removed: uploadProjectAudio (Firebase Storage)
 

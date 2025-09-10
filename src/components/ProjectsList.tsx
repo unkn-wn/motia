@@ -1,4 +1,4 @@
-import React, { Suspense, use, useState, useCallback } from 'react';
+import React, { Suspense, use, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@contexts/objects/FirebaseAuthContextObject';
 import { createProject, listUserProjects, renameProject, deleteProject } from '@/lib/db';
 import ProjectCard from '@/components/Projects/ProjectCard';
@@ -43,6 +43,14 @@ const ProjectsList: React.FC = () => {
   const [busy, setBusy] = useState<string | null>(null); // projectId under action
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const invalidate = useCallback((uid: string) => { projectsCache.delete(uid); }, []);
+
+  // Invalidate once per mount prior to Suspense resolution
+  const invalidatedRef = useRef(false);
+  if (user && !invalidatedRef.current) {
+    projectsCache.delete(user.uid);
+    invalidatedRef.current = true;
+  }
+
   const handleUpload = useCallback(async (file: File) => {
     if (!user) return;
     setUploading(true);
@@ -107,6 +115,8 @@ const ProjectsList: React.FC = () => {
       </div>
     );
   }
+
+  // (No session flag needed; we already invalidated once this mount)
 
   return (
     <FileDropzone onFileSelect={handleUpload} isLoading={uploading}>

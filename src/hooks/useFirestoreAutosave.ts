@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { saveProjectNotes, updateProjectMeta } from '@/lib/db';
+import { saveProjectNotes, updateProjectMeta, touchProjectUpdatedAt } from '@/lib/db';
 import type { Note } from '@types';
 
 type Debounced<T extends (...args: unknown[]) => void> = ((...args: Parameters<T>) => void) & { flush: () => void };
@@ -56,7 +56,9 @@ export function useFirestoreAutosave(params: {
     if (!uid || !projectId) return;
     try {
       setSaving(true);
-  await saveProjectNotes(uid, projectId, notes);
+      await saveProjectNotes(uid, projectId, notes);
+      // Ensure project shows as recently updated in lists
+      await touchProjectUpdatedAt(uid, projectId);
       if (mounted.current) {
         setLastSavedAt(new Date());
         setSaving(false);
@@ -71,7 +73,13 @@ export function useFirestoreAutosave(params: {
     if (!uid || !projectId) return;
     saveNotes();
     // flush on unload to minimize data loss
-    const onBeforeUnload = () => saveNotes.flush();
+    const onBeforeUnload = () => {
+      saveNotes.flush();
+      if (uid && projectId) {
+        // Fire a best-effort timestamp bump; ignore errors in unload
+        touchProjectUpdatedAt(uid, projectId).catch(() => undefined);
+      }
+    };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', onBeforeUnload);

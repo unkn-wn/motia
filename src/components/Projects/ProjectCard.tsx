@@ -69,7 +69,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                onDrag={(e) => e.stopPropagation()}
+                draggable={false}
+                onPointerDownCapture={(e) => e.stopPropagation()}
+                onMouseDownCapture={(e) => e.stopPropagation()}
+                onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 onBlur={commit}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -82,7 +85,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
               <button
                 type="button"
                 onClick={startEditing}
-                className="text-left w-fit text-neutral-100 font-medium truncate hover:underline decoration-neutral-500/60 cursor-text "
+                className="text-left w-fit text-neutral-100 font-medium truncate hover:underline decoration-neutral-500/60 cursor-text text-wrap"
                 title="Click to rename"
               >
                 {title}
