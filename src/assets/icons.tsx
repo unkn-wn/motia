@@ -24,7 +24,8 @@ import {
   RotateCcw,
   Upload,
   Undo2,
-  Redo2
+  Redo2,
+  AudioLines,
 } from 'lucide-react';
 import { Eye, EyeOff, User, Home } from 'lucide-react';
 
@@ -186,3 +187,9 @@ export const HomeIcon = memo(({ className = "w-5 h-5" }: { className?: string })
   <Home className={className} />
 ));
 HomeIcon.displayName = 'HomeIcon';
+
+// Audiolines Icon
+export const AudioLinesIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
+  <AudioLines className={className} />
+));
+AudioLinesIcon.displayName = 'AudioLinesIcon';

@@ -11,9 +11,10 @@ interface Props {
   onJumpToTime: (time: number) => void;
   onChangeNoteColor: (id: string, color: string) => void;
   onUpdateNote: (id: string, content: string) => void;
+  onClose?: () => void;
 }
 
-const NotesSidebarConnected: React.FC<Props> = memo(({ notes, onDeleteNote, onJumpToTime, onChangeNoteColor, onUpdateNote }) => {
+const NotesSidebarConnected: React.FC<Props> = memo(({ notes, onDeleteNote, onJumpToTime, onChangeNoteColor, onUpdateNote, onClose }) => {
   const displayNotes = useStableDisplayNotes(notes);
 
   return (
@@ -24,7 +25,7 @@ const NotesSidebarConnected: React.FC<Props> = memo(({ notes, onDeleteNote, onJu
       onChangeNoteColor={onChangeNoteColor}
       onUpdateNote={onUpdateNote}
     >
-      <NotesSidebar displayNotes={displayNotes} />
+      <NotesSidebar displayNotes={displayNotes} onClose={onClose} />
     </NotesProvider>
   );
 }, (prev, next) => {

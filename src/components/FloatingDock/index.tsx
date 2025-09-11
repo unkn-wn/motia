@@ -40,7 +40,7 @@ const FloatingDock = memo<FloatingDockProps>(({
 }) => {
   return (
     <div
-      className="fixed top-1/12 left-6 z-30 flex flex-col space-y-3 bg-neutral-800 border-2 border-neutral-600/20 p-1 rounded-full shadow-lg"
+      className="fixed top-1/12 left-6 z-20 flex flex-col space-y-3 bg-neutral-800 border-2 border-neutral-600/20 p-1 rounded-full shadow-lg"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Add Note Button - only show when audio is loaded */}

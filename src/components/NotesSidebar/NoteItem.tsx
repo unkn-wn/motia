@@ -141,7 +141,7 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
             <button
               onClick={handleEditCancel}
               className="p-1 hover:bg-red-600/50 rounded text-neutral-300 hover:text-white
-                        transition-all duration-200"
+                        transition-all duration-200 cursor-pointer"
               title="Cancel (Esc)"
             >
               <XIcon className="w-3 h-3" />
@@ -149,7 +149,7 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
             <button
               onClick={handleEditSave}
               className="p-1 hover:bg-green-600/50 rounded text-neutral-300 hover:text-white
-                        transition-all duration-200"
+                        transition-all duration-200 cursor-pointer"
               title="Save (Ctrl+Enter)"
             >
               <CheckIcon className="w-3 h-3" />

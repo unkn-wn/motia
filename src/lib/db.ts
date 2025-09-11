@@ -164,6 +164,15 @@ export async function touchProjectUpdatedAt(uid: string, projectId: string): Pro
   await setDoc(userProjectDoc(uid, projectId), { updatedAt: serverTimestamp() } as unknown as ProjectMetaDoc, { merge: true });
 }
 
+// Set or replace the project's thumbnail data URL without updating updatedAt
+export async function updateProjectThumbnail(
+  uid: string,
+  projectId: string,
+  dataUrl: string
+): Promise<void> {
+  await setDoc(userProjectDoc(uid, projectId), { thumbnail: dataUrl } as unknown as ProjectMetaDoc, { merge: true });
+}
+
 // --- Storage ---
 // Removed: uploadProjectAudio (Firebase Storage)
 

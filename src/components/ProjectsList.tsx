@@ -12,7 +12,7 @@ import FileUploader from '@/components/FileUploader';
 import { saveLocalAudio, deleteLocalAudio } from '@/lib/localAudio';
 import Modal from '@/components/Modal';
 
-type Item = { id: string; title: string; updatedAt?: Date | number | null; durationSec?: number | null };
+type Item = { id: string; title: string; updatedAt?: Date | number | null; durationSec?: number | null; thumbnail?: string | null };
 
 // Simple in-memory cache to stabilize Suspense promises per user
 const projectsCache = new Map<string, Promise<Item[]>>();
@@ -26,6 +26,7 @@ function getProjectsPromise(uid: string): Promise<Item[]> {
       title: r.meta.title ?? r.meta.audio?.name ?? r.id,
       updatedAt: r.meta.updatedAt ? r.meta.updatedAt.toDate() : null,
       durationSec: r.meta.audio?.durationSec ?? null,
+      thumbnail: r.meta.thumbnail ?? null,
     }));
     mapped.sort((a, b) => ((b.updatedAt ? +new Date(b.updatedAt) : 0) - (a.updatedAt ? +new Date(a.updatedAt) : 0)));
     return mapped;
@@ -43,6 +44,9 @@ const ProjectsList: React.FC = () => {
   const [busy, setBusy] = useState<string | null>(null); // projectId under action
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const invalidate = useCallback((uid: string) => { projectsCache.delete(uid); }, []);
+  // If we ever enter here from an external navigation, ensure playing audio is paused
+  // (Primary pause happens in Home before navigate.)
+  // No-op here otherwise to avoid coupling contexts.
 
   // Invalidate once per mount prior to Suspense resolution
   const invalidatedRef = useRef(false);
@@ -83,17 +87,16 @@ const ProjectsList: React.FC = () => {
   if (loading) return (
     <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <div className="mx-auto max-w-5xl">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-semibold text-neutral-100">Your Projects</h1>
+        <div className="flex items-center justify-end mb-4">
           <button
             onClick={openProfile}
-            className="group cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
+            className="group cursor-pointer hover:bg-neutral-800 ring-1 ring-neutral-800 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
             title="Account"
           >
             <UserIcon className="w-5 h-5" />
           </button>
         </div>
-        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr gap-4">
           {Array.from({ length: 6 }).map((_, i) => <ProjectCardSkeleton key={i} />)}
         </ul>
       </div>
@@ -122,11 +125,10 @@ const ProjectsList: React.FC = () => {
     <FileDropzone onFileSelect={handleUpload} isLoading={uploading}>
       <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-semibold text-neutral-100">Your Projects</h1>
+          <div className="flex items-center justify-end mb-4">
             <button
               onClick={openProfile}
-              className="group cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
+              className="group cursor-pointer hover:bg-neutral-800 ring-1 ring-neutral-800 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
               title="Account"
             >
               <UserIcon className="w-5 h-5" />
@@ -182,7 +184,7 @@ const ProjectsGrid: React.FC<{ uid: string; onUpload: (file: File) => void; uplo
     <>
       <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map(p => (
-          <div key={p.id} className="relative">
+          <div key={p.id} className="relative h-full">
             {busyId === p.id && (
               <div className="absolute inset-0 z-10 grid place-items-center bg-neutral-900/60 rounded-xl">
                 <div className="h-5 w-5 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
@@ -193,6 +195,7 @@ const ProjectsGrid: React.FC<{ uid: string; onUpload: (file: File) => void; uplo
               title={p.title}
               updatedAt={p.updatedAt ?? undefined}
               durationSec={p.durationSec ?? undefined}
+              thumbnailUrl={p.thumbnail ?? undefined}
               onRename={onRename}
               onDelete={(id) => onDelete(id, p.title)}
               isBusy={busyId === p.id}

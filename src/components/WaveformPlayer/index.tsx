@@ -31,6 +31,8 @@ export interface WaveformPlayerRef {
   addNoteAtCurrentTime: () => void;
   volumeUp: () => void;
   volumeDown: () => void;
+  exportThumbnail: (width?: number, height?: number) => string | null;
+  pause: () => void;
 }
 
 const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
@@ -47,6 +49,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 }, ref) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wavesurferLocalRef = useRef<WaveSurfer | null>(null);
   // No local wavesurfer ref needed; the instance is stored in AudioContext via setWavesurferRef
 
   // Use audio context for shared state
@@ -135,6 +138,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     });
 
     setWavesurferRef(wavesurfer);
+    wavesurferLocalRef.current = wavesurfer;
 
     const audioUrl = URL.createObjectURL(audioFile);
     wavesurfer.load(audioUrl);
@@ -171,6 +175,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     wavesurfer.on('pause', () => setIsPlaying(false));
 
     return () => {
+      try { wavesurfer.pause(); } catch { }
       wavesurfer.destroy();
       document.body.removeChild(hiddenDiv);
       URL.revokeObjectURL(audioUrl);
@@ -245,7 +250,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     const targetPlayheadY = timeProgress * scaledWaveformHeight;
     const playheadPositionY = canvasHeight * 0.33; // Position at 33% from top
 
-  setTransformSafe(prev => ({
+    setTransformSafe(prev => ({
       offsetX: prev.offsetX, // Don't change X position - preserve user's horizontal view
       offsetY: playheadPositionY - targetPlayheadY, // Position playhead at desired Y position
       scale: prev.scale // Maintain current zoom level
@@ -275,6 +280,47 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     },
     volumeUp: volumeUp,
     volumeDown: volumeDown,
+    exportThumbnail: (width = 480, height = 120) => {
+      const src = canvasRef.current;
+      if (!src) return null;
+      try {
+        const target = document.createElement('canvas');
+        const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+        target.width = width * dpr;
+        target.height = height * dpr;
+        const ctx = target.getContext('2d');
+        if (!ctx) return null;
+        // Optional background fill to ensure consistent look
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary') || '#111827';
+        ctx.fillRect(0, 0, target.width, target.height);
+        // Draw scaled snapshot without distortion: crop source to match target aspect
+        ctx.imageSmoothingEnabled = true;
+        const srcAR = src.width / src.height;
+        const tgtAR = target.width / target.height;
+        let sx = 0, sy = 0, sWidth = src.width, sHeight = src.height;
+        if (srcAR > tgtAR) {
+          // Source is wider; crop left/right
+          sWidth = Math.floor(src.height * tgtAR);
+          sx = Math.floor((src.width - sWidth) / 2);
+        } else if (srcAR < tgtAR) {
+          // Source is taller; crop top/bottom
+          sHeight = Math.floor(src.width / tgtAR);
+          sy = Math.floor((src.height - sHeight) / 2);
+        }
+        ctx.drawImage(src, sx, sy, sWidth, sHeight, 0, 0, target.width, target.height);
+        // Prefer webp, fallback to png if unsupported
+        const webp = target.toDataURL('image/webp', 0.8);
+        if (webp && webp.startsWith('data:image/webp')) return webp;
+        return target.toDataURL('image/png');
+      } catch {
+        return null;
+      }
+    },
+    pause: () => {
+      try {
+        wavesurferLocalRef.current?.pause();
+      } catch { }
+    },
   }));
 
   // Create context value

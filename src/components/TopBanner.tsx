@@ -29,7 +29,7 @@ type BannerComponent = React.FC<BannerProps> & { Button: React.FC<BannerButtonPr
 const BannerBase: React.FC<BannerProps> = ({ variant = 'neutral', className, children }) => {
   const styles = stylesByVariant[variant];
   return (
-    <div className={`fixed top-2 left-1/2 -translate-x-1/2 z-40 px-3 py-2 rounded-md border text-sm flex items-center gap-3 shadow backdrop-blur-md ${styles.container} ${className ?? ''}`}>
+    <div className={`fixed top-2 left-1/2 -translate-x-1/2 z-50 px-3 py-2 rounded-md border text-sm flex items-center gap-3 shadow backdrop-blur-md ${styles.container} ${className ?? ''}`}>
       {children}
     </div>
   );

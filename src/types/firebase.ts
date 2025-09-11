@@ -31,6 +31,7 @@ export type ProjectMetaDoc = {
     samples?: number[]; // decimated peaks for quick paint
     sampleRate?: number; // optional context of samples array density
   };
+  thumbnail?: string; // small data URL preview (webp/png)
 };
 
 export type ProjectNotesDoc = {

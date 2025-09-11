@@ -17,6 +17,7 @@ import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 import { useNotesState } from '@/hooks/useNotesState';
 import { useProjectLifecycle } from '@/hooks/useProjectLifecycle';
+import { fetchProjectMeta, updateProjectThumbnail } from '@/lib/db';
 import AutosaveIndicator from '@/components/AutosaveIndicator';
 import SidebarToggle from '@/components/SidebarToggle';
 
@@ -89,6 +90,7 @@ function Home() {
   // Stable Projects navigation for FloatingDock
   const handleGoProjects = useCallback(() => {
     if (user?.isAnonymous) return; // respect disabled state
+    try { waveformPlayerRef.current?.pause(); } catch { }
     navigate({ to: '/projects' });
   }, [navigate, user?.isAnonymous]);
 
@@ -207,6 +209,28 @@ function Home() {
   }, [handleRelinkSelected]);
 
   const showGlobalProjectOverlay = useMemo(() => params.projectId && (authLoading || loadingProject || loadingWaveform), [params.projectId, authLoading, loadingProject, loadingWaveform]);
+  // Generate and persist a small thumbnail once when waveform is ready
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user || !projectId) return;
+      if (loadingWaveform) return; // wait for waveform ready
+      const ref = waveformPlayerRef.current;
+      if (!ref || !ref.exportThumbnail) return;
+      try {
+        const currentMeta = await fetchProjectMeta(user.uid, projectId);
+        if (cancelled) return;
+        const existing = currentMeta?.thumbnail ?? null;
+        const dataUrl = ref.exportThumbnail(480, 120);
+        if (!dataUrl) return;
+        if (existing && existing.startsWith('data:') && existing.length === dataUrl.length) return; // cheap equality heuristic
+        await updateProjectThumbnail(user.uid, projectId, dataUrl);
+      } catch {
+        // ignore thumbnail errors
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, projectId, loadingWaveform]);
 
   // Memoize text notes count to avoid unnecessary rerenders in toggle
   const textNotesCount = useMemo(() => notes.filter(n => n.type !== 'drawing').length, [notes]);
@@ -277,7 +301,7 @@ function Home() {
               />
               {/* Sidebar toggle + Notes sidebar remain available */}
               <SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
-              <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+              <div className={`fixed right-0 top-8 h-full z-40 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
                 }`}>
                 <NotesSidebarConnected
                   notes={notes}
@@ -285,6 +309,7 @@ function Home() {
                   onJumpToTime={handleJumpToTime}
                   onChangeNoteColor={handleChangeNoteColor}
                   onUpdateNote={handleUpdateNote}
+                  onClose={() => setSidebarOpen(false)}
                 />
               </div>
             </div>
@@ -296,12 +321,7 @@ function Home() {
         <AudioProvider>
           <div className="relative h-screen overflow-hidden">
             {loadingProject && (
-              <div className="absolute inset-0 z-50 grid place-items-center bg-neutral-900/70 text-neutral-200">
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
-                  <span>Loading project…</span>
-                </div>
-              </div>
+              <FullscreenOverlay message="Loading project…" />
             )}
             <AutosaveIndicator saving={saving} lastSavedAt={lastSavedAt} />
             <WaveformPlayer
@@ -348,6 +368,7 @@ function Home() {
                 onJumpToTime={handleJumpToTime}
                 onChangeNoteColor={handleChangeNoteColor}
                 onUpdateNote={handleUpdateNote}
+                onClose={() => setSidebarOpen(false)}
               />
             </div>
           </div>

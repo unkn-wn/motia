@@ -7,11 +7,14 @@ import { Edit3Icon } from '@assets/icons';
 import { currentTimeStore } from '@components/AudioControls/state';
 import { findActiveNote } from '@utils/notesUtils';
 
-interface NotesSidebarProps { displayNotes: import('@types').Note[]; }
+interface NotesSidebarProps { displayNotes: import('@types').Note[]; onClose?: () => void }
 
-const NotesSidebar: React.FC<NotesSidebarProps> = memo(({ displayNotes }) => {
+const NotesSidebar: React.FC<NotesSidebarProps> = memo(({ displayNotes, onClose }) => {
   const { onDeleteNote, onJumpToTime, onChangeNoteColor, onUpdateNote } = useNotesActions();
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const startXRef = React.useRef<number | null>(null);
+  const startYRef = React.useRef<number | null>(null);
+  const trackingRef = React.useRef<boolean>(false);
   // Set up global actions for NoteItem components
   // No dependency on currentTime
   React.useEffect(() => {
@@ -63,8 +66,29 @@ const NotesSidebar: React.FC<NotesSidebarProps> = memo(({ displayNotes }) => {
 
   return (
     <div
-  ref={sidebarRef}
-      className="w-80 rounded-xl bg-neutral-900/95 backdrop-blur-sm border-neutral-700 h-5/6 overflow-y-auto shadow-2xl"
+      ref={sidebarRef}
+      className="w-80 rounded-xl bg-neutral-900 backdrop-blur-sm border-neutral-700 h-5/6 overflow-y-auto shadow-2xl touch-pan-y"
+      onPointerDown={(e) => {
+        if (e.pointerType !== 'touch') return; // only handle touch swipes
+        startXRef.current = e.clientX;
+        startYRef.current = e.clientY;
+        trackingRef.current = true;
+      }}
+      onPointerMove={(e) => {
+        if (!trackingRef.current || onClose == null) return;
+        if (startXRef.current == null || startYRef.current == null) return;
+        const dx = e.clientX - startXRef.current;
+        const dy = e.clientY - startYRef.current;
+        // Consider as swipe-right when mostly horizontal and to the right beyond threshold
+        if (dx > 80 && Math.abs(dy) < 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          trackingRef.current = false;
+          startXRef.current = null;
+          startYRef.current = null;
+          try { onClose(); } catch { }
+        }
+      }}
+      onPointerUp={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}
+      onPointerCancel={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}
     >
       <div className="p-4 space-y-3">
         {displayNotes.length === 0 ? (

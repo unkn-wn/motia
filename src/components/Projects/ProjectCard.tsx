@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Trash2Icon } from '@/assets/icons';
+import { AudioLinesIcon, Trash2Icon } from '@/assets/icons';
 
 export interface ProjectCardProps {
   id: string;
   title: string;
   updatedAt?: Date | number | null;
   durationSec?: number | null;
+  thumbnailUrl?: string;
   onRename?: (id: string, newTitle: string) => void | Promise<void>;
   onDelete?: (id: string) => void;
   isBusy?: boolean;
@@ -19,7 +20,8 @@ function formatMeta(updatedAt?: Date | number | null, durationSec?: number | nul
   return bits.join(' • ');
 }
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, durationSec, onRename, onDelete, isBusy }) => {
+export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, durationSec, thumbnailUrl, onRename, onDelete, isBusy }) => {
+  const MAX_TITLE_LEN = 64;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,7 +43,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
 
   const commit = useCallback(async () => {
     if (!onRename) return setEditing(false);
-    const next = draft.trim();
+    const next = draft.slice(0, MAX_TITLE_LEN).trim();
     setEditing(false);
     if (next && next !== title) {
       await onRename(id, next);
@@ -55,20 +57,30 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
   }, [title]);
 
   return (
-    <li className="list-none">
+    <li className="list-none h-full">
       <Link
         to="/project/$projectId"
         params={{ projectId: id }}
-        className="group block rounded-xl ring-1 ring-neutral-800 bg-neutral-900/60 hover:bg-neutral-900 transition-colors shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+        className="group block h-full rounded-xl ring-1 ring-neutral-800 bg-neutral-900/60 hover:bg-neutral-900 transition-colors shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/40"
         onClick={(e) => { if (editing) { e.preventDefault(); e.stopPropagation(); } }}
       >
-        <div className="p-4 flex items-start justify-between gap-4">
+        <div className="p-4 h-full flex flex-col justify-between gap-4">
           <div className="min-w-0">
+            <div className="mb-2 relative rounded-md overflow-hidden bg-neutral-800 h-32 w-full">
+              {thumbnailUrl ? (
+                <img src={thumbnailUrl} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+              ) : (
+                <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-neutral-800 via-neutral-750 to-neutral-900">
+                  <AudioLinesIcon className="w-12 h-12 text-neutral-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+              )}
+            </div>
             {editing ? (
               <input
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                maxLength={MAX_TITLE_LEN}
                 draggable={false}
                 onPointerDownCapture={(e) => e.stopPropagation()}
                 onMouseDownCapture={(e) => e.stopPropagation()}
@@ -93,7 +105,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
             )}
             <p className="text-sm text-neutral-400 mt-1 truncate">{formatMeta(updatedAt, durationSec) || ' '}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end">
             {onDelete && (
               <button
                 type="button"
