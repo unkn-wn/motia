@@ -16,12 +16,9 @@ import {
 import type { Note } from '@types';
 import { auth } from './firebase';
 import type { Preferences, KeyboardShortcut } from '@utils/shortcutsUtils';
-import type {
-  UserProfileDoc,
-  UserSettingsDoc,
-  ProjectMetaDoc,
-  ProjectNotesDoc,
-} from '@types';
+import type { UserProfileDoc, UserSettingsDoc, ProjectMetaDoc, ProjectNotesDoc } from '@types';
+import { decompressSession } from '@utils/advancedCompression';
+import { compressDrawingAdaptive } from '@utils/drawingUtils';
 
 // --- Sanitization helpers ---
 // Firestore does not support arrays-of-arrays and disallows undefined values.
@@ -183,27 +180,45 @@ export async function saveProjectNotes(
   projectId: string,
   notes: Note[]
 ): Promise<void> {
-  // Normalize any drawing.compressed arrays to JSON strings to avoid arrays-of-arrays in Firestore
-  const normalizedNotes = notes.map((n) => {
-    if (n.drawing && Array.isArray(n.drawing.compressed)) {
+  // Split notes into non-drawings and drawings
+  const nonDrawingNotes = notes.filter(n => n.type !== 'drawing' || !n.drawing);
+  const drawingNotes = notes.filter(n => n.type === 'drawing' && n.drawing);
+
+  // Gather all strokes from drawing notes (support both compressed array and string)
+  const allStrokes: import('@types').DrawingStroke[] = [] as unknown as import('@types').DrawingStroke[];
+  for (const dn of drawingNotes) {
+    const d = dn.drawing!;
+    if (Array.isArray(d.compressed) || typeof d.compressed === 'string') {
       try {
-        n = {
-          ...n,
-          drawing: {
-            ...n.drawing,
-            compressed: JSON.stringify(n.drawing.compressed),
-          },
-        };
-      } catch {/* ignore stringify errors */ }
+        let comp = d.compressed as unknown;
+        if (typeof comp === 'string') comp = JSON.parse(comp);
+        const strokes = decompressSession(comp as unknown as import('@types').CompressedStroke[]);
+        for (const s of strokes as unknown as import('@types').DrawingStroke[]) allStrokes.push(s);
+      } catch {/* ignore parse errors for this note */ }
+    } else if (Array.isArray(d.strokes)) {
+      for (const s of d.strokes as unknown as import('@types').DrawingStroke[]) allStrokes.push(s);
     }
-    return n;
-  });
-  const safeNotes = sanitizeForFirestore(normalizedNotes) as Note[] | unknown;
-  await setDoc(
-    userProjectNotesDoc(uid, projectId),
-    { notes: safeNotes, updatedAt: serverTimestamp() as Timestamp } as unknown as ProjectNotesDoc,
-    { merge: true }
-  );
+  }
+
+  // Compress aggregated strokes into a single session array, else empty
+  let aggregatedCompressed: unknown[] | string | undefined = undefined;
+  if (allStrokes.length > 0) {
+    const compression = compressDrawingAdaptive(allStrokes);
+    aggregatedCompressed = compression.strokes;
+  } else {
+    aggregatedCompressed = [] as unknown[];
+  }
+
+  // Sanitize non-drawing notes
+  const safeNotes = sanitizeForFirestore(nonDrawingNotes) as Note[] | unknown;
+  const payload: ProjectNotesDoc = {
+    notes: safeNotes as Note[],
+    // Store compressed as JSON string to be safe with arrays-of-arrays
+    compressed: Array.isArray(aggregatedCompressed) ? JSON.stringify(aggregatedCompressed) : (aggregatedCompressed ?? '[]') as string,
+    updatedAt: serverTimestamp() as Timestamp,
+  } as unknown as ProjectNotesDoc;
+
+  await setDoc(userProjectNotesDoc(uid, projectId), payload, { merge: true });
 }
 
 // --- Reads ---
@@ -258,6 +273,33 @@ export async function fetchProjectNotes(
   if (!snap.exists()) return null;
   const data = snap.data() as ProjectNotesDoc;
   const notes = hydrateNotes(data.notes as unknown);
+  // If compressed field exists, create a single drawing note for runtime use
+  const compressedRaw = (data as unknown as { compressed?: unknown }).compressed;
+  if (compressedRaw) {
+    let comp: unknown = compressedRaw;
+    if (typeof comp === 'string') {
+      try { comp = JSON.parse(comp); } catch { comp = []; }
+    }
+    try {
+      // Validate it’s parseable by trying to decompress
+      decompressSession(comp as unknown as import('@types').CompressedStroke[]);
+      // Create a synthetic global drawing note
+      const globalDrawing: Note = {
+        id: 'drawing-global',
+        time: 0,
+        canvasX: 0,
+        canvasY: 0,
+        content: '',
+        color: 'gray',
+        createdAt: new Date(),
+        type: 'drawing',
+        drawing: { compressed: comp as unknown as unknown[], bounds: { width: 0, height: 0 } },
+      };
+      return [...notes, globalDrawing];
+    } catch {
+      return notes;
+    }
+  }
   return notes;
 }
 

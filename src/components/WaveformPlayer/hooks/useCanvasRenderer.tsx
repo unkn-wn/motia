@@ -5,6 +5,8 @@ import { decompressSession } from '@utils/advancedCompression';
 import { getColorCode } from '@utils/colorUtils';
 import type { Note } from '@types';
 
+// Centralized canvas renderer: draws waveform, notes, drawings, selection, previews.
+// Pure rendering; all interaction state comes from context.
 export const useCanvasRenderer = () => {
   const {
     transform,
@@ -13,18 +15,23 @@ export const useCanvasRenderer = () => {
     currentStroke,
     isDrawing,
     NOTE_LABEL_HIDE_THRESHOLD,
+    selectionBox,
+    selectedDrawingIds,
+    selectedStrokeGroups,
+    movingStrokePreview,
+    erasingStrokeIds,
+    eraserCursor,
     canvasRef
   } = useWaveformContext();
 
   const { currentTime, duration, waveformData } = useAudio();
 
-  // Caches
+  // Small caches to avoid repeated layout/decompression work between frames
   const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const decompressedCacheRef = useRef<Map<string, { key: string; strokes: any[] }>>(new Map());
+  const decompressedCacheRef = useRef<Map<string, { key: string; strokes: import('@types').DrawingStroke[] }>>(new Map());
   const noteLayoutCacheRef = useRef<Map<string, { key: string; lines: string[]; noteHeight: number }>>(new Map());
 
-  // Layout helpers
+  // Waveform dimensions in world space
   const getWaveformDims = useCallback(
     (_width: number, height: number) => {
       const waveformHeight = Math.max(height * 3, duration * 100);
@@ -36,26 +43,28 @@ export const useCanvasRenderer = () => {
     [duration]
   );
 
-  // Draw a drawing note from compressed data (with cache)
+  // Draw a single drawing note (uses compression cache), optionally skipping some strokes
   const renderDrawingOnCanvas = useCallback(
-    (ctx: CanvasRenderingContext2D, note: Note) => {
+    (ctx: CanvasRenderingContext2D, note: Note, excludeIndexes?: Set<number>) => {
       if (!note.drawing || !note.drawing.compressed) return;
       try {
-        // Build a stable cache key that changes whenever the compressed payload changes.
-        // Using just length fails when session compression keeps array length at 1.
-        let rev = note.drawing.compressedSize;
-        if (rev == null) {
-          // Fallback: compute a lightweight revision from JSON length
-          try {
-            rev = JSON.stringify(note.drawing.compressed).length;
-          } catch {
-            rev = Date.now();
+        // Cache key must change when compressed payload changes (content hash > size-only)
+        let cacheKey: string;
+        try {
+          const json = JSON.stringify(note.drawing.compressed);
+          // Simple fast hash (FNV-1a like) for short strings
+          let hash = 2166136261;
+          for (let i = 0; i < json.length; i++) {
+            hash ^= json.charCodeAt(i);
+            hash = (hash * 16777619) >>> 0;
           }
+          cacheKey = `${note.id}:${json.length}:${hash.toString(36)}`;
+        } catch {
+          // Fallback to timestamp to force refresh
+          cacheKey = `${note.id}:err:${Date.now()}`;
         }
-        const cacheKey = `${note.id}:${rev}`;
         const cached = decompressedCacheRef.current.get(note.id);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let decompressed: any[];
+        let decompressed: import('@types').DrawingStroke[];
         if (cached && cached.key === cacheKey) {
           decompressed = cached.strokes;
         } else {
@@ -66,26 +75,28 @@ export const useCanvasRenderer = () => {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        for (const stroke of decompressed) {
+        for (let i = 0; i < decompressed.length; i++) {
+          if (excludeIndexes && excludeIndexes.has(i)) continue;
+          const stroke = decompressed[i];
           const points = stroke.points as Array<{ x: number; y: number }>;
           if (!points || points.length < 2) continue;
           ctx.strokeStyle = stroke.color || '#9ca3af';
           ctx.lineWidth = stroke.strokeWidth || 2;
           ctx.beginPath();
           ctx.moveTo(note.canvasX + points[0].x, note.canvasY + points[0].y);
-          for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(note.canvasX + points[i].x, note.canvasY + points[i].y);
+          for (let j = 1; j < points.length; j++) {
+            ctx.lineTo(note.canvasX + points[j].x, note.canvasY + points[j].y);
           }
           ctx.stroke();
         }
       } catch {
-        // keep rendering resilient
+        // Never fail the whole frame on drawing issues
       }
     },
     []
   );
 
-  // Draw only the live stroke; completed strokes are saved to note and rendered via renderDrawingsOnCanvas
+  // Draw only the live in-progress stroke
   const renderCurrentDrawing = useCallback(
     (ctx: CanvasRenderingContext2D) => {
       // Live stroke
@@ -103,19 +114,21 @@ export const useCanvasRenderer = () => {
     [isDrawing, currentStroke]
   );
 
-  // Draw all drawing notes
+  // Draw the single global drawing note (new model uses exactly one)
   const renderDrawingsOnCanvas = useCallback(
     (ctx: CanvasRenderingContext2D, notesList: Note[]) => {
-      for (const note of notesList) {
-        if (note.type === 'drawing' && note.drawing) {
-          renderDrawingOnCanvas(ctx, note);
-        }
-      }
+      // With the new model, there should be exactly one drawing note synthesized from the global compressed payload
+      const drawingNote = notesList.find(n => n.type === 'drawing' && n.drawing);
+      if (!drawingNote) return;
+      const exclude = (movingStrokePreview && movingStrokePreview.noteId === drawingNote.id)
+        ? new Set<number>(movingStrokePreview.strokeIndexes)
+        : undefined;
+      renderDrawingOnCanvas(ctx, drawingNote, exclude);
     },
-    [renderDrawingOnCanvas]
+    [renderDrawingOnCanvas, movingStrokePreview]
   );
 
-  // Draw text notes and connectors
+  // Draw text notes and their connectors from the waveform
   const renderNotesOnCanvas = useCallback(
     (
       ctx: CanvasRenderingContext2D,
@@ -130,14 +143,14 @@ export const useCanvasRenderer = () => {
       for (const note of notesList) {
         if (note.type === 'drawing') continue;
 
-        // Culling (convert world Y to screen Y)
+        // Quick vertical culling using approximate height
         const screenTop = transform.offsetY + transform.scale * note.canvasY;
         const approxHeight = showNoteLabels ? 200 : 16;
         const screenBottom = screenTop + approxHeight;
         const { h } = sizeRef.current;
         if (screenBottom < -200 || screenTop > h + 200) continue;
 
-        // Connector from waveform point to note center/dot
+        // Connector from waveform to note body/anchor
         const timeProgress = dur > 0 ? note.time / dur : 0;
         const waveformCanvasY = timeProgress * waveformHeight;
         ctx.strokeStyle = '#6b7280';
@@ -148,7 +161,7 @@ export const useCanvasRenderer = () => {
         ctx.moveTo(waveformX + waveformWidth / 2, waveformCanvasY);
 
         if (showNoteLabels) {
-          // Need center of note rect: compute dimensions below; use cached height for line endpoint
+          // Use cached layout for a stable center target
           const noteWidth = 240;
           const padding = 8;
           const headerHeight = 40;
@@ -156,7 +169,7 @@ export const useCanvasRenderer = () => {
           const layoutKey = `${note.id}:${note.content ?? ''}`;
           let layout = noteLayoutCacheRef.current.get(note.id);
           if (!layout || layout.key !== layoutKey) {
-            // Support CRLF and preserve explicit blank lines
+            // Basic word wrap, preserving blank lines
             const rawLines = note.content ? note.content.split(/\r?\n/) : ['Empty note'];
             const lines: string[] = [];
             ctx.save();
@@ -198,7 +211,7 @@ export const useCanvasRenderer = () => {
         ctx.setLineDash([]);
         ctx.globalAlpha = 1;
 
-        // Dot at waveform endpoint (colored)
+        // Dot at waveform endpoint (colored by note)
         ctx.fillStyle = getColorCode(note.color);
         ctx.strokeStyle = '#2d2d2d';
         ctx.lineWidth = 2;
@@ -209,7 +222,7 @@ export const useCanvasRenderer = () => {
 
         if (!showNoteLabels) continue;
 
-        // Draw card
+        // Note card
         const noteWidth = 240;
         const padding = 8;
         const headerHeight = 40;
@@ -274,7 +287,7 @@ export const useCanvasRenderer = () => {
         ctx.roundRect(note.canvasX, note.canvasY, 4, noteHeight, [4, 0, 0, 4]);
         ctx.fill();
 
-        // Header
+        // Header (🕐 time)
         ctx.fillStyle = '#a3a3a3';
         ctx.font = '16px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'left';
@@ -286,7 +299,7 @@ export const useCanvasRenderer = () => {
         ctx.fillText('🕐', note.canvasX + padding, note.canvasY + 24);
         ctx.fillText(timeLabel, note.canvasX + padding + 20, note.canvasY + 24);
 
-        // Content
+        // Content lines
         ctx.fillStyle = '#e5e5e5';
         ctx.font = '18px system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'left';
@@ -299,11 +312,12 @@ export const useCanvasRenderer = () => {
     [transform.scale, transform.offsetY, NOTE_LABEL_HIDE_THRESHOLD]
   );
 
+  // Main frame render
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Prune caches for removed notes
+    // Drop cache entries for removed notes
     const idSet = new Set(notes.map((n: Note) => n.id));
     for (const key of decompressedCacheRef.current.keys()) {
       if (!idSet.has(key)) decompressedCacheRef.current.delete(key);
@@ -331,8 +345,7 @@ export const useCanvasRenderer = () => {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    // Apply base screen-centering first (keeps world X=0 at screen center regardless of viewport width)
-    // Then apply world transform so panning/zoom affects everything
+    // Screen-centering, then world transform (pan/zoom)
     ctx.save();
     ctx.translate(width / 2, 0);
     ctx.translate(transform.offsetX, transform.offsetY);
@@ -395,7 +408,149 @@ export const useCanvasRenderer = () => {
     // Drawings under notes
     renderDrawingsOnCanvas(ctx, notes);
 
-    // Current drawing session overlay in drawing mode
+    // Full-note selection outline (hidden while box is visible to avoid double visuals)
+    if (!selectionBox && selectedDrawingIds && selectedDrawingIds.size > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(59,130,246,0.8)';
+      ctx.lineWidth = 2 / transform.scale;
+      ctx.setLineDash([6 / transform.scale, 4 / transform.scale]);
+      for (const n of notes) {
+        if (n.type === 'drawing' && selectedDrawingIds.has(n.id) && n.drawing?.bounds) {
+          if (movingStrokePreview && movingStrokePreview.noteId === n.id) continue;
+          const b = n.drawing.bounds;
+          ctx.strokeRect(n.canvasX, n.canvasY, b.width, b.height);
+        }
+      }
+      ctx.restore();
+    }
+
+    // Per-stroke selection highlight (skip ones currently in moving preview)
+    if (selectedStrokeGroups && selectedStrokeGroups.length > 0) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const group of selectedStrokeGroups) {
+        const note = notes.find(n => n.id === group.noteId);
+        if (!note?.drawing?.compressed) continue;
+        try {
+          const cached = decompressedCacheRef.current.get(note.id)?.strokes;
+          const decompressed = cached ?? decompressSession(note.drawing.compressed as unknown as import('@types').CompressedStroke[]);
+          for (const si of group.strokeIndexes) {
+            if (movingStrokePreview && movingStrokePreview.noteId === group.noteId && movingStrokePreview.strokeIndexes.includes(si)) {
+              continue;
+            }
+            const stroke = decompressed[si];
+            if (!stroke) continue;
+            const pts = stroke.points as Array<{ x: number; y: number }>;
+            if (!pts || pts.length < 2) continue;
+            // Underlay
+            ctx.strokeStyle = 'rgba(96,165,250,0.25)';
+            ctx.lineWidth = (stroke.strokeWidth || 2) + 1 / transform.scale;
+            ctx.beginPath();
+            ctx.moveTo(note.canvasX + pts[0].x, note.canvasY + pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(note.canvasX + pts[i].x, note.canvasY + pts[i].y);
+            ctx.stroke();
+            // Main highlight (thin)
+            ctx.strokeStyle = 'rgba(147,197,253,1)';
+            ctx.lineWidth = (stroke.strokeWidth || 2) / transform.scale;
+            ctx.beginPath();
+            ctx.moveTo(note.canvasX + pts[0].x, note.canvasY + pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(note.canvasX + pts[i].x, note.canvasY + pts[i].y);
+            ctx.stroke();
+          }
+        } catch { /* ignore */ }
+      }
+      ctx.restore();
+    }
+
+    // Live move preview for selected strokes
+    if (movingStrokePreview) {
+      const { noteId, strokeIndexes, dx, dy } = movingStrokePreview;
+      const note = notes.find(n => n.id === noteId);
+      if (note?.drawing?.compressed && (dx !== 0 || dy !== 0)) {
+        try {
+          const cached = decompressedCacheRef.current.get(note.id)?.strokes;
+          const decompressed = cached ?? decompressSession(note.drawing.compressed as unknown as import('@types').CompressedStroke[]);
+          ctx.save();
+          ctx.globalAlpha = 1;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          for (const si of strokeIndexes) {
+            const stroke = decompressed[si];
+            if (!stroke) continue;
+            const pts = stroke.points as Array<{ x: number; y: number }>;
+            if (!pts || pts.length < 2) continue;
+            // Underlay (match selection)
+            ctx.strokeStyle = 'rgba(96,165,250,0.5)';
+            ctx.lineWidth = (stroke.strokeWidth || 2) + 1 / transform.scale;
+            ctx.beginPath();
+            ctx.moveTo(note.canvasX + pts[0].x + dx, note.canvasY + pts[0].y + dy);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(note.canvasX + pts[i].x + dx, note.canvasY + pts[i].y + dy);
+            ctx.stroke();
+            // Main (match selection)
+            ctx.strokeStyle = 'rgba(147,197,253,1)';
+            ctx.lineWidth = (stroke.strokeWidth || 2) / transform.scale;
+            ctx.beginPath();
+            ctx.moveTo(note.canvasX + pts[0].x + dx, note.canvasY + pts[0].y + dy);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(note.canvasX + pts[i].x + dx, note.canvasY + pts[i].y + dy);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } catch { /* ignore */ }
+      }
+    }
+
+    // Erasing preview on hit strokes
+    if (erasingStrokeIds && erasingStrokeIds.length > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      for (const item of erasingStrokeIds) {
+        const note = notes.find(n => n.id === item.noteId);
+        if (!note?.drawing?.compressed) continue;
+        try {
+          // Decompress once (cache already used inside renderDrawingOnCanvas earlier) but we need strokes array
+          const decompressed = decompressedCacheRef.current.get(note.id)?.strokes;
+          if (!decompressed) continue;
+          for (const si of item.strokeIndexes) {
+            const stroke = decompressed[si];
+            if (!stroke) continue;
+            const pts = stroke.points as Array<{ x: number; y: number }>;
+            if (!pts || pts.length < 2) continue;
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = (stroke.strokeWidth || 2) + 2 / transform.scale;
+            ctx.beginPath();
+            ctx.moveTo(note.canvasX + pts[0].x, note.canvasY + pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(note.canvasX + pts[i].x, note.canvasY + pts[i].y);
+            ctx.stroke();
+            // Inner original width for dual ring effect
+            ctx.strokeStyle = '#fca5a5';
+            ctx.lineWidth = (stroke.strokeWidth || 2);
+            ctx.beginPath();
+            ctx.moveTo(note.canvasX + pts[0].x, note.canvasY + pts[0].y);
+            for (let i = 1; i < pts.length; i++) ctx.lineTo(note.canvasX + pts[i].x, note.canvasY + pts[i].y);
+            ctx.stroke();
+          }
+        } catch {/* ignore */ }
+      }
+      ctx.restore();
+    }
+
+    // Eraser cursor ring (world radius = screenRadius/scale)
+    if (eraserCursor && isDrawingMode === false) {
+      ctx.save();
+      // Match erase radius used in logic
+      const screenRadius = 10;
+      const r = screenRadius / (transform.scale || 1);
+      ctx.strokeStyle = 'rgba(239,68,68,0.85)';
+      ctx.lineWidth = 2 / transform.scale;
+      ctx.setLineDash([4 / transform.scale, 4 / transform.scale]);
+      ctx.beginPath();
+      ctx.arc(eraserCursor.x, eraserCursor.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Current live-stroke overlay
     if (isDrawingMode) {
       renderCurrentDrawing(ctx);
     }
@@ -403,8 +558,22 @@ export const useCanvasRenderer = () => {
     // Notes on top
     renderNotesOnCanvas(ctx, notes, waveformX, waveformWidth, waveformHeight, duration);
 
+    // Selection box overlay (drawn in world space)
+    if (selectionBox) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(96,165,250,0.9)';
+      ctx.lineWidth = 2 / transform.scale;
+      ctx.setLineDash([4 / transform.scale, 4 / transform.scale]);
+      ctx.fillStyle = 'rgba(96,165,250,0.15)';
+      ctx.beginPath();
+      ctx.rect(selectionBox.x, selectionBox.y, selectionBox.w, selectionBox.h);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.restore();
-  }, [canvasRef, notes, transform, currentTime, duration, waveformData, isDrawingMode, getWaveformDims, renderDrawingsOnCanvas, renderCurrentDrawing, renderNotesOnCanvas]);
+  }, [canvasRef, notes, transform, currentTime, duration, waveformData, isDrawingMode, getWaveformDims, renderDrawingsOnCanvas, renderCurrentDrawing, renderNotesOnCanvas, erasingStrokeIds, eraserCursor, selectedDrawingIds, selectedStrokeGroups, movingStrokePreview, selectionBox]);
 
   return {
     renderDrawingOnCanvas,

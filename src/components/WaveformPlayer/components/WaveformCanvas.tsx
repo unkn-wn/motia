@@ -11,11 +11,14 @@ export const WaveformCanvas: React.FC = () => {
     canvasRef,
     transform,
     isDrawingMode,
+    toolMode,
     isPanning,
     dragOccurred,
     notes,
     NOTE_LABEL_HIDE_THRESHOLD
   } = useWaveformContext();
+  // Selection / drawings state pulled once (avoid calling hook inside handlers)
+  const { selectionBox, setSelectionBox, selectedDrawingIds } = useWaveformContext();
 
   const { duration, seekToTime } = useAudio();
   const { handleMouseDown, handleMouseMove, handleWheel } = useMouseInteractions();
@@ -33,14 +36,41 @@ export const WaveformCanvas: React.FC = () => {
     handleMouseDown(e);
 
     // Then handle drawing if in drawing mode
-    if (isDrawingMode && e.button === 0) {
+    // Selection tool start
+    if (toolMode === 'select' && e.button === 0) {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
+      if (selectionBox && canvasX >= selectionBox.x && canvasX <= selectionBox.x + selectionBox.w && canvasY >= selectionBox.y && canvasY <= selectionBox.y + selectionBox.h) {
+        // Begin move of existing selection
+        setSelectionBox?.({
+          ...selectionBox,
+          dragging: true,
+          mode: 'move',
+          startPointerX: canvasX,
+          startPointerY: canvasY,
+          originX: selectionBox.x,
+          originY: selectionBox.y,
+          originalPositions: Array.from(selectedDrawingIds || []).map(id => {
+            const n = notes.find(n => n.id === id);
+            return { id, x: n?.canvasX || 0, y: n?.canvasY || 0 };
+          })
+        });
+      } else {
+        // Start new selection box
+        setSelectionBox?.({ x: canvasX, y: canvasY, w: 0, h: 0, dragging: true, mode: 'create', anchorX: canvasX, anchorY: canvasY });
+      }
+      return;
+    }
+
+    if (isDrawingMode && e.button === 0 && toolMode === 'draw') {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
       const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
       handleDrawingStart(canvasX, canvasY);
     }
-  }, [handleMouseDown, isDrawingMode, canvasRef, transform, handleDrawingStart]);
+  }, [handleMouseDown, isDrawingMode, toolMode, canvasRef, transform, handleDrawingStart, selectionBox, setSelectionBox, selectedDrawingIds, notes]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || duration === 0 || isPanning || dragOccurred) return;
@@ -130,10 +160,17 @@ export const WaveformCanvas: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
-      className={`w-full h-full touch-none ${isDrawingMode ? 'bg-neutral-700/50 cursor-crosshair' :
-        isPanning ? 'bg-neutral-800 cursor-grabbing' :
-          'bg-neutral-800 cursor-grab'
-        }`}
+      className={`w-full h-full touch-none ${
+        toolMode === 'draw'
+          ? 'bg-neutral-700/50 cursor-crosshair'
+          : toolMode === 'erase'
+          ? 'bg-neutral-800 cursor-cell'
+          : toolMode === 'select'
+          ? 'bg-neutral-800 cursor-crosshair'
+          : isPanning
+          ? 'bg-neutral-800 cursor-grabbing'
+          : 'bg-neutral-800 cursor-grab'
+      }`}
       onClick={handleCanvasClick}
       onMouseDown={(e) => { handleMouseDownForMenu(e); enhancedHandleMouseDown(e); }}
       onMouseMove={handleMouseMove}

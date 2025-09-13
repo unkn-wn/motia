@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 export type HeroBackdropHandle = { shuffle: () => void };
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 type HeroBackdropProps = {};
 
 // Simplified backdrop: self-animated; supports imperative shuffle to re-randomize bar amplitudes.

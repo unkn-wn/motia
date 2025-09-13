@@ -25,7 +25,8 @@ function Home() {
   const navigate = useNavigate();
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(() => getShortcuts());
-  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [isDrawingMode, setIsDrawingMode] = useState(false); // legacy
+  const [toolMode, setToolMode] = useState<'draw' | 'select' | 'erase' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -76,8 +77,17 @@ function Home() {
     }
   }, []);
 
-  const handleToggleDrawingMode = useCallback(() => {
+  const handleDrawMode = useCallback(() => {
+    setToolMode(m => m === 'draw' ? null : 'draw');
     setIsDrawingMode(prev => !prev);
+  }, []);
+  const handleSelectMode = useCallback(() => {
+    setIsDrawingMode(false);
+    setToolMode(m => m === 'select' ? null : 'select');
+  }, []);
+  const handleEraseMode = useCallback(() => {
+    setIsDrawingMode(false);
+    setToolMode(m => m === 'erase' ? null : 'erase');
   }, []);
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen(prev => !prev);
@@ -90,7 +100,7 @@ function Home() {
   // Stable Projects navigation for FloatingDock
   const handleGoProjects = useCallback(() => {
     if (user?.isAnonymous) return; // respect disabled state
-    try { waveformPlayerRef.current?.pause(); } catch { }
+    try { waveformPlayerRef.current?.pause(); } catch { /* ignore */ }
     navigate({ to: '/projects' });
   }, [navigate, user?.isAnonymous]);
 
@@ -120,7 +130,9 @@ function Home() {
     // Create action handlers
     const actionHandlers = {
       'ADD_NOTE': handleAddNoteAtCurrentTime,
-      'TOGGLE_DRAWING_MODE': handleToggleDrawingMode,
+      'TOOL_DRAW': handleDrawMode,
+      'TOOL_SELECT': handleSelectMode,
+      'TOOL_ERASE': handleEraseMode,
       'TOGGLE_SIDEBAR': handleToggleSidebar,
       'SHOW_SHORTCUTS': () => setShowShortcuts(true),
       'TOGGLE_PLAYBACK': () => {
@@ -155,7 +167,7 @@ function Home() {
 
     window.addEventListener('keydown', keyboardHandler);
     return () => window.removeEventListener('keydown', keyboardHandler);
-  }, [shortcuts, handleAddNoteAtCurrentTime, handleToggleDrawingMode, handleToggleSidebar]);
+  }, [shortcuts, handleAddNoteAtCurrentTime, handleDrawMode, handleSelectMode, handleEraseMode, handleToggleSidebar]);
 
   // note handlers provided by notes state
 
@@ -283,6 +295,7 @@ function Home() {
                 isDrawingMode={isDrawingMode}
                 onAddDrawing={handleAddDrawing}
                 onUpdateDrawing={handleUpdateDrawing}
+                toolMode={toolMode}
               />
               <AudioControls />
               <FloatingDock
@@ -290,7 +303,10 @@ function Home() {
                 onShowShortcuts={handleShowShortcuts}
                 canAddNote={true}
                 isDrawingMode={isDrawingMode}
-                onToggleDrawingMode={handleToggleDrawingMode}
+                onToggleDrawingMode={handleDrawMode}
+                onSelectMode={handleSelectMode}
+                onEraseMode={handleEraseMode}
+                toolMode={toolMode}
                 onUndo={handleUndo}
                 onRedo={handleRedo}
                 canUndo={canUndo}
@@ -336,6 +352,7 @@ function Home() {
               isDrawingMode={isDrawingMode}
               onAddDrawing={handleAddDrawing}
               onUpdateDrawing={handleUpdateDrawing}
+              toolMode={toolMode}
             />
 
             {/* Audio Controls - now outside WaveformPlayer */}
@@ -347,7 +364,10 @@ function Home() {
               onShowShortcuts={handleShowShortcuts}
               canAddNote={!!audioFile}
               isDrawingMode={isDrawingMode}
-              onToggleDrawingMode={handleToggleDrawingMode}
+              onToggleDrawingMode={handleDrawMode}
+              onSelectMode={handleSelectMode}
+              onEraseMode={handleEraseMode}
+              toolMode={toolMode}
               onUndo={handleUndo}
               onRedo={handleRedo}
               canUndo={canUndo}

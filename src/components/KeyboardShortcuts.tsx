@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
-import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton, setShortcuts } from '@utils/shortcutsUtils';
+import { getPreferences, setPreferences, type EditorEnterBehavior, type PanMouseButton, type Preferences, setShortcuts } from '@utils/shortcutsUtils';
 import { NOTE_COLORS, getColorPickerStyle, type NoteColor } from '@utils/colorUtils';
 import { history } from '@utils/history';
 import { formatKeyDisplay, isValidShortcut } from '@utils/shortcutsUtils';
 import { XIcon, RotateCcwIcon } from '@assets/icons';
 import Modal from '@/components/Modal';
+import { useAuth } from '@contexts/objects/FirebaseAuthContextObject';
+import { fetchUserSettings, saveUserSettings } from '@/lib/db';
 // persistence is handled centrally in FirebaseAuthContext via subscription
 
 interface KeyboardShortcutsProps {
@@ -23,6 +25,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   onUpdateShortcut,
   onResetShortcuts
 }) => {
+  const { user } = useAuth();
   // no direct persistence here; state flows up and global store is updated
   const [editingId, setEditingId] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string>('');
@@ -31,16 +34,46 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
   const [historyMax, setHistoryMaxState] = useState<number>(getPreferences().historyMax);
   const [defaultNoteColor, setDefaultNoteColor] = useState<NoteColor>(getPreferences().defaultNoteColor);
 
+  // set to default helper function
+  const setPrefsToDefault = () => {
+    const prefs = getPreferences();
+    setEnterBehaviorState(prefs.editorEnterBehavior);
+    setPanButtonState(prefs.panMouseButton);
+    setHistoryMaxState(prefs.historyMax);
+    setDefaultNoteColor(prefs.defaultNoteColor);
+  }
+
   // Keep local state in sync when panel opens
   useEffect(() => {
-    if (isOpen) {
-      const prefs = getPreferences();
-      setEnterBehaviorState(prefs.editorEnterBehavior);
-      setPanButtonState(prefs.panMouseButton);
-      setHistoryMaxState(prefs.historyMax);
-      setDefaultNoteColor(prefs.defaultNoteColor);
+    if (!isOpen) return;
+    (async () => {
+      try {
+        if (user) {
+          const settings = await fetchUserSettings(user.uid);
+          const prefs = settings?.preferences ?? getPreferences();
+          setEnterBehaviorState(prefs.editorEnterBehavior ?? getPreferences().editorEnterBehavior);
+          setPanButtonState(prefs.panMouseButton ?? getPreferences().panMouseButton);
+          setHistoryMaxState(prefs.historyMax ?? getPreferences().historyMax);
+          setDefaultNoteColor(prefs.defaultNoteColor ?? getPreferences().defaultNoteColor);
+        } else {
+          setPrefsToDefault();
+        }
+      } catch {
+        setPrefsToDefault();
+      }
+    })();
+  }, [isOpen, user]);
+
+  // Persist preferences helper: sync local store + Firestore
+  const setPref = useCallback(async (patch: Partial<Preferences>) => {
+    setPreferences(patch);
+    if (typeof patch.historyMax === 'number') {
+      history.setMax(patch.historyMax);
     }
-  }, [isOpen]);
+    if (user) {
+      try { await saveUserSettings(user.uid, { preferences: patch }); } catch { /* ignore */ }
+    }
+  }, [user]);
 
   const handleCancel = useCallback(() => {
     setEditingId(null);
@@ -165,7 +198,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                   onClick={() => {
                     const next: EditorEnterBehavior = enterBehavior === 'save' ? 'newline' : 'save';
                     setEnterBehaviorState(next);
-                    setPreferences({ editorEnterBehavior: next });
+                    void setPref({ editorEnterBehavior: next });
                   }}
                   className={`w-10 h-5 rounded-full transition-colors cursor-pointer ${enterBehavior === 'save' ? 'bg-green-600' : 'bg-neutral-700'}`}
                   title={enterBehavior === 'save' ? 'Enter saves the note (Shift+Enter newline)' : 'Enter creates newline (Shift/Ctrl/Cmd+Enter saves)'}
@@ -180,7 +213,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                   {(['Left', 'Middle', 'Right'] as PanMouseButton[]).map(opt => (
                     <button
                       key={opt}
-                      onClick={() => { setPanButtonState(opt); setPreferences({ panMouseButton: opt }); }}
+                      onClick={() => { setPanButtonState(opt); void setPref({ panMouseButton: opt }); }}
                       className={`px-2 py-1 text-xs ${panButton === opt ? 'bg-neutral-700 text-white' : 'text-neutral-300 hover:bg-neutral-800'} cursor-pointer transition-colors`}
                       title={`Pan with ${opt.toLowerCase()} mouse button`}
                     >
@@ -199,8 +232,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                     const num = Math.floor(Number(e.target.value));
                     const val = Number.isNaN(num) ? 30 : Math.max(1, Math.min(200, num));
                     setHistoryMaxState(val);
-                    setPreferences({ historyMax: val });
-                    history.setMax(val);
+                    void setPref({ historyMax: val });
                   }}
                   min={1}
                   max={200}
@@ -217,7 +249,7 @@ const KeyboardShortcuts: React.FC<KeyboardShortcutsProps> = ({
                   {NOTE_COLORS.map((color) => (
                     <button
                       key={color}
-                      onClick={() => { setDefaultNoteColor(color); setPreferences({ defaultNoteColor: color }); }}
+                      onClick={() => { setDefaultNoteColor(color); void setPref({ defaultNoteColor: color }); }}
                       className={`w-6 h-6 rounded-full border-2 cursor-pointer ${defaultNoteColor === color ? 'border-neutral-200' : 'border-neutral-500'}`}
                       style={{ backgroundColor: getColorPickerStyle(color) }}
                       title={color}

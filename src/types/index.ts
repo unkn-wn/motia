@@ -29,6 +29,9 @@ export type {
   NoteCreateData
 } from './notes';
 
+// Tool modes (drawing / selection / eraser)
+export type ToolMode = 'draw' | 'select' | 'erase' | null;
+
 // Color types (re-export from utils)
 export type { NoteColor } from '@utils/colorUtils';
 

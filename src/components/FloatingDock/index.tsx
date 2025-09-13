@@ -1,18 +1,24 @@
 import { memo } from 'react';
 import AddNoteButton from './AddNoteButton';
 import DrawingModeButton from './DrawingModeButton';
+// (selection / eraser buttons will reuse simple unicode placeholders for now)
 import ShortcutsButton from './ShortcutsButton';
 import ProfileButton from './ProfileButton.tsx';
 import HomeButton from './HomeButton';
 import UndoButton from './UndoButton';
 import RedoButton from './RedoButton';
+import SelectToolButton from './SelectToolButton';
+import EraseToolButton from './EraseToolButton';
 
 interface FloatingDockProps {
   onAddNote: () => void;
   onShowShortcuts: () => void;
   canAddNote: boolean;
-  isDrawingMode: boolean;
-  onToggleDrawingMode: () => void;
+  isDrawingMode: boolean; // legacy
+  onToggleDrawingMode: () => void; // toggles draw tool
+  onSelectMode?: () => void;
+  onEraseMode?: () => void;
+  toolMode?: 'draw' | 'select' | 'erase' | null;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -28,8 +34,11 @@ const FloatingDock = memo<FloatingDockProps>(({
   onAddNote,
   onShowShortcuts,
   canAddNote,
-  isDrawingMode,
+  // isDrawingMode retained for backward compatibility but unused when toolMode provided
   onToggleDrawingMode,
+  onSelectMode,
+  onEraseMode,
+  toolMode,
   onUndo,
   onRedo,
   canUndo = true,
@@ -48,10 +57,18 @@ const FloatingDock = memo<FloatingDockProps>(({
 
       {/* Drawing Mode Button - only show when audio is loaded */}
       {canAddNote && onToggleDrawingMode && (
-        <DrawingModeButton
-          isDrawingMode={isDrawingMode}
-          onToggleDrawingMode={onToggleDrawingMode}
-        />
+        <>
+          {onSelectMode && (
+            <SelectToolButton active={toolMode === 'select'} onClick={onSelectMode} />
+          )}
+          <DrawingModeButton
+            isDrawingMode={toolMode === 'draw'}
+            onToggleDrawingMode={onToggleDrawingMode}
+          />
+          {onEraseMode && (
+            <EraseToolButton active={toolMode === 'erase'} onClick={onEraseMode} />
+          )}
+        </>
       )}
 
       <div className='border-t-2 border-neutral-600/20 rounded-full' />

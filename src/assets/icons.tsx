@@ -27,7 +27,7 @@ import {
   Redo2,
   AudioLines,
 } from 'lucide-react';
-import { Eye, EyeOff, User, Home } from 'lucide-react';
+import { Eye, EyeOff, User, Home, Eraser, Square } from 'lucide-react';
 
 /**
  * Memoized Lucide icon components to prevent unnecessary rerenders
@@ -193,3 +193,15 @@ export const AudioLinesIcon = memo(({ className = "w-5 h-5" }: { className?: str
   <AudioLines className={className} />
 ));
 AudioLinesIcon.displayName = 'AudioLinesIcon';
+
+// Tool Icons
+export const EraserIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
+  <Eraser className={className} />
+));
+EraserIcon.displayName = 'EraserIcon';
+
+// Using a plain Square to represent selection box
+export const SelectionIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
+  <Square className={className} />
+));
+SelectionIcon.displayName = 'SelectionIcon';

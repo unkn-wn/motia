@@ -36,5 +36,7 @@ export type ProjectMetaDoc = {
 
 export type ProjectNotesDoc = {
   notes: Note[];
+  // All drawing strokes compressed together (JSON string of CompressedStroke[])
+  compressed?: string | unknown[];
   updatedAt: Timestamp;
 };

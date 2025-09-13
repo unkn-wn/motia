@@ -124,20 +124,38 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
     category: 'playback'
   },
   {
-    id: 'toggle-drawing-mode',
-    label: 'Toggle Drawing Mode',
-    description: 'Enable/disable drawing mode',
+    id: 'tool-draw',
+    label: 'Draw Tool',
+    description: 'Enable drawing mode',
     defaultKey: 'd',
     currentKey: 'd',
-    action: 'TOGGLE_DRAWING_MODE',
+    action: 'TOOL_DRAW',
+    category: 'notes'
+  },
+  {
+    id: 'tool-select',
+    label: 'Select Tool',
+    description: 'Enable selection tool',
+    defaultKey: 's',
+    currentKey: 's',
+    action: 'TOOL_SELECT',
+    category: 'notes'
+  },
+  {
+    id: 'tool-erase',
+    label: 'Erase Tool',
+    description: 'Enable eraser tool',
+    defaultKey: 'f',
+    currentKey: 'f',
+    action: 'TOOL_ERASE',
     category: 'notes'
   },
   {
     id: 'toggle-sidebar',
     label: 'Toggle Sidebar',
     description: 'Show or hide notes sidebar',
-    defaultKey: 's',
-    currentKey: 's',
+    defaultKey: 'b',
+    currentKey: 'b',
     action: 'TOGGLE_SIDEBAR',
     category: 'navigation'
   },
@@ -332,7 +350,6 @@ export const isNoteEditSubmitCombo = (e: KeyboardEvent | React.KeyboardEvent): b
   // Behavior depends on preference: 'newline' (default) or 'save'
   // newline: Save on Shift/Ctrl/Cmd + Enter; plain Enter inserts newline
   // save: Save on plain Enter; Shift+Enter inserts newline
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyE: any = e as any;
   const hasCtrlMeta = !!(anyE.ctrlKey || anyE.metaKey);
   const hasShift = !!anyE.shiftKey;

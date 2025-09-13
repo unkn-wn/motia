@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Note, CanvasTransform } from '@types';
+import type { Note, CanvasTransform, ToolMode } from '@types';
 import type { DrawingSession, DrawingPoint } from '@types';
 
 export interface WaveformContextValue {
@@ -65,6 +65,24 @@ export interface WaveformContextValue {
   }>>;
   deleteConfirmNoteId: string | null;
   setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
+  // Tooling
+  toolMode?: ToolMode; // preferred over isDrawingMode going forward
+  setToolMode?: React.Dispatch<React.SetStateAction<ToolMode>>;
+  // Selection (drawings only for now)
+  selectionBox?: { x: number; y: number; w: number; h: number; dragging?: boolean; mode?: 'create' | 'move'; startPointerX?: number; startPointerY?: number; originX?: number; originY?: number; originalPositions?: Array<{ id: string; x: number; y: number }>; anchorX?: number; anchorY?: number; } | null;
+  setSelectionBox?: React.Dispatch<React.SetStateAction<{ x: number; y: number; w: number; h: number; dragging?: boolean; mode?: 'create' | 'move'; startPointerX?: number; startPointerY?: number; originX?: number; originY?: number; originalPositions?: Array<{ id: string; x: number; y: number }>; anchorX?: number; anchorY?: number; } | null>>;
+  selectedDrawingIds?: Set<string>;
+  setSelectedDrawingIds?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  selectedStrokeGroups?: { noteId: string; strokeIndexes: number[] }[];
+  setSelectedStrokeGroups?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[] }[]>>;
+  // Live move preview for selected strokes
+  movingStrokePreview?: { noteId: string; strokeIndexes: number[]; dx: number; dy: number } | null;
+  setMovingStrokePreview?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[]; dx: number; dy: number } | null>>;
+  // Erasing state
+  erasingStrokeIds?: { noteId: string; strokeIndexes: number[] }[]; // pending deletion preview
+  setErasingStrokeIds?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[] }[]>>;
+  eraserCursor?: { x: number; y: number } | null;
+  setEraserCursor?: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
 }
 
 export const WaveformContext = createContext<WaveformContextValue | null>(null);

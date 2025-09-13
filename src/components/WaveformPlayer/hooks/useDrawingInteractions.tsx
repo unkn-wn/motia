@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
-import { compressDrawingAdaptive } from '@utils/drawingUtils';
+import { compressDrawingAdaptive, recomputeBoundsFromStrokes } from '@utils/drawingUtils';
 import { decompressSession } from '@utils/advancedCompression';
 import type { DrawingSession } from '@types';
 
@@ -24,26 +24,31 @@ export const useDrawingInteractions = () => {
   } = useWaveformContext();
 
   const handleDrawingStart = useCallback((canvasX: number, canvasY: number) => {
+    // Double-guard: only start when drawing tool truly active
     if (!isDrawingMode || !onAddDrawing) return;
 
     setIsDrawing(true);
     setDrawingStartPos({ x: canvasX, y: canvasY });
     setCurrentStroke([{ x: canvasX, y: canvasY }]);
 
-    // Initialize drawing session only if it doesn't exist yet
-    setDrawingSession(prevSession => {
-      if (!prevSession) {
-        return {
-          strokes: [],
-          startTime: Date.now(),
-          startPosition: { x: canvasX, y: canvasY }
-        };
-      }
-      // If session exists, keep it as is - don't modify the start position
-      return prevSession;
-    });
-  }, [isDrawingMode, onAddDrawing, setIsDrawing, setDrawingStartPos, setCurrentStroke, setDrawingSession]);
+    // If a global drawing note already exists in memory, target it to keep all strokes together
+    if (!drawingNoteId) {
+      const existing = notes.find(n => n.type === 'drawing' && n.drawing);
+      if (existing) setDrawingNoteId(existing.id);
+    }
 
+    setDrawingSession(prev => prev || { strokes: [], startTime: Date.now(), startPosition: { x: 0, y: 0 } });
+  }, [
+    isDrawingMode,
+    onAddDrawing,
+    setIsDrawing,
+    setDrawingStartPos,
+    setCurrentStroke,
+    setDrawingSession,
+    drawingNoteId,
+    notes,
+    setDrawingNoteId
+  ]);
   const handleDrawingEnd = useCallback(() => {
 
     // Always clear drawing state first
@@ -57,35 +62,41 @@ export const useDrawingInteractions = () => {
     }
 
     // Build base from current note state to stay in sync with undo/redo
-    let baseStrokes: DrawingSession['strokes'] = [];
-    let baseStartPos = drawingStartPos!;
-    if (drawingNoteId) {
-      const note = notes.find(n => n.id === drawingNoteId);
-      baseStrokes = note?.drawing?.compressed ? decompressSession(note.drawing.compressed as unknown as import('@types').CompressedStroke[]) : [];
-      baseStartPos = note ? { x: note.canvasX, y: note.canvasY } : baseStartPos;
-    } else if (drawingSession) {
-      baseStrokes = drawingSession.strokes;
-      baseStartPos = drawingSession.startPosition || baseStartPos;
+    // Always operate on global drawing note; points are absolute (world) coordinates.
+    let existingStrokes: DrawingSession['strokes'] = [];
+    // Prefer updating an existing global drawing note if present
+    let targetNoteId = drawingNoteId;
+    if (!targetNoteId) {
+      const existing = notes.find(n => n.type === 'drawing' && n.drawing);
+      if (existing) {
+        targetNoteId = existing.id;
+        setDrawingNoteId(existing.id);
+      }
     }
 
-    const nextStrokes = [
-      ...baseStrokes,
-      { points: currentStroke, color: '#9ca3af', strokeWidth: 2 },
-    ];
+    if (targetNoteId) {
+      const note = notes.find(n => n.id === targetNoteId);
+      if (note?.drawing?.compressed) {
+        try {
+          let comp = note.drawing.compressed as unknown as import('@types').CompressedStroke[];
+          if (typeof comp === 'string') comp = JSON.parse(comp);
+          existingStrokes = decompressSession(comp) as import('@types').DrawingStroke[];
+        } catch { existingStrokes = []; }
+      }
+    } else if (drawingSession) {
+      existingStrokes = drawingSession.strokes;
+    }
+    const nextStrokes: import('@types').DrawingStroke[] = [...existingStrokes, { points: currentStroke, color: '#9ca3af', strokeWidth: 2 }];
 
     // Compress the entire session (advanced adaptive already optimizes per stroke and at session-level)
     const compressionResult = compressDrawingAdaptive(nextStrokes);
 
     // Calculate bounds
-    const allPoints = nextStrokes.flatMap(stroke => stroke.points);
-    const minX = Math.min(...allPoints.map(p => p.x));
-    const maxX = Math.max(...allPoints.map(p => p.x));
-    const minY = Math.min(...allPoints.map(p => p.y));
-    const maxY = Math.max(...allPoints.map(p => p.y));
+    const { width, height } = recomputeBoundsFromStrokes(nextStrokes);
 
     const drawing = {
       compressed: compressionResult.strokes,
-      bounds: { width: maxX - minX + 20, height: maxY - minY + 20 },
+      bounds: { width, height },
       originalSize: compressionResult.originalSize,
       compressedSize: compressionResult.compressedSize,
       compressionRatio: compressionResult.reduction,
@@ -94,60 +105,23 @@ export const useDrawingInteractions = () => {
     // Calculate time for first stroke only
     const rect = canvasRef.current?.getBoundingClientRect();
     const waveformHeight = rect ? Math.max(rect.height * 3, 100) : 100;
-    const timeProgress = (baseStartPos?.y ?? 0) / waveformHeight;
+    const timeProgress = (drawingStartPos?.y ?? 0) / waveformHeight;
     const time = Math.max(0, Math.min(100, timeProgress * 100));
-
-    if (!drawingNoteId) {
-      if (onAddDrawing) {
-        const newId = onAddDrawing(time, baseStartPos.x, baseStartPos.y, drawing);
-        setDrawingNoteId(newId ?? null);
-      }
+    if (targetNoteId) {
+      onUpdateDrawing?.(targetNoteId, drawing);
     } else {
-      onUpdateDrawing?.(drawingNoteId, drawing);
+      // Create the global drawing note on first commit
+      const newId = onAddDrawing?.(time, 0, 0, drawing);
+      if (newId) setDrawingNoteId(newId);
     }
 
-    // Update local session for live rendering of current stroke behavior
-    setDrawingSession({ strokes: nextStrokes, startTime: Date.now(), startPosition: baseStartPos });
+    setDrawingSession({ strokes: nextStrokes, startTime: Date.now(), startPosition: { x: 0, y: 0 } });
 
     // Clear the live stroke
     setCurrentStroke([]);
     setDrawingStartPos(null);
   }, [drawingStartPos, currentStroke, setIsDrawing, setCurrentStroke, setDrawingStartPos, setDrawingSession, canvasRef, drawingNoteId, onAddDrawing, onUpdateDrawing, setDrawingNoteId, notes, drawingSession]);
 
-  // Save drawing session
-  const saveDrawingSession = useCallback((session: DrawingSession) => {
-    if (!onAddDrawing || session.strokes.length === 0) return;
-
-    const compressionResult = compressDrawingAdaptive(session.strokes);
-
-    // Calculate bounds
-    const allPoints = session.strokes.flatMap(stroke => stroke.points);
-    const minX = Math.min(...allPoints.map(p => p.x));
-    const maxX = Math.max(...allPoints.map(p => p.x));
-    const minY = Math.min(...allPoints.map(p => p.y));
-    const maxY = Math.max(...allPoints.map(p => p.y));
-
-    const drawing = {
-      compressed: compressionResult.strokes,
-      bounds: {
-        width: maxX - minX + 20,
-        height: maxY - minY + 20
-      },
-      originalSize: compressionResult.originalSize,
-      compressedSize: compressionResult.compressedSize,
-      compressionRatio: compressionResult.reduction
-    };
-
-    // Calculate time
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const waveformHeight = Math.max(rect.height * 3, 100);
-    const timeProgress = session.startPosition.y / waveformHeight;
-    const time = Math.max(0, Math.min(100, timeProgress * 100)); // Fallback duration
-
-    onAddDrawing(time, session.startPosition.x, session.startPosition.y, drawing);
-  }, [onAddDrawing, canvasRef]);
 
   // Handle drawing mode changes - clear state on exit (note is already kept up to date)
   useEffect(() => {
@@ -170,7 +144,6 @@ export const useDrawingInteractions = () => {
 
   return {
     handleDrawingStart,
-    handleDrawingEnd,
-    saveDrawingSession
+    handleDrawingEnd
   };
 };

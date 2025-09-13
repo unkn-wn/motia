@@ -84,7 +84,7 @@ const NotesSidebar: React.FC<NotesSidebarProps> = memo(({ displayNotes, onClose 
           trackingRef.current = false;
           startXRef.current = null;
           startYRef.current = null;
-          try { onClose(); } catch { }
+          try { onClose(); } catch { /* ignore */ }
         }
       }}
       onPointerUp={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}

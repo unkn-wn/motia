@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ReactNode } from 'react';
-import type { Note, CanvasTransform } from '@types';
+import type { Note, CanvasTransform, ToolMode } from '@types';
 import type { DrawingSession, DrawingPoint } from '@types';
 import { WaveformContext } from './objects/WaveformContextObject';
 
@@ -70,6 +70,20 @@ export interface WaveformContextValue {
   }>>;
   deleteConfirmNoteId: string | null;
   setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
+  toolMode?: ToolMode;
+  setToolMode?: React.Dispatch<React.SetStateAction<ToolMode>>;
+  selectionBox?: { x: number; y: number; w: number; h: number; dragging?: boolean; mode?: 'create' | 'move'; startPointerX?: number; startPointerY?: number; originX?: number; originY?: number; originalPositions?: Array<{ id: string; x: number; y: number }>; anchorX?: number; anchorY?: number; } | null;
+  setSelectionBox?: React.Dispatch<React.SetStateAction<{ x: number; y: number; w: number; h: number; dragging?: boolean; mode?: 'create' | 'move'; startPointerX?: number; startPointerY?: number; originX?: number; originY?: number; originalPositions?: Array<{ id: string; x: number; y: number }>; anchorX?: number; anchorY?: number; } | null>>;
+  selectedDrawingIds?: Set<string>;
+  setSelectedDrawingIds?: React.Dispatch<React.SetStateAction<Set<string>>>;
+  selectedStrokeGroups?: { noteId: string; strokeIndexes: number[] }[];
+  setSelectedStrokeGroups?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[] }[]>>;
+  erasingStrokeIds?: { noteId: string; strokeIndexes: number[] }[];
+  setErasingStrokeIds?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[] }[]>>;
+  eraserCursor?: { x: number; y: number } | null;
+  setEraserCursor?: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
+  movingStrokePreview?: { noteId: string; strokeIndexes: number[]; dx: number; dy: number } | null;
+  setMovingStrokePreview?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[]; dx: number; dy: number } | null>>;
 }
 
 interface WaveformProviderProps {

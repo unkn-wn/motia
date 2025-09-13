@@ -10,6 +10,7 @@ export const useMouseInteractions = () => {
     transform,
     setTransform,
     isDrawingMode,
+    toolMode,
     isPanning,
     lastPanPoint,
     setDragOccurred,
@@ -28,35 +29,13 @@ export const useMouseInteractions = () => {
     // Map mouse button to label
     const buttonLabel = e.button === 0 ? 'Left' : e.button === 1 ? 'Middle' : e.button === 2 ? 'Right' : 'Left';
 
-    // Common rect/clicked note calculation where needed
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
-    const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
-
-    // If clicking on a note with left button and not drawing, start dragging
-    if (buttonLabel === 'Left' && clickedNote && !isDrawingMode) {
-      e.preventDefault();
-      setDragOccurred(false);
-      setDragging({
-        id: clickedNote.id,
-        startX: e.clientX,
-        startY: e.clientY,
-        initialCanvasX: clickedNote.canvasX,
-        initialCanvasY: clickedNote.canvasY
-      });
-      // Start a coalesced move entry for history
-      history.beginMove(clickedNote.id, { x: clickedNote.canvasX, y: clickedNote.canvasY });
-      return;
-    }
-
-    // Drawing start is handled in WaveformCanvas; when in drawing mode, block panning for Left only
-    if (isDrawingMode && buttonLabel === 'Left') {
-      return;
-    }
-
-    // Start panning only when the pressed mouse button matches preference
+    // Start panning when the pressed mouse button matches preference (takes precedence),
+    // but if pan is bound to Left and a tool is active (draw/select/erase), do not pan.
     if (buttonLabel === desired) {
+      if (desired === 'Left' && (isDrawingMode || toolMode === 'select' || toolMode === 'erase')) {
+        // Let tool-specific handlers take over
+        return;
+      }
       e.preventDefault();
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
@@ -76,7 +55,34 @@ export const useMouseInteractions = () => {
       window.addEventListener('contextmenu', onUp, { capture: true } as AddEventListenerOptions);
       return;
     }
-  }, [canvasRef, transform, isDrawingMode, setDragOccurred, setDragging, setIsPanning, setLastPanPoint, setIsFollowingPlayhead, notes, NOTE_LABEL_HIDE_THRESHOLD]);
+
+    // Common rect/clicked note calculation where needed (after pan precedence)
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
+    const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
+
+    // If clicking on a note with left button and no active tool, start dragging the note
+    if (buttonLabel === 'Left' && clickedNote && !isDrawingMode && !toolMode) {
+      e.preventDefault();
+      setDragOccurred(false);
+      setDragging({
+        id: clickedNote.id,
+        startX: e.clientX,
+        startY: e.clientY,
+        initialCanvasX: clickedNote.canvasX,
+        initialCanvasY: clickedNote.canvasY
+      });
+      // Start a coalesced move entry for history
+      history.beginMove(clickedNote.id, { x: clickedNote.canvasX, y: clickedNote.canvasY });
+      return;
+    }
+
+    // Block panning via Left button when a tool is active; Middle/Right pan is still allowed above.
+    if ((isDrawingMode || toolMode === 'select' || toolMode === 'erase') && buttonLabel === 'Left') {
+      return;
+    }
+  }, [canvasRef, transform, isDrawingMode, toolMode, setDragOccurred, setDragging, setIsPanning, setLastPanPoint, setIsFollowingPlayhead, notes, NOTE_LABEL_HIDE_THRESHOLD]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isPanning) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { useAudio } from '@contexts/objects/AudioContextObject';
-import type { Note, CanvasTransform } from '@types';
+import type { Note, CanvasTransform, ToolMode } from '@types';
 import type { DrawingPoint, DrawingSession } from '@types';
 
 // Import refactored components and hooks
@@ -20,6 +20,7 @@ export interface WaveformPlayerProps {
   isDrawingMode?: boolean;
   onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => string;
   onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
+  toolMode?: ToolMode; // new controlled tool mode
 }
 
 export interface WaveformPlayerRef {
@@ -45,7 +46,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   onMoveNote,
   isDrawingMode = false,
   onAddDrawing,
-  onUpdateDrawing
+  onUpdateDrawing,
+  toolMode: externalToolMode
 }, ref) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,8 +95,48 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number; noteId: string | null }>({ isOpen: false, x: 0, y: 0, noteId: null });
   const [deleteConfirmNoteId, setDeleteConfirmNoteId] = useState<string | null>(null);
 
-  // Drawing state
+  // Controlled tool mode derived from prop (fallback to legacy isDrawingMode only if prop is undefined)
+  // Use definedness check so that externalToolMode = null means "no tool", not fallback to draw
+  const toolMode: ToolMode = (externalToolMode !== undefined)
+    ? externalToolMode
+    : (isDrawingMode ? 'draw' : null);
+  // Provide a no-op setter for context compatibility (future: lift fully)
+  const setToolMode = useCallback<React.Dispatch<React.SetStateAction<ToolMode>>>(() => { /* noop controlled */ }, []);
   const [isDrawing, setIsDrawing] = useState(false);
+  // Ensure we exit drawing state when tool changes away from draw
+  useEffect(() => {
+    if (toolMode !== 'draw' && isDrawing) {
+      setIsDrawing(false);
+      setCurrentStroke([]);
+    }
+  }, [toolMode, isDrawing]);
+  // Selection & eraser state
+  const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number; dragging?: boolean; mode?: 'create' | 'move'; startPointerX?: number; startPointerY?: number; originX?: number; originY?: number; originalPositions?: Array<{ id: string; x: number; y: number }>; } | null>(null);
+  const [selectedStrokeGroups, setSelectedStrokeGroups] = useState<{ noteId: string; strokeIndexes: number[] }[]>([]);
+  const [movingStrokePreview, setMovingStrokePreview] = useState<{ noteId: string; strokeIndexes: number[]; dx: number; dy: number } | null>(null);
+  useEffect(() => {
+    if (toolMode !== 'select') {
+      setSelectionBox(null);
+      setSelectedDrawingIds(new Set());
+      setSelectedStrokeGroups([]);
+      setMovingStrokePreview(null);
+    }
+    if (toolMode !== 'erase') {
+      setErasingStrokeIds([]);
+      setEraserCursor(null);
+    }
+    // If leaving draw, stop drawing and clear live stroke immediately (extra safety)
+    if (toolMode !== 'draw') {
+      setIsDrawing(false);
+      setCurrentStroke([]);
+    }
+  // Cancel any active dragging/panning when switching tools to avoid stuck states
+  setDragging(null);
+  setIsPanning(false);
+  }, [toolMode]);
+  const [selectedDrawingIds, setSelectedDrawingIds] = useState<Set<string>>(new Set());
+  const [erasingStrokeIds, setErasingStrokeIds] = useState<{ noteId: string; strokeIndexes: number[] }[]>([]);
+  const [eraserCursor, setEraserCursor] = useState<{ x: number; y: number } | null>(null);
   const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
   const [drawingStartPos, setDrawingStartPos] = useState<{ x: number; y: number } | null>(null);
   const [drawingSession, setDrawingSession] = useState<DrawingSession | null>(null);
@@ -175,7 +217,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     wavesurfer.on('pause', () => setIsPlaying(false));
 
     return () => {
-      try { wavesurfer.pause(); } catch { }
+  try { wavesurfer.pause(); } catch { /* ignore pause errors */ }
       wavesurfer.destroy();
       document.body.removeChild(hiddenDiv);
       URL.revokeObjectURL(audioUrl);
@@ -319,7 +361,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     pause: () => {
       try {
         wavesurferLocalRef.current?.pause();
-      } catch { }
+  } catch { /* ignore */ }
     },
   }));
 
@@ -349,7 +391,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     setDragOccurred,
 
     // Drawing state
-    isDrawingMode,
+    isDrawingMode: toolMode === 'draw',
     isDrawing,
     setIsDrawing,
     currentStroke,
@@ -360,6 +402,20 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     setDrawingSession,
     drawingNoteId,
     setDrawingNoteId,
+    toolMode,
+    setToolMode,
+    selectionBox,
+    setSelectionBox,
+    selectedDrawingIds,
+    setSelectedDrawingIds,
+    selectedStrokeGroups,
+    setSelectedStrokeGroups,
+    erasingStrokeIds,
+    setErasingStrokeIds,
+    eraserCursor,
+    setEraserCursor,
+    movingStrokePreview,
+    setMovingStrokePreview,
 
     // Event handlers
     onAddNote,

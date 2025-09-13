@@ -11,7 +11,7 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 export const WaveformPlayerContent: React.FC = () => {
   const { renderCanvas } = useCanvasRenderer();
   const { isPlaying } = useAudio();
-  const { isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu } = useWaveformContext();
+  const { isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, toolMode, movingStrokePreview } = useWaveformContext();
   const frameRef = useRef<number | null>(null);
   const activeRef = useRef(false);
   const suppressContextUntilRef = useRef<number>(0);
@@ -22,7 +22,8 @@ export const WaveformPlayerContent: React.FC = () => {
 
   // RAF-driven render when actively changing (playback, panning, drawing, dragging)
   useEffect(() => {
-    const active = isPlaying || isPanning || isDrawing || !!dragging;
+    // Treat selection drag and erase interactions as active so we get smooth live feedback
+    const active = isPlaying || isPanning || isDrawing || !!dragging || !!selectionBox?.dragging || toolMode === 'erase';
     activeRef.current = active;
 
     if (!active) {
@@ -48,7 +49,7 @@ export const WaveformPlayerContent: React.FC = () => {
         frameRef.current = null;
       }
     };
-  }, [isPlaying, isPanning, isDrawing, dragging, renderCanvas]);
+  }, [isPlaying, isPanning, isDrawing, dragging, selectionBox?.dragging, toolMode, renderCanvas]);
 
   // When static, re-render on key data changes (transform/notes) to reflect updates
   useEffect(() => {
@@ -56,7 +57,7 @@ export const WaveformPlayerContent: React.FC = () => {
       renderCanvas();
     }
     // Only when transform or notes identity changes
-  }, [transform, notes, renderCanvas]);
+  }, [transform, notes, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, movingStrokePreview, renderCanvas]);
 
   // Global Escape handling: close editor or modal if open
   useEffect(() => {

@@ -153,7 +153,7 @@ const ProjectsList: React.FC = () => {
             setBusy(deleteTarget.id);
             try {
               await deleteProject(user.uid, deleteTarget.id);
-              try { await deleteLocalAudio(deleteTarget.id); } catch { }
+              try { await deleteLocalAudio(deleteTarget.id); } catch { /* ignore */ }
               invalidate(user.uid);
               setDeleteTarget(null);
             } finally {
