@@ -1,20 +1,26 @@
 import { useCallback, useRef } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
-import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
+import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFromCanvasY, getWaveformDimensions } from '@utils/canvasUtils';
 import { useDrawingInteractions } from './useDrawingInteractions';
 import { handleSelectionCreate, handleSelectionMove } from './mouse/selectionMouseHandlers';
 import { updateEraserPreview } from './mouse/eraserMouseHandlers';
+import { useAudio } from '@contexts/objects/AudioContextObject';
 type Ctx = ReturnType<typeof import('@contexts/objects/WaveformContextObject').useWaveformContext>;
 
 export const usePointerInteractions = () => {
   // Capture full context once for reuse in handlers
   const ctx = useWaveformContext();
+  const { duration, seekToTime } = useAudio();
   const {
     canvasRef,
     transform,
     setTransform,
     isDrawingMode,
+    isDrawing,
+    setIsDrawing,
+    setCurrentStroke,
+    setDrawingStartPos,
     toolMode,
     isPanning,
     lastPanPoint,
@@ -32,6 +38,10 @@ export const usePointerInteractions = () => {
 
   // Track active pointers for pinch/drag
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  // Track initial tap position/time for single-finger tap detection
+  const tapStarts = useRef<Map<number, { x: number; y: number; t: number }>>(new Map());
+  // Track potential single-finger pan start (activate after small threshold)
+  const pendingPanStart = useRef<{ x: number; y: number } | null>(null);
   const initialPinch = useRef<{ distance: number; midpointX: number; midpointY: number; initialScale: number } | null>(null);
   const { handleDrawingStart } = useDrawingInteractions();
   // Track touch-based erasing (there is no buttons bitfield on touch)
@@ -48,6 +58,10 @@ export const usePointerInteractions = () => {
     (e.target as Element).setPointerCapture?.(e.pointerId);
 
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Record tap start for single-pointer gestures
+    if (pointers.current.size === 1) {
+      tapStarts.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
+    }
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -60,12 +74,27 @@ export const usePointerInteractions = () => {
       const pts = Array.from(pointers.current.values());
       const dist = distanceBetween(pts[0], pts[1]);
       const m = midpoint(pts[0], pts[1]);
+      // Cancel any active single-finger tool gestures when pinch starts
+      if (toolMode === 'draw' && isDrawing) {
+        setIsDrawing(false);
+        setCurrentStroke?.([]);
+        setDrawingStartPos?.(null);
+      }
+      if (toolMode === 'erase') {
+        eraseActiveRef.current = false;
+      }
+      if (selectionBox?.dragging) {
+        setSelectionBox?.(null);
+      }
       initialPinch.current = {
-        distance: dist,
+        // Clamp initial distance to reduce sensitivity when fingers start very close
+        distance: Math.max(dist, 10),
         midpointX: (m.x - rect2.left) - rect2.width / 2,
         midpointY: m.y - rect2.top,
         initialScale: transform.scale
       };
+      // Two-finger gesture should cancel follow-playhead
+      setIsFollowingPlayhead(false);
       setIsPanning(true);
       lastTwoFingerMidRef.current = { x: (m.x - rect2.left) - rect2.width / 2, y: m.y - rect2.top };
       return;
@@ -112,34 +141,19 @@ export const usePointerInteractions = () => {
       return;
     }
 
-    // Note drag hit test (exclude drawings when not in drawing mode)
-    const clickedNote = findNoteAtPosition(
-      canvasX,
-      canvasY,
-      notes,
-      transform.scale,
-      NOTE_LABEL_HIDE_THRESHOLD,
-      !isDrawingMode
-    );
-
-    if (clickedNote && !isDrawingMode) {
-      setDragOccurred(false);
-      setDragging({
-        id: clickedNote.id,
-        startX: e.clientX,
-        startY: e.clientY,
-        initialCanvasX: clickedNote.canvasX,
-        initialCanvasY: clickedNote.canvasY,
-      });
-      return;
-    }
+    // On touch: prefer panning over note dragging by default
+    // So we skip starting a note drag here on mobile
 
     if (isDrawingMode && toolMode === 'draw') {
       handleDrawingStart(canvasX, canvasY);
       return;
     }
 
-  // For single pointer, fall through to tool-specific handling above
+    // For single pointer with no active tool, prepare to pan (after threshold)
+    if (pointers.current.size === 1 && !toolMode) {
+      pendingPanStart.current = { x: e.clientX, y: e.clientY };
+      // Do not set isPanning yet; wait for small movement to preserve tap-to-seek
+    }
   }, [isDrawingMode, toolMode, setIsPanning, setLastPanPoint, setIsFollowingPlayhead, canvasRef, transform, setDragOccurred, setDragging, handleDrawingStart, notes, NOTE_LABEL_HIDE_THRESHOLD, selectionBox, setSelectionBox, selectedDrawingIds]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -166,35 +180,49 @@ export const usePointerInteractions = () => {
     if (pointers.current.size === 2) {
       const pinchState = initialPinch.current;
       if (!pinchState) return; // not initialized yet
-      // Only apply pinch once (primary pointer move)
-      if (!e.isPrimary) return;
+      // Process pinch on any pointer move to keep midpoint updates smooth
+      // Ensure any single-finger actions are cancelled during pinch move
+      if (isDrawing) {
+        setIsDrawing(false);
+        setCurrentStroke?.([]);
+        setDrawingStartPos?.(null);
+      }
+      eraseActiveRef.current = false;
+      if (selectionBox?.dragging) {
+        setSelectionBox?.(null);
+      }
       const pts = Array.from(pointers.current.values());
       const dist = distanceBetween(pts[0], pts[1]);
       const m = midpoint(pts[0], pts[1]);
       // Current midpoint in screen-space coordinates used by transform mapping
       const curMidX = (m.x - rect.left) - rect.width / 2;
       const curMidY = m.y - rect.top;
-      // Compute scale against initial distance and initial scale to avoid compounding
-      const { newScale } = computePinchScale(pinchState.distance, dist, pinchState.initialScale);
-      const scaleChange = newScale / transform.scale;
       // Two-finger drag delta
       const last = lastTwoFingerMidRef.current ?? { x: curMidX, y: curMidY };
       const dx = curMidX - last.x;
       const dy = curMidY - last.y;
       setDragOccurred(true);
       setTransform(prev => {
+        // Compute scale against initial distance and initial scale to avoid compounding
+        const { newScale } = computePinchScale(pinchState.distance, dist, pinchState.initialScale);
+        // Use prev.scale for consistency to avoid jumps from stale closures
+        const scaleChange = newScale / prev.scale;
+        // Tiny deadzone to avoid micro teleports when gesture is jittery
+        const effectiveScaleChange = Math.abs(scaleChange - 1) < 0.005 ? 1 : scaleChange;
         // Apply panning by midpoint delta first
         let nextOffsetX = prev.offsetX + dx;
         let nextOffsetY = prev.offsetY + dy;
         // Apply zoom around the original pivot point from gesture start
-        nextOffsetX = nextOffsetX - (pinchState.midpointX - nextOffsetX) * (scaleChange - 1);
-        nextOffsetY = nextOffsetY - (pinchState.midpointY - nextOffsetY) * (scaleChange - 1);
+        nextOffsetX = nextOffsetX - (pinchState.midpointX - nextOffsetX) * (effectiveScaleChange - 1);
+        nextOffsetY = nextOffsetY - (pinchState.midpointY - nextOffsetY) * (effectiveScaleChange - 1);
         return {
-          scale: newScale,
+          scale: effectiveScaleChange === 1 ? prev.scale : newScale,
           offsetX: nextOffsetX,
           offsetY: nextOffsetY,
         };
       });
+      // Prevent any browser-level gesture handling just in case
+      if ((e as any).preventDefault) try { e.preventDefault(); } catch { /* ignore */ }
       // Update last midpoint for next move
       lastTwoFingerMidRef.current = { x: curMidX, y: curMidY };
       return;
@@ -223,6 +251,18 @@ export const usePointerInteractions = () => {
     }
 
     // Otherwise, panning for single pointer
+    // If no tool is active, enable one-finger pan after a small movement threshold
+    if (!toolMode && pointers.current.size === 1 && !isPanning && pendingPanStart.current) {
+      const dx0 = Math.abs(e.clientX - pendingPanStart.current.x);
+      const dy0 = Math.abs(e.clientY - pendingPanStart.current.y);
+      if (dx0 > 6 || dy0 > 6) {
+        setIsPanning(true);
+        setLastPanPoint({ x: e.clientX, y: e.clientY });
+        setIsFollowingPlayhead(false);
+        // Clear pending to avoid re-trigger
+        pendingPanStart.current = null;
+      }
+    }
     if (isPanning) {
       e.preventDefault();
       const deltaX = e.movementX || (e.clientX - lastPanPoint.x);
@@ -245,6 +285,40 @@ export const usePointerInteractions = () => {
     eraseActiveRef.current = false;
     if (pointers.current.size < 2) {
       lastTwoFingerMidRef.current = null;
+    }
+    // Clear pending pan start when gesture ends
+    pendingPanStart.current = null;
+    // Single-finger tap-to-seek: only when gesture ends and it was a tap (no drag/pan)
+    const start = tapStarts.current.get(e.pointerId);
+    tapStarts.current.delete(e.pointerId);
+    if (
+      start &&
+      pointers.current.size === 0 && // gesture ended
+      !isPanning &&
+      !ctx.dragOccurred &&
+      duration > 0
+    ) {
+      const dx = Math.abs(e.clientX - start.x);
+      const dy = Math.abs(e.clientY - start.y);
+      const dt = Date.now() - start.t;
+      if (dx <= 6 && dy <= 6 && dt <= 300) {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (rect) {
+          const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
+          // Seek to note if tapped on note and not in drawing mode
+          const clickedNote = findNoteAtPosition(canvasX, canvasY, ctx.notes, transform.scale, ctx.NOTE_LABEL_HIDE_THRESHOLD, !ctx.isDrawingMode);
+          if (clickedNote && !ctx.isDrawingMode) {
+            seekToTime(clickedNote.time);
+            return;
+          }
+          // Otherwise, seek to waveform time if inside bounds
+          const { waveformX, waveformWidth, waveformHeight } = getWaveformDimensions(rect.width, rect.height, duration);
+          if (isClickInWaveform(canvasX, waveformX, waveformWidth)) {
+            const time = getTimeFromCanvasY(canvasY, waveformHeight, duration);
+            seekToTime(time);
+          }
+        }
+      }
     }
   }, [setIsPanning, isPanning]);
 

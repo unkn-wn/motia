@@ -6,22 +6,28 @@ import { PlaybackProvider, VolumeProvider } from '@contexts/AudioControlsContext
 
 const AudioControls: React.FC = memo(() => {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900/50 backdrop-blur-xs border-neutral-700 z-30">
-      <div className="max-w-6xl mx-auto px-4 pb-3 pt-2">
-        {/* Modern compact layout */}
-        <div className="flex items-center space-x-4">
-          <PlaybackProvider>
-            {/* Playback Controls - rarely changes */}
-            <PlaybackControls />
-          </PlaybackProvider>
+    <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-neutral-800 bg-neutral-900/70 backdrop-blur-sm">
+      <div className="max-w-6xl mx-auto px-3 md:px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+        {/* Responsive layout: Progress on top for mobile, then controls, then (optional) volume */}
+        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+          <div className="order-2 md:flex-1 min-w-0 w-full">
+            {/* Progress Section - updates frequently */}
+            <ProgressSection />
+          </div>
 
-          {/* Progress Section - updates frequently */}
-          <ProgressSection />
+          <div className="order-1">
+            <PlaybackProvider>
+              {/* Playback Controls - rarely changes */}
+              <PlaybackControls />
+            </PlaybackProvider>
+          </div>
 
-          <VolumeProvider>
-            {/* Volume Control - rarely changes */}
-            <VolumeControl />
-          </VolumeProvider>
+          <div className="order-3">
+            <VolumeProvider>
+              {/* Volume Control - rarely changes (hidden on small screens) */}
+              <VolumeControl />
+            </VolumeProvider>
+          </div>
         </div>
       </div>
     </div>

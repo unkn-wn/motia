@@ -8,14 +8,16 @@ const ProgressSection: React.FC = memo(() => {
   const { currentTime, duration, seekToTime } = useTimeState();
 
   return (
-    <div className="flex-1 flex items-center space-x-4">
-      <span className="text-neutral-400 text-sm font-mono text-right min-w-[45px]">
+    <div className="flex-1 flex items-center gap-3 min-w-0 w-full">
+      <span className="text-neutral-400 text-xs md:text-sm font-mono text-right min-w-[42px]">
         {formatTime(currentTime)}
       </span>
 
-      <ProgressBar currentTime={currentTime} duration={duration} onSeek={seekToTime} />
+      <div className="flex-1 min-w-0 w-full">
+        <ProgressBar currentTime={currentTime} duration={duration} onSeek={seekToTime} />
+      </div>
 
-      <span className="text-neutral-400 text-sm font-mono min-w-[45px]">
+      <span className="text-neutral-400 text-xs md:text-sm font-mono min-w-[42px] text-right">
         {formatTime(duration)}
       </span>
     </div>

@@ -15,7 +15,7 @@ const PlaybackControls: React.FC = memo(() => {
   const isPlaying = useSyncExternalStore(isPlayingStore.subscribe, isPlayingStore.getSnapshot);
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center space-x-2 justify-center md:justify-normal">
       <button
         onClick={skipBack}
         className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg cursor-pointer transition-all"

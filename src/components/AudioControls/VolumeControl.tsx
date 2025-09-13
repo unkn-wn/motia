@@ -16,7 +16,7 @@ const VolumeControl: React.FC = memo(() => {
   const volumePercentage = volume * 100;
 
   return (
-    <div className="flex items-center space-x-3">
+    <div className="hidden md:flex items-center space-x-3">
       <Volume2Icon className="w-4 h-4 text-neutral-400" />
       <input
         id="volume-control"
@@ -26,7 +26,7 @@ const VolumeControl: React.FC = memo(() => {
         step="0.1"
         value={volume}
         onChange={handleVolumeChange}
-        className="w-20 h-2 bg-neutral-700 rounded-full appearance-none cursor-pointer
+        className="w-24 h-2 bg-neutral-700 rounded-full appearance-none cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3
                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer
                    [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-neutral-900
