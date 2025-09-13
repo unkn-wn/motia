@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';
 import { XIcon, CheckIcon, LogInIcon, UserPlusIcon } from '@/assets/icons';
 import AuthModal from '@/components/Home/AuthModal';
 import Modal from '@/components/Modal';
+import Logo from '@/components/Logo';
 
 interface ProfileModalProps {
   open: boolean;
@@ -33,6 +34,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
         <XIcon className="w-5 h-5" />
       </button>
       <div className="space-y-3">
+        <div className="text-center -mt-1">
+          <Logo height={24} className="mx-auto" />
+        </div>
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3">
           <div className="text-sm text-neutral-400">Signed in as</div>
           <div className="mt-0.5 text-neutral-100 font-medium">{displayName}</div>

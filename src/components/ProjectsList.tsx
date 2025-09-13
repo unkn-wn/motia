@@ -87,7 +87,8 @@ const ProjectsList: React.FC = () => {
   if (loading) return (
     <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <div className="mx-auto max-w-5xl">
-        <div className="flex items-center justify-end mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <img src="/motia-logo-light.svg" alt="motia" className="h-6 w-auto opacity-90 select-none" />
           <button
             onClick={openProfile}
             className="group cursor-pointer hover:bg-neutral-800 ring-1 ring-neutral-800 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
@@ -125,7 +126,11 @@ const ProjectsList: React.FC = () => {
     <FileDropzone onFileSelect={handleUpload} isLoading={uploading}>
       <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-end mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className='flex flex-row items-center gap-2'>
+              <img src="/motia-logo-light.svg" alt="motia" className="h-8 w-auto opacity-90 select-none" />
+              <h1 className="text-2xl font-semibold tracking-tight text-neutral-100 -translate-y-0.5">motia</h1>
+            </div>
             <button
               onClick={openProfile}
               className="group cursor-pointer hover:bg-neutral-800 ring-1 ring-neutral-800 text-white rounded-full p-2.5 shadow-md transition-all duration-300"

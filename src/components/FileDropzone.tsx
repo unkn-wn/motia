@@ -25,6 +25,8 @@ const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) =>
   const [dragActive, setDragActive] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const dragCounter = useRef(0);
+  // Track last dragover time to auto-dismiss overlay if drag stops without proper dragleave
+  const lastDragOverAtRef = useRef<number>(0);
 
   const onDropWindow = useCallback((e: DragEvent) => {
     // Always prevent default on drop to allow handling anywhere on the page
@@ -55,6 +57,7 @@ const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) =>
   const onDragOverWindow = useCallback((e: DragEvent) => {
     // Prevent default continuously to indicate a valid drop target
     e.preventDefault();
+    lastDragOverAtRef.current = Date.now();
   }, []);
 
   const onDragLeaveWindow = useCallback((e: DragEvent) => {
@@ -70,13 +73,36 @@ const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) =>
     window.addEventListener('dragover', onDragOverWindow);
     window.addEventListener('dragleave', onDragLeaveWindow);
     window.addEventListener('drop', onDropWindow);
+    // Some browsers can miss dragleave; dragend is a good final safety net
+    const onDragEndWindow = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setDragActive(false);
+      setInvalid(false);
+    };
+    window.addEventListener('dragend', onDragEndWindow);
     return () => {
       window.removeEventListener('dragenter', onDragEnterWindow);
       window.removeEventListener('dragover', onDragOverWindow);
       window.removeEventListener('dragleave', onDragLeaveWindow);
       window.removeEventListener('drop', onDropWindow);
+      window.removeEventListener('dragend', onDragEndWindow);
     };
   }, [onDragEnterWindow, onDragOverWindow, onDragLeaveWindow, onDropWindow]);
+
+  // Heartbeat timeout: if we stop receiving dragover events, hide overlay automatically
+  useEffect(() => {
+    if (!dragActive) return;
+    const id = window.setInterval(() => {
+      const elapsed = Date.now() - lastDragOverAtRef.current;
+      if (elapsed > 350) {
+        dragCounter.current = 0;
+        setDragActive(false);
+        setInvalid(false);
+      }
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [dragActive]);
 
   const overlayVisible = dragActive || invalid;
   const overlay = useMemo(() => (

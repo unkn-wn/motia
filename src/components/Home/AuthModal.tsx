@@ -3,6 +3,7 @@ import { LogInIcon, UserPlusIcon, XIcon, CheckIcon, EyeIcon, EyeOffIcon } from '
 import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';
 import { getAuthErrorMessage } from '@utils/firebaseErrors';
 import Modal from '@/components/Modal';
+import Logo from '@/components/Logo';
 
 type Mode = 'signin' | 'signup';
 
@@ -25,6 +26,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
 
   useEffect(() => setMode(initialMode), [initialMode]);
   useEffect(() => { if (!open) { setEmail(''); setPassword(''); setLoading(false); setDone(false); setError(null); } }, [open]);
+  // When the modal opens, ensure mode resets to the requested one (signin/signup)
+  useEffect(() => {
+    if (open) setMode(initialMode);
+  }, [open, initialMode]);
 
   // ESC and overlay close handled by shared Modal
 
@@ -58,7 +63,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ open, mode: initialMode = 'signin
           <XIcon className="w-5 h-5" />
         </button>
         <div className="text-center mb-3">
-          <div className="mx-auto w-14 h-[3px] rounded-full bg-gradient-to-r from-neutral-600 via-neutral-300 to-neutral-600 animate-shine" />
+          <Logo height={24} className="mx-auto" />
           <h2 className="mt-3 text-xl font-semibold text-neutral-100">{mode === 'signin' ? 'Welcome back' : 'Create account'}</h2>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">

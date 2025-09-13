@@ -250,7 +250,7 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, r
         ctx.beginPath();
         ctx.arc(n.x, n.y, Math.max(1, n.r), 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = isSpark ? 'rgba(243,244,246,1)' : 'rgba(212,212,212,0.9)';
+        ctx.fillStyle = isSpark ? 'rgba(243,244,246,1)' : '#bfbfbf';
         ctx.beginPath();
         ctx.arc(n.x, n.y, Math.max(0.8, n.r * 0.6), 0, Math.PI * 2);
         ctx.fill();

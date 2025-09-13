@@ -354,7 +354,7 @@ export const useCanvasRenderer = () => {
     const { waveformHeight, waveformWidth, waveformX } = getWaveformDims(width, height);
 
     // Waveform background
-    ctx.fillStyle = 'rgb(23, 23, 23, 0.8)';
+    ctx.fillStyle = 'rgb(29, 29, 29)';
     ctx.fillRect(waveformX - 10, 0, waveformWidth + 20, waveformHeight);
 
     // Waveform bars and playhead
@@ -561,7 +561,7 @@ export const useCanvasRenderer = () => {
     // Selection box overlay (drawn in world space)
     if (selectionBox) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(96,165,250,0.9)';
+      ctx.strokeStyle = 'rgba(96,165,250,1)';
       ctx.lineWidth = 2 / transform.scale;
       ctx.setLineDash([4 / transform.scale, 4 / transform.scale]);
       ctx.fillStyle = 'rgba(96,165,250,0.15)';

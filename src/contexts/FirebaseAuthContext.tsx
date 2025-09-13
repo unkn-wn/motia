@@ -182,11 +182,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Centralized persistence of shortcut changes
   useEffect(() => {
     if (!user) return;
+    let t: number | null = null;
+    let lastPayload: ReturnType<typeof shortcutsArrayToMap> | null = null;
+    const flush = () => {
+      if (!user || !lastPayload) return;
+      void saveUserSettings(user.uid, { shortcuts: lastPayload });
+      lastPayload = null;
+    };
     const unsub = subscribeShortcuts((list) => {
-      // Fire and forget; do not block UI
-      void saveUserSettings(user.uid, { shortcuts: shortcutsArrayToMap(list) });
+      lastPayload = shortcutsArrayToMap(list);
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(flush, 500);
     });
     return () => {
+      if (t) window.clearTimeout(t);
+      flush();
       unsub();
     };
   }, [user]);

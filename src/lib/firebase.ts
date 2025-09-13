@@ -4,7 +4,7 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAnalytics, isSupported as analyticsIsSupported, type Analytics } from 'firebase/analytics';
 import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, type Firestore } from 'firebase/firestore';
 // Storage not used: free plan alternative uses local IndexedDB
 
 // Your web app's Firebase configuration (loaded from Vite env)
@@ -34,7 +34,21 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 
 // Core services
 const auth: Auth = getAuth(app);
-const firestore: Firestore = getFirestore(app);
+// Initialize Firestore with persistent local cache (modern API)
+let firestore: Firestore;
+try {
+  firestore = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentSingleTabManager({
+        // In environments without localStorage (e.g., web workers), take ownership
+        forceOwnership: typeof window === 'undefined' || !(('localStorage' in globalThis))
+      })
+    })
+  });
+} catch {
+  // Fallback to default init if custom cache fails (should be rare)
+  firestore = initializeFirestore(app, {});
+}
 
 // Analytics: only in the browser and when supported. Expose via a helper to avoid SSR build issues.
 export async function getAnalyticsIfSupported(): Promise<Analytics | undefined> {

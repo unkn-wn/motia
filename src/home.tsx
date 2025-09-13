@@ -204,11 +204,24 @@ function Home() {
   }, [handleUndo, handleRedo]);
 
   // Autosave notes to Firestore when possible
-  const { saving, lastSavedAt } = useFirestoreAutosave({
+  const { saving, lastSavedAt, flush: flushAutosave } = useFirestoreAutosave({
     uid: user?.uid,
     projectId,
     notes,
   });
+  // Manual save via Ctrl/Cmd+S
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isMeta = e.ctrlKey || e.metaKey;
+      if (!isMeta) return;
+      if (e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        try { flushAutosave(); } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [flushAutosave]);
 
   // Relink audio handlers for project routes when audio is missing locally
   const handleRelinkClick = useCallback(() => {
@@ -341,7 +354,7 @@ function Home() {
             {loadingProject && (
               <FullscreenOverlay message="Loading project…" />
             )}
-            <AutosaveIndicator saving={saving} lastSavedAt={lastSavedAt} />
+            <AutosaveIndicator saving={saving} lastSavedAt={lastSavedAt} onClick={flushAutosave} />
             <WaveformPlayer
               ref={waveformPlayerRef}
               audioFile={audioFile}
