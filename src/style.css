@@ -14,7 +14,13 @@
 html, body, #root {
   background-color: var(--bg-primary);
   /* Extend into the notch and bottom safe areas on iOS devices */
-  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Utility to lock body scroll when needed */
+body.no-scroll {
+  overflow: hidden;
+  touch-action: none;
 }
 
 /* Use env(safe-area-inset-*) to avoid showing the default browser background */

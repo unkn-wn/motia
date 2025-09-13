@@ -29,7 +29,7 @@ const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, 
   }, [user, signInGuest, onUpload]);
 
   return (
-    <div ref={containerRef} className="h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div ref={containerRef} className="min-h-dvh flex flex-col items-center justify-center p-6 relative overflow-hidden touch-none overscroll-none">
       {/* Ambient canvas backdrop (static unless we shuffle on hover) */}
       <HeroBackdrop ref={backdropRef} />
 

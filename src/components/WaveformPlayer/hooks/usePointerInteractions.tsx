@@ -53,6 +53,24 @@ export const usePointerInteractions = () => {
     if (!rect) return;
     const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
 
+    // If two pointers are now active, initialize pinch regardless of tool mode
+    if (pointers.current.size === 2) {
+      const rect2 = canvasRef.current?.getBoundingClientRect();
+      if (!rect2) return;
+      const pts = Array.from(pointers.current.values());
+      const dist = distanceBetween(pts[0], pts[1]);
+      const m = midpoint(pts[0], pts[1]);
+      initialPinch.current = {
+        distance: dist,
+        midpointX: (m.x - rect2.left) - rect2.width / 2,
+        midpointY: m.y - rect2.top,
+        initialScale: transform.scale
+      };
+      setIsPanning(true);
+      lastTwoFingerMidRef.current = { x: (m.x - rect2.left) - rect2.width / 2, y: m.y - rect2.top };
+      return;
+    }
+
     // Selection tool start (touch): begin create or move, and stop panning
     if (toolMode === 'select') {
       // Prevent panning while selecting
@@ -121,24 +139,7 @@ export const usePointerInteractions = () => {
       return;
     }
 
-    // Initialize pinch state if we have two pointers
-    if (pointers.current.size === 2) {
-      const rect2 = canvasRef.current?.getBoundingClientRect();
-      if (!rect2) return;
-      const pts = Array.from(pointers.current.values());
-      const dist = distanceBetween(pts[0], pts[1]);
-      const m = midpoint(pts[0], pts[1]);
-      initialPinch.current = {
-        distance: dist,
-        // Pivot in world space: account for base centering (rect.width/2)
-        midpointX: (m.x - rect2.left) - rect2.width / 2,
-        midpointY: m.y - rect2.top,
-        initialScale: transform.scale
-      };
-      // Enable two-finger panning while pinching
-      setIsPanning(true);
-      lastTwoFingerMidRef.current = { x: (m.x - rect2.left) - rect2.width / 2, y: m.y - rect2.top };
-    }
+  // For single pointer, fall through to tool-specific handling above
   }, [isDrawingMode, toolMode, setIsPanning, setLastPanPoint, setIsFollowingPlayhead, canvasRef, transform, setDragOccurred, setDragging, handleDrawingStart, notes, NOTE_LABEL_HIDE_THRESHOLD, selectionBox, setSelectionBox, selectedDrawingIds]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -161,6 +162,44 @@ export const usePointerInteractions = () => {
 
     // Note dragging is handled by global handlers (pointermove on document)
 
+    // Pinch-zoom + two-finger pan when two pointers are active (takes precedence over tools)
+    if (pointers.current.size === 2) {
+      const pinchState = initialPinch.current;
+      if (!pinchState) return; // not initialized yet
+      // Only apply pinch once (primary pointer move)
+      if (!e.isPrimary) return;
+      const pts = Array.from(pointers.current.values());
+      const dist = distanceBetween(pts[0], pts[1]);
+      const m = midpoint(pts[0], pts[1]);
+      // Current midpoint in screen-space coordinates used by transform mapping
+      const curMidX = (m.x - rect.left) - rect.width / 2;
+      const curMidY = m.y - rect.top;
+      // Compute scale against initial distance and initial scale to avoid compounding
+      const { newScale } = computePinchScale(pinchState.distance, dist, pinchState.initialScale);
+      const scaleChange = newScale / transform.scale;
+      // Two-finger drag delta
+      const last = lastTwoFingerMidRef.current ?? { x: curMidX, y: curMidY };
+      const dx = curMidX - last.x;
+      const dy = curMidY - last.y;
+      setDragOccurred(true);
+      setTransform(prev => {
+        // Apply panning by midpoint delta first
+        let nextOffsetX = prev.offsetX + dx;
+        let nextOffsetY = prev.offsetY + dy;
+        // Apply zoom around the original pivot point from gesture start
+        nextOffsetX = nextOffsetX - (pinchState.midpointX - nextOffsetX) * (scaleChange - 1);
+        nextOffsetY = nextOffsetY - (pinchState.midpointY - nextOffsetY) * (scaleChange - 1);
+        return {
+          scale: newScale,
+          offsetX: nextOffsetX,
+          offsetY: nextOffsetY,
+        };
+      });
+      // Update last midpoint for next move
+      lastTwoFingerMidRef.current = { x: curMidX, y: curMidY };
+      return;
+    }
+
     // Selection box create/resize/move (touch parity with mouse)
     if (toolMode === 'select' && selectionBox?.dragging) {
       setDragOccurred(true);
@@ -180,42 +219,6 @@ export const usePointerInteractions = () => {
       const p = toCanvas(e.clientX, e.clientY);
       if (eraseActiveRef.current) setDragOccurred(true);
       updateEraserPreview(ctx as Ctx, p, eraseActiveRef.current, 12);
-      return;
-    }
-
-    // Pinch-zoom + two-finger pan when two pointers are active
-    if (pointers.current.size === 2 && initialPinch.current) {
-      // Only apply pinch once (primary pointer move)
-      if (!e.isPrimary) return;
-      const pts = Array.from(pointers.current.values());
-      const dist = distanceBetween(pts[0], pts[1]);
-      const m = midpoint(pts[0], pts[1]);
-      // Current midpoint in screen-space coordinates used by transform mapping
-      const curMidX = (m.x - rect.left) - rect.width / 2;
-      const curMidY = m.y - rect.top;
-      // Compute scale against initial distance and initial scale to avoid compounding
-      const { newScale } = computePinchScale(initialPinch.current.distance, dist, initialPinch.current.initialScale);
-      const scaleChange = newScale / transform.scale;
-      // Two-finger drag delta
-      const last = lastTwoFingerMidRef.current ?? { x: curMidX, y: curMidY };
-      const dx = curMidX - last.x;
-      const dy = curMidY - last.y;
-      setDragOccurred(true);
-      setTransform(prev => {
-        // Apply panning by midpoint delta first
-        let nextOffsetX = prev.offsetX + dx;
-        let nextOffsetY = prev.offsetY + dy;
-        // Apply zoom around the original pivot point from gesture start
-        nextOffsetX = nextOffsetX - (initialPinch.current!.midpointX - nextOffsetX) * (scaleChange - 1);
-        nextOffsetY = nextOffsetY - (initialPinch.current!.midpointY - nextOffsetY) * (scaleChange - 1);
-        return {
-          scale: newScale,
-          offsetX: nextOffsetX,
-          offsetY: nextOffsetY,
-        };
-      });
-      // Update last midpoint for next move
-      lastTwoFingerMidRef.current = { x: curMidX, y: curMidY };
       return;
     }
 
