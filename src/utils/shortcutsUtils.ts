@@ -350,9 +350,9 @@ export const isNoteEditSubmitCombo = (e: KeyboardEvent | React.KeyboardEvent): b
   // Behavior depends on preference: 'newline' (default) or 'save'
   // newline: Save on Shift/Ctrl/Cmd + Enter; plain Enter inserts newline
   // save: Save on plain Enter; Shift+Enter inserts newline
-  const anyE: any = e as any;
-  const hasCtrlMeta = !!(anyE.ctrlKey || anyE.metaKey);
-  const hasShift = !!anyE.shiftKey;
+  const ev = e as unknown as { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean };
+  const hasCtrlMeta = !!(ev.ctrlKey || ev.metaKey);
+  const hasShift = !!ev.shiftKey;
   if (preferences.editorEnterBehavior === 'save') {
     return !(hasCtrlMeta || hasShift);
   }

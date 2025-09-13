@@ -1,10 +1,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 export type HeroBackdropHandle = { shuffle: () => void };
-type HeroBackdropProps = {};
+type HeroBackdropProps = React.ComponentPropsWithoutRef<'canvas'>;
 
 // Simplified backdrop: self-animated; supports imperative shuffle to re-randomize bar amplitudes.
-const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((_props, ref) => {
+const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, ref) => {
   // Tunables and small helpers
   const TRANSITION_SEC = 0.8; // ease duration for amp/freq retarget
   const TRAVEL_SEC = 1.0; // bottom -> top duration
@@ -286,7 +286,12 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((_props, 
   }), []);
 
   return (
-    <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true" />
+    <canvas
+      ref={canvasRef}
+      {...props}
+      className={`absolute inset-0 w-full h-full pointer-events-none${props.className ? ` ${props.className}` : ''}`}
+      aria-hidden="true"
+    />
   );
 });
 

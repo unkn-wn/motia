@@ -77,6 +77,9 @@ export const useGlobalMouseHandlers = () => {
 
       // Eraser hover preview (accumulates hit strokes while button held)
       if (toolMode === 'erase') {
+        // Skip eraser interactions if the pointer is within an element that prevents erasing (e.g., sidebar)
+        const targetEl = (e.target as HTMLElement | null);
+        if (targetEl && targetEl.closest('[data-prevent-erase]')) return;
         const p = toCanvas(e.clientX, e.clientY);
         const buttonDown = (e.buttons & 1) === 1;
         if (buttonDown) setDragOccurred(true);
@@ -116,7 +119,7 @@ export const useGlobalMouseHandlers = () => {
         setIsPanning(false);
       }
 
-      // Finish selection box interaction
+      // Finish selection box interaction (mouse or touch)
       if (toolMode === 'select' && selectionBox?.dragging) {
         // If we just created a box and it contains no strokes, remove it entirely
         const isCreate = selectionBox.mode === 'create';
@@ -137,7 +140,7 @@ export const useGlobalMouseHandlers = () => {
         }
         // Clear live preview
         setMovingStrokePreview?.(null);
-        // Let React onClick (which fires after mouseup) see dragOccurred=true, then clear shortly after
+        // Let onClick/ontap (which fires after up) see dragOccurred=true, then clear shortly after
         setTimeout(() => setDragOccurred(false), 10);
       }
 
@@ -174,7 +177,7 @@ export const useGlobalMouseHandlers = () => {
         setEraserCursor?.(null);
         // Nudge transform to refresh canvas if caches stayed warm
         setTransform?.(prev => ({ ...prev }));
-        // Defer clearing drag flag to suppress click-based seek
+        // Defer clearing drag flag to suppress click/tap-based seek
         setTimeout(() => setDragOccurred(false), 10);
       }
 
@@ -195,7 +198,7 @@ export const useGlobalMouseHandlers = () => {
           // Release guard to allow the next stroke
           setTimeout(() => { strokeEndGuardRef.current = false; }, 0);
         }
-        // Defer clearing drag flag to suppress click-based seek
+        // Defer clearing drag flag to suppress click/tap-based seek
         setTimeout(() => setDragOccurred(false), 10);
       }
     };

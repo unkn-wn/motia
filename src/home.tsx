@@ -317,8 +317,10 @@ function Home() {
               />
               {/* Sidebar toggle + Notes sidebar remain available */}
               <SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
-              <div className={`fixed right-0 top-8 h-full z-40 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-                }`}>
+              <div
+                data-prevent-erase
+                className={`fixed right-0 top-8 h-full z-40 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+                  }`}>
                 <NotesSidebarConnected
                   notes={notes}
                   onDeleteNote={handleDeleteNote}
@@ -380,8 +382,10 @@ function Home() {
             <SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
 
             {/* Collapsible Sidebar */}
-            <div className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-              }`}>
+            <div
+              data-prevent-erase
+              className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}>
               <NotesSidebarConnected
                 notes={notes}
                 onDeleteNote={handleDeleteNote}
