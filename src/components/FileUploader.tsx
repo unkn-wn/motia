@@ -54,7 +54,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileSelect, isLoading }) 
       >
         <input
           type="file"
-          accept="audio/*"
+          accept="audio/*,.mp3,.wav,.m4a,.aac,audio/mpeg,audio/wav,audio/x-wav,audio/x-pn-wav,audio/mp4,audio/aac,audio/x-m4a"
           onChange={handleFileInput}
           className="sr-only"
           tabIndex={-1}

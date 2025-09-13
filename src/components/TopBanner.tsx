@@ -87,7 +87,13 @@ export function RelinkBannerOption({ show, isLoading, onRelinkClick, fileInputRe
             {isLoading ? 'Linking…' : 'Relink audio'}
           </Banner.Button>
         </div>
-        <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={onFileSelected} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,.mp3,.wav,.m4a,.aac,audio/mpeg,audio/wav,audio/x-wav,audio/x-pn-wav,audio/mp4,audio/aac,audio/x-m4a"
+          className="hidden"
+          onChange={onFileSelected}
+        />
       </Banner>
     ),
   };
