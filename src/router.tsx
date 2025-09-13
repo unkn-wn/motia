@@ -24,7 +24,11 @@ const projectsRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([indexRoute, projectRoute, projectsRoute]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  // Ensure routes match when hosted under a subpath (e.g., /motia/ on GitHub Pages)
+  basepath: import.meta.env.BASE_URL,
+});
 
 declare module '@tanstack/react-router' {
   interface Register {
