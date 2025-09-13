@@ -56,8 +56,8 @@ jobs:
           BASE_PATH: ${{ env.BASE_PATH }}
         run: |
           npm run build
-          # Ensure SPA fallback for clean URLs on GitHub Pages
-          cp 404.html build/404.html
+          # Ensure SPA fallback for clean URLs on GitHub Pages (serve app on deep links)
+          cp build/index.html build/404.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
