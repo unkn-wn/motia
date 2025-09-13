@@ -6,6 +6,9 @@ import { compression } from  'vite-plugin-compression2'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages: set base to repo name, e.g., '/motia/'
+  // You can override via BASE_PATH env var in CI if needed
+  base: process.env.BASE_PATH || '/',
   plugins: [
     react(),
     tailwindcss(),

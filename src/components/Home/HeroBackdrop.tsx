@@ -23,6 +23,7 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, r
   const freqTargetRef = useRef<Float32Array | null>(null);
   const angleRef = useRef<Float32Array | null>(null); // integrated per-bar angle
   const pulseRef = useRef<{ pos: number; speed: number; width: number; strength: number; active: boolean } | null>(null);
+  const lastSizeRef = useRef<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,16 +34,7 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, r
 
     const dpr = Math.max(1, window.devicePixelRatio || 1);
 
-    const resize = () => {
-      const { clientWidth, clientHeight } = canvas;
-      canvas.width = Math.max(1, Math.floor(clientWidth * dpr));
-      canvas.height = Math.max(1, Math.floor(clientHeight * dpr));
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
-      // Re-seed nodes when size changes
-      seedNodes();
-    };
-
+    // Initialize nodes and bar arrays once on mount
     const seedNodes = () => {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
@@ -79,6 +71,28 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, r
       seedsLerpTRef.current = 1;
     };
 
+    // Resize canvas without reseeding; scale existing node positions to new size
+    const resize = () => {
+      const prev = lastSizeRef.current;
+      const { clientWidth, clientHeight } = canvas;
+      canvas.width = Math.max(1, Math.floor(clientWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(clientHeight * dpr));
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      if (prev) {
+        const sx = clientWidth > 0 && prev.w > 0 ? clientWidth / prev.w : 1;
+        const sy = clientHeight > 0 && prev.h > 0 ? clientHeight / prev.h : 1;
+        if (sx !== 1 || sy !== 1) {
+          const nodes = nodesRef.current;
+          for (let i = 0; i < nodes.length; i++) {
+            nodes[i].x *= sx;
+            nodes[i].y *= sy;
+          }
+        }
+      }
+      lastSizeRef.current = { w: clientWidth, h: clientHeight };
+    };
+
     let lastTs = 0;
     const draw = (ts: number) => {
       const w = canvas.clientWidth;
@@ -113,29 +127,37 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, r
       let freqCurrent = freqCurrentRef.current;
       let freqTarget = freqTargetRef.current;
       let angles = angleRef.current;
-      if (!seedsCurrent || seedsCurrent.length !== barCount) {
-        seedsCurrent = new Float32Array(barCount);
-        for (let i = 0; i < barCount; i++) seedsCurrent[i] = 1.0;
-        seedsCurrentRef.current = seedsCurrent;
-      }
-      if (!seedsTarget || seedsTarget.length !== barCount) {
-        seedsTarget = new Float32Array(seedsCurrent);
-        seedsTargetRef.current = seedsTarget;
-      }
-      if (!freqCurrent || freqCurrent.length !== barCount) {
-        freqCurrent = new Float32Array(barCount);
-        for (let i = 0; i < barCount; i++) freqCurrent[i] = 1.0;
-        freqCurrentRef.current = freqCurrent;
-      }
-      if (!freqTarget || freqTarget.length !== barCount) {
-        freqTarget = new Float32Array(freqCurrent);
-        freqTargetRef.current = freqTarget;
-      }
-      if (!angles || angles.length !== barCount) {
-        angles = new Float32Array(barCount);
-        for (let i = 0; i < barCount; i++) angles[i] = Math.random() * Math.PI * 2;
-        angleRef.current = angles;
-      }
+
+      // Helper to resize typed arrays while preserving values to minimize visual jumps
+      const ensureSize = (arr: Float32Array | null, newLen: number, def: number): Float32Array => {
+        if (!arr) {
+          const next = new Float32Array(newLen);
+          for (let i = 0; i < newLen; i++) next[i] = def;
+          return next;
+        }
+        if (arr.length === newLen) return arr;
+        const next = new Float32Array(newLen);
+        const minLen = Math.min(arr.length, newLen);
+        next.set(arr.subarray(0, minLen));
+        if (newLen > arr.length) {
+          const fill = arr.length ? arr[arr.length - 1] : def;
+          for (let i = arr.length; i < newLen; i++) next[i] = fill;
+        }
+        return next;
+      };
+
+      seedsCurrent = ensureSize(seedsCurrent ?? null, barCount, 1.0);
+      seedsTarget = ensureSize(seedsTarget ?? null, barCount, 1.0);
+      freqCurrent = ensureSize(freqCurrent ?? null, barCount, 1.0);
+      freqTarget = ensureSize(freqTarget ?? null, barCount, 1.0);
+      angles = ensureSize(angles ?? null, barCount, 0.0);
+
+      seedsCurrentRef.current = seedsCurrent;
+      seedsTargetRef.current = seedsTarget;
+      freqCurrentRef.current = freqCurrent;
+      freqTargetRef.current = freqTarget;
+      angleRef.current = angles;
+
       if (seedsLerpTRef.current < 1) {
         const speed = 1 / TRANSITION_SEC;
         seedsLerpTRef.current = Math.min(1, seedsLerpTRef.current + dt * speed);
@@ -260,7 +282,10 @@ const HeroBackdrop = forwardRef<HeroBackdropHandle, HeroBackdropProps>((props, r
     };
 
     const onResize = () => resize();
+    // First layout pass
     resize();
+    // Seed initial state once (do not reseed on subsequent resizes)
+    if (!nodesRef.current.length) seedNodes();
     rafRef.current = requestAnimationFrame(draw);
     window.addEventListener('resize', onResize);
     // No pointer listeners; backdrop is independent
