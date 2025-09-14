@@ -49,6 +49,8 @@ export const usePointerInteractions = () => {
   const eraseActiveRef = useRef<boolean>(false);
   // Defer starting erasing until we know it's a single-finger intent
   const pendingEraserStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Guard to suppress erasing during multi-touch sessions
+  const multiTouchActiveRef = useRef<boolean>(false);
   // Track last two-finger midpoint for drag-to-pan
   const lastTwoFingerMidRef = useRef<{ x: number; y: number } | null>(null);
   // Track long-press for opening context menu on touch
@@ -83,6 +85,7 @@ export const usePointerInteractions = () => {
 
     // If two pointers are now active, initialize pinch regardless of tool mode
     if (pointers.current.size === 2) {
+      multiTouchActiveRef.current = true;
       const rect2 = canvasRef.current?.getBoundingClientRect();
       if (!rect2) return;
       const pts = Array.from(pointers.current.values());
@@ -95,7 +98,11 @@ export const usePointerInteractions = () => {
         setDrawingStartPos?.(null);
       }
       if (toolMode === 'erase') {
+        // Fully suppress eraser when a second finger joins
         eraseActiveRef.current = false;
+        pendingEraserStartRef.current = null;
+        ctx.setEraserCursor?.(null);
+        ctx.setErasingStrokeIds?.([]);
       }
       if (selectionBox?.dragging) {
         setSelectionBox?.(null);
@@ -150,6 +157,14 @@ export const usePointerInteractions = () => {
 
     // Eraser tool: mark active (touch has no buttons)
     if (toolMode === 'erase') {
+      // If in a multi-touch session, do not start or preview erasing
+      if (multiTouchActiveRef.current) {
+        eraseActiveRef.current = false;
+        pendingEraserStartRef.current = null;
+        ctx.setEraserCursor?.(null);
+        ctx.setErasingStrokeIds?.([]);
+        return;
+      }
       // If touch starts over an element that requests erase suppression (e.g., sidebar), skip
       const targetEl = e.target as HTMLElement | null;
       if (targetEl && targetEl.closest('[data-prevent-erase]')) {
@@ -157,7 +172,7 @@ export const usePointerInteractions = () => {
         pendingEraserStartRef.current = null;
       } else {
         // Don't start erasing immediately on touch-down; wait for a small
-        // movement/time threshold so two-finger pinch/pan doesn't erase.
+        // movement threshold so two-finger pinch/pan doesn't erase.
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
         setIsPanning(false);
@@ -239,6 +254,7 @@ export const usePointerInteractions = () => {
 
     // Pinch-zoom + two-finger pan when two pointers are active (takes precedence over tools)
     if (pointers.current.size === 2) {
+      multiTouchActiveRef.current = true;
       const pinchState = initialPinch.current;
       if (!pinchState) return; // not initialized yet
       // Process pinch on any pointer move to keep midpoint updates smooth
@@ -250,6 +266,9 @@ export const usePointerInteractions = () => {
       }
       eraseActiveRef.current = false;
       pendingEraserStartRef.current = null;
+      // Hide eraser cursor and any pending hits while pinching
+      ctx.setEraserCursor?.(null);
+      ctx.setErasingStrokeIds?.([]);
       if (selectionBox?.dragging) {
         setSelectionBox?.(null);
       }
@@ -321,21 +340,30 @@ export const usePointerInteractions = () => {
       const targetEl = (e.target as HTMLElement | null);
       if (targetEl && targetEl.closest('[data-prevent-erase]')) return;
       const p = toCanvas(e.clientX, e.clientY);
+      // If currently in a multi-touch session, do not preview or activate
+      if (multiTouchActiveRef.current) {
+        eraseActiveRef.current = false;
+        pendingEraserStartRef.current = null;
+        ctx.setEraserCursor?.(null);
+        ctx.setErasingStrokeIds?.([]);
+        return;
+      }
       // If two fingers are active, never erase and clear pending
       if (pointers.current.size >= 2) {
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = null;
-        updateEraserPreview(ctx as Ctx, p, false, 12);
+        // Do not update cursor position during multi-touch to avoid jumping between fingers
+        ctx.setEraserCursor?.(null);
+        ctx.setErasingStrokeIds?.([]);
         return;
       }
       // If not yet active, decide if we should promote to active erasing
       if (!eraseActiveRef.current) {
         const start = pendingEraserStartRef.current;
-        const dt = start ? (Date.now() - start.t) : 0;
         const dx = start ? Math.abs(e.clientX - start.x) : 0;
         const dy = start ? Math.abs(e.clientY - start.y) : 0;
-        // promote after tiny move or short delay, only for single-finger
-        if (start && (dx > 6 || dy > 6 || dt > 80)) {
+        // Promote only after a tiny move (no time-only promotion) and still single-finger
+        if (start && (dx > 6 || dy > 6) && pointers.current.size === 1) {
           eraseActiveRef.current = true;
           pendingEraserStartRef.current = null;
         }
@@ -406,6 +434,9 @@ export const usePointerInteractions = () => {
     // End touch-based erasing
     eraseActiveRef.current = false;
     pendingEraserStartRef.current = null;
+    ctx.setEraserCursor?.(null);
+    // When all pointers are up, end multi-touch session
+    if (pointers.current.size === 0) multiTouchActiveRef.current = false;
     if (pointers.current.size < 2) {
       lastTwoFingerMidRef.current = null;
     }
