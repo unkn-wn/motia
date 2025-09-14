@@ -111,7 +111,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
                 type="button"
                 title="Delete"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(id); }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-red-300 cursor-pointer"
+                className="md:opacity-0 md:group-hover:opacity-100 md:transition-opacity p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-red-300 cursor-pointer"
               >
                 <Trash2Icon className="w-4 h-4" />
               </button>

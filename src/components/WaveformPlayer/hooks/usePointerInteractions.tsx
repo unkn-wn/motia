@@ -47,6 +47,8 @@ export const usePointerInteractions = () => {
   const { handleDrawingStart } = useDrawingInteractions();
   // Track touch-based erasing (there is no buttons bitfield on touch)
   const eraseActiveRef = useRef<boolean>(false);
+  // Defer starting erasing until we know it's a single-finger intent
+  const pendingEraserStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Track last two-finger midpoint for drag-to-pan
   const lastTwoFingerMidRef = useRef<{ x: number; y: number } | null>(null);
   // Track long-press for opening context menu on touch
@@ -152,8 +154,12 @@ export const usePointerInteractions = () => {
       const targetEl = e.target as HTMLElement | null;
       if (targetEl && targetEl.closest('[data-prevent-erase]')) {
         eraseActiveRef.current = false;
+        pendingEraserStartRef.current = null;
       } else {
-        eraseActiveRef.current = true;
+        // Don't start erasing immediately on touch-down; wait for a small
+        // movement/time threshold so two-finger pinch/pan doesn't erase.
+        eraseActiveRef.current = false;
+        pendingEraserStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
         setIsPanning(false);
         setDragOccurred(false);
       }
@@ -243,6 +249,7 @@ export const usePointerInteractions = () => {
         setDrawingStartPos?.(null);
       }
       eraseActiveRef.current = false;
+      pendingEraserStartRef.current = null;
       if (selectionBox?.dragging) {
         setSelectionBox?.(null);
       }
@@ -314,6 +321,25 @@ export const usePointerInteractions = () => {
       const targetEl = (e.target as HTMLElement | null);
       if (targetEl && targetEl.closest('[data-prevent-erase]')) return;
       const p = toCanvas(e.clientX, e.clientY);
+      // If two fingers are active, never erase and clear pending
+      if (pointers.current.size >= 2) {
+        eraseActiveRef.current = false;
+        pendingEraserStartRef.current = null;
+        updateEraserPreview(ctx as Ctx, p, false, 12);
+        return;
+      }
+      // If not yet active, decide if we should promote to active erasing
+      if (!eraseActiveRef.current) {
+        const start = pendingEraserStartRef.current;
+        const dt = start ? (Date.now() - start.t) : 0;
+        const dx = start ? Math.abs(e.clientX - start.x) : 0;
+        const dy = start ? Math.abs(e.clientY - start.y) : 0;
+        // promote after tiny move or short delay, only for single-finger
+        if (start && (dx > 6 || dy > 6 || dt > 80)) {
+          eraseActiveRef.current = true;
+          pendingEraserStartRef.current = null;
+        }
+      }
       if (eraseActiveRef.current) setDragOccurred(true);
       updateEraserPreview(ctx as Ctx, p, eraseActiveRef.current, 12);
       return;
@@ -379,6 +405,7 @@ export const usePointerInteractions = () => {
     if (isPanning) setIsPanning(false);
     // End touch-based erasing
     eraseActiveRef.current = false;
+    pendingEraserStartRef.current = null;
     if (pointers.current.size < 2) {
       lastTwoFingerMidRef.current = null;
     }

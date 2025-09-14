@@ -82,16 +82,16 @@ const FloatingDock = memo<FloatingDockProps>(({
         </div>
       )}
 
-      {/* Keyboard Shortcuts Button */}
-      <ShortcutsButton onShowShortcuts={onShowShortcuts} />
-
       {/* Settings cluster */}
       {(onOpenProfile || onGoHome) && (
         <div className="flex flex-col space-y-3">
-          {onOpenProfile && <ProfileButton onOpenProfile={onOpenProfile} />}
           {onGoHome && <HomeButton onGoHome={onGoHome} disabled={disableGoHome} />}
+          {onOpenProfile && <ProfileButton onOpenProfile={onOpenProfile} />}
         </div>
       )}
+
+      {/* Keyboard Shortcuts Button */}
+      <ShortcutsButton onShowShortcuts={onShowShortcuts} />
     </div>
   );
 });
