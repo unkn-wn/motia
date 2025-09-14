@@ -9,7 +9,7 @@ const AudioControls: React.FC = memo(() => {
     <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-neutral-800 bg-neutral-900/70 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-3 md:px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         {/* Responsive layout: Progress on top for mobile, then controls, then (optional) volume */}
-        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4">
           <div className="order-2 md:flex-1 min-w-0 w-full">
             {/* Progress Section - updates frequently */}
             <ProgressSection />

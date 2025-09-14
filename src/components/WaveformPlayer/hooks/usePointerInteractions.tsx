@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
 import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFromCanvasY, getWaveformDimensions } from '@utils/canvasUtils';
@@ -51,6 +51,43 @@ export const usePointerInteractions = () => {
   const pendingEraserStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Guard to suppress erasing during multi-touch sessions
   const multiTouchActiveRef = useRef<boolean>(false);
+  const activeTouchCountRef = useRef<number>(0);
+  const multiTouchBlockUntilRef = useRef<number>(0);
+
+  // Global touch listeners to detect multi-touch even when second finger starts off-canvas
+  useEffect(() => {
+    const onTouchStart = (ev: TouchEvent) => {
+      activeTouchCountRef.current = ev.touches ? ev.touches.length : Math.max(activeTouchCountRef.current + 1, 1);
+      if (activeTouchCountRef.current >= 2) {
+        multiTouchActiveRef.current = true;
+        // Immediately suppress any eraser state/cursor
+        eraseActiveRef.current = false;
+        pendingEraserStartRef.current = null;
+        ctx.setEraserCursor?.(null);
+        ctx.setErasingStrokeIds?.([]);
+      }
+    };
+    const onTouchEndCancel = (ev: TouchEvent) => {
+      activeTouchCountRef.current = ev.touches ? ev.touches.length : Math.max(activeTouchCountRef.current - 1, 0);
+      if (activeTouchCountRef.current < 2) {
+        // End of multi-touch session; if 1 finger remains, briefly block eraser to avoid flicker
+        if (activeTouchCountRef.current === 1) {
+          multiTouchBlockUntilRef.current = Date.now() + 80; // small grace period
+        }
+        if (activeTouchCountRef.current === 0) {
+          multiTouchActiveRef.current = false;
+        }
+      }
+    };
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchend', onTouchEndCancel, { passive: true });
+    window.addEventListener('touchcancel', onTouchEndCancel, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchend', onTouchEndCancel);
+      window.removeEventListener('touchcancel', onTouchEndCancel);
+    };
+  }, [ctx]);
   // Track last two-finger midpoint for drag-to-pan
   const lastTwoFingerMidRef = useRef<{ x: number; y: number } | null>(null);
   // Track long-press for opening context menu on touch
@@ -157,8 +194,8 @@ export const usePointerInteractions = () => {
 
     // Eraser tool: mark active (touch has no buttons)
     if (toolMode === 'erase') {
-      // If in a multi-touch session, do not start or preview erasing
-      if (multiTouchActiveRef.current) {
+      // If in or just after a multi-touch session, do not start or preview erasing
+      if (multiTouchActiveRef.current || Date.now() < multiTouchBlockUntilRef.current || activeTouchCountRef.current >= 2) {
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = null;
         ctx.setEraserCursor?.(null);
@@ -341,7 +378,7 @@ export const usePointerInteractions = () => {
       if (targetEl && targetEl.closest('[data-prevent-erase]')) return;
       const p = toCanvas(e.clientX, e.clientY);
       // If currently in a multi-touch session, do not preview or activate
-      if (multiTouchActiveRef.current) {
+      if (multiTouchActiveRef.current || Date.now() < multiTouchBlockUntilRef.current || activeTouchCountRef.current >= 2) {
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = null;
         ctx.setEraserCursor?.(null);

@@ -25,7 +25,7 @@ const ProgressBar: React.FC<ProgressBarProps> = memo(({ currentTime, duration, o
         step="0.1"
         value={currentTime}
         onChange={handleProgressChange}
-        className="w-full h-3 md:h-2 bg-neutral-700 rounded-full appearance-none -translate-y-0.5 cursor-pointer
+        className="w-full h-3 md:h-2 bg-neutral-700 rounded-full appearance-none md:-translate-y-0.5 cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 md:[&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-4
                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer
                    [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-neutral-900
