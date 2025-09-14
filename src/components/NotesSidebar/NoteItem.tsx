@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { Note } from '../../types/notes';
 import { formatTime } from '@utils/timeUtils';
 import { isNoteEditSubmitCombo, isNoteEditCancelKey } from '@utils/shortcutsUtils';
@@ -21,6 +21,9 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
   // Local editing state for this specific note
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const confirmTimerRef = useRef<number | null>(null);
+  const itemRef = useRef<HTMLDivElement>(null);
 
   const colors = ['yellow', 'blue', 'green', 'pink', 'purple'];
 
@@ -31,8 +34,8 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
   }, [note.content]);
 
   const handleEditSave = useCallback(() => {
-  const actions = getNoteItemActions();
-  if (actions) actions.onUpdateNote(note.id, editContent);
+    const actions = getNoteItemActions();
+    if (actions) actions.onUpdateNote(note.id, editContent);
     setIsEditing(false);
     setEditContent('');
   }, [note.id, editContent]);
@@ -57,22 +60,58 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
   }, [handleEditStart]);
 
   const handleDeleteClick = useCallback(() => {
-  const actions = getNoteItemActions();
-  if (actions) actions.onDeleteNote(note.id);
-  }, [note.id]);
+    // Two-step: first click reveals tiny confirm; second click confirms
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    const actions = getNoteItemActions();
+    if (actions) actions.onDeleteNote(note.id);
+    setConfirmingDelete(false);
+  }, [confirmingDelete, note.id]);
+
+  const handleCancelDelete = useCallback(() => {
+    setConfirmingDelete(false);
+  }, []);
+
+  // Auto-cancel the confirm after a short delay
+  useEffect(() => {
+    if (!confirmingDelete) return;
+    if (confirmTimerRef.current) window.clearTimeout(confirmTimerRef.current);
+    confirmTimerRef.current = window.setTimeout(() => setConfirmingDelete(false), 3000);
+    return () => {
+      if (confirmTimerRef.current) {
+        window.clearTimeout(confirmTimerRef.current);
+        confirmTimerRef.current = null;
+      }
+    };
+  }, [confirmingDelete]);
+
+  // Click-away to cancel when tapping outside this item
+  useEffect(() => {
+    if (!confirmingDelete) return;
+    const onAway = (e: MouseEvent | PointerEvent) => {
+      const el = itemRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) setConfirmingDelete(false);
+    };
+    document.addEventListener('pointerdown', onAway);
+    return () => document.removeEventListener('pointerdown', onAway);
+  }, [confirmingDelete]);
 
   const handleJumpClick = useCallback(() => {
-  const actions = getNoteItemActions();
-  if (actions) actions.onJumpToTime(note.time);
+    const actions = getNoteItemActions();
+    if (actions) actions.onJumpToTime(note.time);
   }, [note.time]);
 
   const handleColorChange = useCallback((color: string) => {
-  const actions = getNoteItemActions();
-  if (actions) actions.onChangeNoteColor(note.id, color);
+    const actions = getNoteItemActions();
+    if (actions) actions.onChangeNoteColor(note.id, color);
   }, [note.id]);
 
   return (
     <div
+      ref={itemRef}
       className={`note-item border rounded-lg p-2 transition-all hover:shadow-md text-neutral-200 ${getColorClasses(note.color)}`}
       data-note-id={note.id}
       data-note-time={note.time}
@@ -97,15 +136,14 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
                   <button
                     key={color}
                     onClick={() => handleColorChange(color)}
-                    className={`w-6 h-6 rounded-full border-2 hover:ring-1 cursor-pointer ${
-                      note.color === color ? 'border-neutral-200' : 'border-neutral-500'
-                    }`}
+                    className={`w-6 h-6 rounded-full border-2 hover:ring-1 cursor-pointer ${note.color === color ? 'border-neutral-200' : 'border-neutral-500'
+                      }`}
                     style={{
                       backgroundColor:
                         color === 'yellow' ? '#fbbf24' :
-                        color === 'blue' ? '#3b82f6' :
-                        color === 'green' ? '#10b981' :
-                        color === 'pink' ? '#ec4899' : '#8b5cf6'
+                          color === 'blue' ? '#3b82f6' :
+                            color === 'green' ? '#10b981' :
+                              color === 'pink' ? '#ec4899' : '#8b5cf6'
                     }}
                   />
                 ))}
@@ -113,12 +151,34 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note }) => {
             </div>
           </div>
 
-          <button
-            onClick={handleDeleteClick}
-            className="p-1 hover:bg-red-600/50 hover:bg-opacity-50 text-red-400 rounded cursor-pointer transition-colors"
-          >
-            <Trash2Icon className="w-4 h-4" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={handleDeleteClick}
+              className={`p-1 rounded cursor-pointer transition-colors ${confirmingDelete ? 'bg-red-600/60 text-white' : 'hover:bg-red-600/50 text-red-400'}`}
+              title={confirmingDelete ? 'Tap again to confirm' : 'Delete'}
+            >
+              <Trash2Icon className="w-4 h-4" />
+            </button>
+            {confirmingDelete && (
+              <div className="absolute right-0 top-full mt-1 z-20 bg-neutral-900 border border-neutral-700 rounded-md shadow-lg px-2 py-1 flex items-center gap-2 text-xs">
+                <span className="text-neutral-300">Confirm?</span>
+                <button
+                  onClick={handleCancelDelete}
+                  className="px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteClick}
+                  className="px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-500"
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

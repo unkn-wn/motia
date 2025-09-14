@@ -262,7 +262,7 @@ function Home() {
 
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className="min-h-dvh" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {shouldRedirectToProjects ? <Navigate to="/projects" /> : null}
       {redirectTo && redirectTo !== 'PROJECTS' ? (
         <Navigate to="/project/$projectId" params={{ projectId: redirectTo }} />
@@ -292,7 +292,7 @@ function Home() {
       {!audioFile ? (
         params.projectId ? (
           <AudioProvider>
-            <div className="relative h-screen overflow-hidden">
+            <div className="relative h-dvh overflow-hidden">
               {/* Relink banner handled by TopBanner to avoid overlap */}
 
               {/* Notes and UI still render against a default waveform */}

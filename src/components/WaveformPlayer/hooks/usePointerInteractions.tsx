@@ -6,6 +6,7 @@ import { useDrawingInteractions } from './useDrawingInteractions';
 import { handleSelectionCreate, handleSelectionMove } from './mouse/selectionMouseHandlers';
 import { updateEraserPreview } from './mouse/eraserMouseHandlers';
 import { useAudio } from '@contexts/objects/AudioContextObject';
+import { history } from '@utils/history';
 type Ctx = ReturnType<typeof import('@contexts/objects/WaveformContextObject').useWaveformContext>;
 
 export const usePointerInteractions = () => {
@@ -48,6 +49,17 @@ export const usePointerInteractions = () => {
   const eraseActiveRef = useRef<boolean>(false);
   // Track last two-finger midpoint for drag-to-pan
   const lastTwoFingerMidRef = useRef<{ x: number; y: number } | null>(null);
+  // Track long-press for opening context menu on touch
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressTriggeredRef = useRef<boolean>(false);
+  // Track a candidate for touch-based note dragging (when no tool active)
+  const touchDragCandidateRef = useRef<null | {
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    initialCanvasX: number;
+    initialCanvasY: number;
+  }>(null);
 
   // touch-action is handled by CSS (touch-none on canvas). No effect needed.
 
@@ -86,6 +98,13 @@ export const usePointerInteractions = () => {
       if (selectionBox?.dragging) {
         setSelectionBox?.(null);
       }
+      // Cancel long-press and candidate drag on pinch start
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      longPressTriggeredRef.current = false;
+      touchDragCandidateRef.current = null;
       initialPinch.current = {
         // Clamp initial distance to reduce sensitivity when fingers start very close
         distance: Math.max(dist, 10),
@@ -141,20 +160,56 @@ export const usePointerInteractions = () => {
       return;
     }
 
-    // On touch: prefer panning over note dragging by default
-    // So we skip starting a note drag here on mobile
+    // On touch: if no tool is active and a note is under the finger, prepare for note drag or long-press menu
+    if (!toolMode && pointers.current.size === 1) {
+      const clickedNote = findNoteAtPosition(
+        canvasX,
+        canvasY,
+        notes,
+        transform.scale,
+        NOTE_LABEL_HIDE_THRESHOLD,
+        true // exclude drawings: only text notes are draggable/contextable
+      );
+      if (clickedNote) {
+        // Candidate for dragging this note if finger moves beyond threshold
+        touchDragCandidateRef.current = {
+          id: clickedNote.id,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          initialCanvasX: clickedNote.canvasX,
+          initialCanvasY: clickedNote.canvasY,
+        };
+        // Start long-press to open context menu
+        if (longPressTimerRef.current) window.clearTimeout(longPressTimerRef.current);
+        longPressTriggeredRef.current = false;
+        longPressTimerRef.current = window.setTimeout(() => {
+          // If user hasn't moved far and still only one finger, open menu
+          const cand = touchDragCandidateRef.current;
+          if (!cand) return;
+          if (pointers.current.size !== 1) return;
+          longPressTriggeredRef.current = true;
+          setIsPanning(false);
+          setDragOccurred(true);
+          // Open at current finger position
+          ctx.setContextMenu?.({ isOpen: true, x: e.clientX, y: e.clientY, noteId: cand.id });
+          // Clear candidate so we don't start dragging afterwards
+          touchDragCandidateRef.current = null;
+        }, 450);
+        return;
+      }
+    }
 
     if (isDrawingMode && toolMode === 'draw') {
       handleDrawingStart(canvasX, canvasY);
       return;
     }
 
-    // For single pointer with no active tool, prepare to pan (after threshold)
-    if (pointers.current.size === 1 && !toolMode) {
+    // For single pointer with no active tool and no note under finger, prepare to pan (after threshold)
+    if (pointers.current.size === 1 && !toolMode && !touchDragCandidateRef.current) {
       pendingPanStart.current = { x: e.clientX, y: e.clientY };
       // Do not set isPanning yet; wait for small movement to preserve tap-to-seek
     }
-  }, [isDrawingMode, toolMode, setIsPanning, setLastPanPoint, setIsFollowingPlayhead, canvasRef, transform, setDragOccurred, setDragging, handleDrawingStart, notes, NOTE_LABEL_HIDE_THRESHOLD, selectionBox, setSelectionBox, selectedDrawingIds]);
+  }, [isDrawingMode, toolMode, setIsPanning, setIsFollowingPlayhead, canvasRef, transform, setDragOccurred, handleDrawingStart, notes, NOTE_LABEL_HIDE_THRESHOLD, selectionBox, setSelectionBox, selectedDrawingIds, isDrawing, setIsDrawing, setCurrentStroke, setDrawingStartPos, ctx]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType === 'mouse') return;
@@ -222,10 +277,24 @@ export const usePointerInteractions = () => {
         };
       });
       // Prevent any browser-level gesture handling just in case
-      if ((e as any).preventDefault) try { e.preventDefault(); } catch { /* ignore */ }
+      const ne = e.nativeEvent as PointerEvent;
+      if (ne.cancelable) e.preventDefault();
       // Update last midpoint for next move
       lastTwoFingerMidRef.current = { x: curMidX, y: curMidY };
       return;
+    }
+
+    // Cancel long-press if moving beyond small threshold
+    const start = tapStarts.current.get(e.pointerId);
+    if (start) {
+      const dx0 = Math.abs(e.clientX - start.x);
+      const dy0 = Math.abs(e.clientY - start.y);
+      if (dx0 > 6 || dy0 > 6) {
+        if (longPressTimerRef.current) {
+          window.clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
     }
 
     // Selection box create/resize/move (touch parity with mouse)
@@ -250,9 +319,36 @@ export const usePointerInteractions = () => {
       return;
     }
 
+    // Touch note dragging when no tool is active
+    if (!toolMode && touchDragCandidateRef.current) {
+      const cand = touchDragCandidateRef.current;
+      const movedX = Math.abs(e.clientX - cand.startClientX);
+      const movedY = Math.abs(e.clientY - cand.startClientY);
+      if (movedX > 6 || movedY > 6) {
+        // Begin dragging the note
+        setDragOccurred(true);
+        setDragging({
+          id: cand.id,
+          startX: cand.startClientX,
+          startY: cand.startClientY,
+          initialCanvasX: cand.initialCanvasX,
+          initialCanvasY: cand.initialCanvasY,
+        });
+        history.beginMove(cand.id, { x: cand.initialCanvasX, y: cand.initialCanvasY });
+        // Cancel long-press and candidate
+        if (longPressTimerRef.current) {
+          window.clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+        longPressTriggeredRef.current = false;
+        touchDragCandidateRef.current = null;
+        return;
+      }
+    }
+
     // Otherwise, panning for single pointer
     // If no tool is active, enable one-finger pan after a small movement threshold
-    if (!toolMode && pointers.current.size === 1 && !isPanning && pendingPanStart.current) {
+    if (!toolMode && !touchDragCandidateRef.current && pointers.current.size === 1 && !isPanning && pendingPanStart.current) {
       const dx0 = Math.abs(e.clientX - pendingPanStart.current.x);
       const dy0 = Math.abs(e.clientY - pendingPanStart.current.y);
       if (dx0 > 6 || dy0 > 6) {
@@ -274,7 +370,7 @@ export const usePointerInteractions = () => {
       }));
       setLastPanPoint({ x: e.clientX, y: e.clientY });
     }
-  }, [canvasRef, transform, isPanning, lastPanPoint, setTransform, setLastPanPoint, toolMode, selectionBox, setDragOccurred, ctx]);
+  }, [canvasRef, transform, isPanning, lastPanPoint, setTransform, toolMode, selectionBox, setDragOccurred, ctx, isDrawing, setCurrentStroke, setDrawingStartPos, setIsDrawing, setSelectionBox, setIsPanning, setIsFollowingPlayhead, setLastPanPoint, setDragging]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType === 'mouse') return;
@@ -288,6 +384,15 @@ export const usePointerInteractions = () => {
     }
     // Clear pending pan start when gesture ends
     pendingPanStart.current = null;
+    // Cancel long-press timer on up
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    const wasLongPress = longPressTriggeredRef.current;
+    longPressTriggeredRef.current = false;
+    // Clear any dormant candidate
+    touchDragCandidateRef.current = null;
     // Single-finger tap-to-seek: only when gesture ends and it was a tap (no drag/pan)
     const start = tapStarts.current.get(e.pointerId);
     tapStarts.current.delete(e.pointerId);
@@ -295,7 +400,7 @@ export const usePointerInteractions = () => {
       start &&
       pointers.current.size === 0 && // gesture ended
       !isPanning &&
-      !ctx.dragOccurred &&
+      !wasLongPress &&
       duration > 0
     ) {
       const dx = Math.abs(e.clientX - start.x);
@@ -306,8 +411,8 @@ export const usePointerInteractions = () => {
         if (rect) {
           const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
           // Seek to note if tapped on note and not in drawing mode
-          const clickedNote = findNoteAtPosition(canvasX, canvasY, ctx.notes, transform.scale, ctx.NOTE_LABEL_HIDE_THRESHOLD, !ctx.isDrawingMode);
-          if (clickedNote && !ctx.isDrawingMode) {
+          const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
+          if (clickedNote && !isDrawingMode) {
             seekToTime(clickedNote.time);
             return;
           }
@@ -320,7 +425,7 @@ export const usePointerInteractions = () => {
         }
       }
     }
-  }, [setIsPanning, isPanning]);
+  }, [setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     // If a touch pointer is active, ignore wheel to avoid double-zoom on mobile

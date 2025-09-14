@@ -160,23 +160,25 @@ export const WaveformCanvas: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
-      className={`w-full h-full touch-none ${
-        toolMode === 'draw'
-          ? 'bg-neutral-700/50 cursor-crosshair'
-          : toolMode === 'erase'
+      className={`w-full h-full touch-none select-none touch-callout-none no-user-drag no-tap-highlight ${toolMode === 'draw'
+        ? 'bg-neutral-700/50 cursor-crosshair'
+        : toolMode === 'erase'
           ? 'bg-neutral-800 cursor-cell'
           : toolMode === 'select'
-          ? 'bg-neutral-800 cursor-crosshair'
-          : isPanning
-          ? 'bg-neutral-800 cursor-grabbing'
-          : 'bg-neutral-800 cursor-grab'
-      }`}
+            ? 'bg-neutral-800 cursor-crosshair'
+            : isPanning
+              ? 'bg-neutral-800 cursor-grabbing'
+              : 'bg-neutral-800 cursor-grab'
+        }`}
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
       onClick={handleCanvasClick}
       onMouseDown={(e) => { handleMouseDownForMenu(e); enhancedHandleMouseDown(e); }}
       onMouseMove={handleMouseMove}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onWheel={handleWheel}
       onContextMenu={handleContextMenu}
     />

@@ -86,7 +86,7 @@ const ProjectsList: React.FC = () => {
 
   const base = import.meta.env.BASE_URL || '/';
   if (loading) return (
-    <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className="min-h-dvh p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center justify-between mb-4">
           <img src={`${base}motia-logo-light.svg`} alt="motia" className="h-6 w-auto opacity-90 select-none" />
@@ -110,7 +110,7 @@ const ProjectsList: React.FC = () => {
 
   if (user.isAnonymous) {
     return (
-      <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <div className="min-h-dvh p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <TopBanner options={[SignInBannerOption({ show: true })]} />
         <div className="mx-auto max-w-2xl pt-16">
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/70 p-6 text-center">
@@ -125,7 +125,7 @@ const ProjectsList: React.FC = () => {
 
   return (
     <FileDropzone onFileSelect={handleUpload} isLoading={uploading}>
-      <div className="min-h-screen p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <div className="min-h-dvh p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <div className="mx-auto max-w-5xl">
           <div className="flex items-center justify-between mb-4">
             <div className='flex flex-row items-center gap-2'>
@@ -177,7 +177,7 @@ const ProjectsGrid: React.FC<{ uid: string; onUpload: (file: File) => void; uplo
 
   if (items.length === 0) {
     return (
-      <div className="grid min-h-[calc(100vh-8rem)] place-items-center text-neutral-400">
+      <div className="grid min-h-[calc(100dvh-8rem)] place-items-center text-neutral-400">
         <div className="text-center">
           <div className="mb-4 text-sm font-mono">No projects yet</div>
           <FileUploader onFileSelect={onUpload} isLoading={uploading} />
