@@ -1,11 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { useDrawingInteractions } from './useDrawingInteractions';
-import { recomputeBoundsFromStrokes } from '@utils/drawingUtils';
 import { history } from '@utils/history';
-import { decompressSession } from '@utils/advancedCompression';
-import { compressDrawingAdaptive } from '@utils/drawingUtils';
-import { updateEraserPreview } from './mouse/eraserMouseHandlers';
+import { updateEraserPreview, commitEraser } from './mouse/eraserMouseHandlers';
 import { handleDrawMove } from './mouse/drawMouseHandlers';
 import { handleSelectionCreate, handleSelectionMove, finalizeSelectionMove } from './mouse/selectionMouseHandlers';
 
@@ -147,41 +144,7 @@ export const useGlobalMouseHandlers = () => {
       }
 
       // Commit erasing (apply accumulated stroke deletions)
-      if (toolMode === 'erase' && erasingStrokeIds && erasingStrokeIds.length) {
-        for (const item of erasingStrokeIds) {
-          const note = notes.find(n => n.id === item.noteId);
-          if (!note?.drawing?.compressed) continue;
-          let compressed = note.drawing.compressed as unknown as import('@types').CompressedStroke[];
-          if (typeof compressed === 'string') {
-            try { compressed = JSON.parse(compressed); } catch { continue; }
-          }
-          const fullStrokes = decompressSession(compressed) as Array<{ points: Array<{ x: number; y: number }>; strokeWidth: number; color: string }>;
-          const remaining = fullStrokes.filter((_, idx) => !item.strokeIndexes.includes(idx));
-          if (remaining.length === fullStrokes.length) continue; // nothing changed
-          if (remaining.length === 0) {
-            // No strokes left: clear drawing
-            onUpdateDrawing?.(note.id, { ...note.drawing, compressed: [], bounds: { width: 0, height: 0 } });
-            continue;
-          }
-          const compressionResult = compressDrawingAdaptive(remaining as unknown as import('@types').DrawingStroke[]);
-          // Update bounds for remaining strokes
-          const newBounds = recomputeBoundsFromStrokes(remaining as unknown as import('@types').DrawingStroke[]);
-          onUpdateDrawing?.(note.id, {
-            ...note.drawing,
-            compressed: compressionResult.strokes,
-            bounds: newBounds,
-            originalSize: compressionResult.originalSize,
-            compressedSize: compressionResult.compressedSize,
-            compressionRatio: compressionResult.reduction,
-          });
-        }
-        setErasingStrokeIds?.([]);
-        setEraserCursor?.(null);
-        // Nudge transform to refresh canvas if caches stayed warm
-        setTransform?.(prev => ({ ...prev }));
-        // Defer clearing drag flag to suppress click/tap-based seek
-        setTimeout(() => setDragOccurred(false), 10);
-      }
+      if (toolMode === 'erase') commitEraser(ctx);
 
       // End note dragging (records history entry)
       if (dragging) {

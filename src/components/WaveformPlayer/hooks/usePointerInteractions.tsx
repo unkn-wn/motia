@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { commitEraser } from './mouse/eraserMouseHandlers';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
 import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFromCanvasY, getWaveformDimensions } from '@utils/canvasUtils';
@@ -452,7 +453,9 @@ export const usePointerInteractions = () => {
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) initialPinch.current = null;
     if (isPanning) setIsPanning(false);
-    // End touch-based erasing
+    // Commit touch-based erasing (mirror mouse logic) before clearing state
+    if (toolMode === 'erase') commitEraser(ctx);
+    // Clear erasing flags
     eraseActiveRef.current = false;
     pendingEraserStartRef.current = null;
     ctx.setEraserCursor?.(null);

@@ -1,5 +1,5 @@
 import { decompressSession } from '@utils/advancedCompression';
-import { strokeHitByEraser } from '@utils/drawingUtils';
+import { strokeHitByEraser, compressDrawingAdaptive, recomputeBoundsFromStrokes } from '@utils/drawingUtils';
 
 type Ctx = ReturnType<typeof import('@contexts/objects/WaveformContextObject').useWaveformContext>;
 
@@ -35,4 +35,39 @@ export function updateEraserPreview(ctx: Ctx, p: { x: number; y: number }, butto
     if (set.size) pending.push({ noteId, strokeIndexes: Array.from(set).sort((a, b) => a - b) });
   }
   setErasingStrokeIds?.(pending);
+}
+
+// Commit accumulated erasing operations (shared by mouse & touch). Safe to call even if nothing pending.
+export function commitEraser(ctx: Ctx) {
+  const { erasingStrokeIds, notes, onUpdateDrawing, setErasingStrokeIds, setEraserCursor, setTransform, setDragOccurred } = ctx;
+  if (!erasingStrokeIds || !erasingStrokeIds.length) return;
+  for (const item of erasingStrokeIds) {
+    const note = notes.find(n => n.id === item.noteId);
+    if (!note?.drawing?.compressed) continue;
+    let compressed = note.drawing.compressed as unknown as import('@types').CompressedStroke[];
+    if (typeof compressed === 'string') {
+      try { compressed = JSON.parse(compressed); } catch { continue; }
+    }
+    const fullStrokes = decompressSession(compressed) as Array<{ points: Array<{ x: number; y: number }>; strokeWidth: number; color: string }>;
+    const remaining = fullStrokes.filter((_, idx) => !item.strokeIndexes.includes(idx));
+    if (remaining.length === fullStrokes.length) continue;
+    if (remaining.length === 0) {
+      onUpdateDrawing?.(note.id, { ...note.drawing, compressed: [], bounds: { width: 0, height: 0 } });
+      continue;
+    }
+    const compressionResult = compressDrawingAdaptive(remaining as unknown as import('@types').DrawingStroke[]);
+    const newBounds = recomputeBoundsFromStrokes(remaining as unknown as import('@types').DrawingStroke[]);
+    onUpdateDrawing?.(note.id, {
+      ...note.drawing,
+      compressed: compressionResult.strokes,
+      bounds: newBounds,
+      originalSize: compressionResult.originalSize,
+      compressedSize: compressionResult.compressedSize,
+      compressionRatio: compressionResult.reduction,
+    });
+  }
+  setErasingStrokeIds?.([]);
+  setEraserCursor?.(null);
+  setTransform?.(prev => ({ ...prev }));
+  setTimeout(() => setDragOccurred?.(false), 10);
 }
