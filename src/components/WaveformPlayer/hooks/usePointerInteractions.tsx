@@ -54,6 +54,15 @@ export const usePointerInteractions = () => {
   const activeTouchCountRef = useRef<number>(0);
   const multiTouchBlockUntilRef = useRef<number>(0);
 
+  // Single predicate to decide if touch erasing is allowed right now
+  const allowTouchErase = () => {
+    if (multiTouchActiveRef.current) return false;
+    if (Date.now() < multiTouchBlockUntilRef.current) return false;
+    if (activeTouchCountRef.current >= 2) return false;
+    if (pointers.current.size !== 1) return false;
+    return true;
+  };
+
   // Global touch listeners to detect multi-touch even when second finger starts off-canvas
   useEffect(() => {
     const onTouchStart = (ev: TouchEvent) => {
@@ -194,8 +203,8 @@ export const usePointerInteractions = () => {
 
     // Eraser tool: mark active (touch has no buttons)
     if (toolMode === 'erase') {
-      // If in or just after a multi-touch session, do not start or preview erasing
-      if (multiTouchActiveRef.current || Date.now() < multiTouchBlockUntilRef.current || activeTouchCountRef.current >= 2) {
+      // If erasing is not allowed, suppress immediately
+      if (!allowTouchErase()) {
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = null;
         ctx.setEraserCursor?.(null);
@@ -377,19 +386,10 @@ export const usePointerInteractions = () => {
       const targetEl = (e.target as HTMLElement | null);
       if (targetEl && targetEl.closest('[data-prevent-erase]')) return;
       const p = toCanvas(e.clientX, e.clientY);
-      // If currently in a multi-touch session, do not preview or activate
-      if (multiTouchActiveRef.current || Date.now() < multiTouchBlockUntilRef.current || activeTouchCountRef.current >= 2) {
+      // If erasing not allowed, clear and skip
+      if (!allowTouchErase()) {
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = null;
-        ctx.setEraserCursor?.(null);
-        ctx.setErasingStrokeIds?.([]);
-        return;
-      }
-      // If two fingers are active, never erase and clear pending
-      if (pointers.current.size >= 2) {
-        eraseActiveRef.current = false;
-        pendingEraserStartRef.current = null;
-        // Do not update cursor position during multi-touch to avoid jumping between fingers
         ctx.setEraserCursor?.(null);
         ctx.setErasingStrokeIds?.([]);
         return;
@@ -400,7 +400,7 @@ export const usePointerInteractions = () => {
         const dx = start ? Math.abs(e.clientX - start.x) : 0;
         const dy = start ? Math.abs(e.clientY - start.y) : 0;
         // Promote only after a tiny move (no time-only promotion) and still single-finger
-        if (start && (dx > 6 || dy > 6) && pointers.current.size === 1) {
+        if (start && (dx > 6 || dy > 6) && allowTouchErase()) {
           eraseActiveRef.current = true;
           pendingEraserStartRef.current = null;
         }
@@ -472,6 +472,7 @@ export const usePointerInteractions = () => {
     eraseActiveRef.current = false;
     pendingEraserStartRef.current = null;
     ctx.setEraserCursor?.(null);
+    ctx.setErasingStrokeIds?.([]);
     // When all pointers are up, end multi-touch session
     if (pointers.current.size === 0) multiTouchActiveRef.current = false;
     if (pointers.current.size < 2) {

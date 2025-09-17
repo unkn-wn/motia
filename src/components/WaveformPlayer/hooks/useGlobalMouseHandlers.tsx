@@ -75,8 +75,10 @@ export const useGlobalMouseHandlers = () => {
         }
       }
 
-      // Eraser hover preview (accumulates hit strokes while button held)
+      // Eraser hover preview (mouse-only): touch is handled by usePointerInteractions
       if (toolMode === 'erase') {
+        // Skip touch/stylus pointer events here to avoid conflicting with touch logic
+        if ('pointerType' in e && e.pointerType !== 'mouse') return;
         // Skip eraser interactions if the pointer is within an element that prevents erasing (e.g., sidebar)
         const targetEl = (e.target as HTMLElement | null);
         if (targetEl && targetEl.closest('[data-prevent-erase]')) return;
