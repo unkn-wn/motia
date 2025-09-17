@@ -51,23 +51,16 @@ export const usePointerInteractions = () => {
   const pendingEraserStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
   // Guard to suppress erasing during multi-touch sessions
   const multiTouchActiveRef = useRef<boolean>(false);
-  const activeTouchCountRef = useRef<number>(0);
-  const multiTouchBlockUntilRef = useRef<number>(0);
 
   // Single predicate to decide if touch erasing is allowed right now
   const allowTouchErase = () => {
-    if (multiTouchActiveRef.current) return false;
-    if (Date.now() < multiTouchBlockUntilRef.current) return false;
-    if (activeTouchCountRef.current >= 2) return false;
-    if (pointers.current.size !== 1) return false;
-    return true;
+    return !multiTouchActiveRef.current && pointers.current.size === 1;
   };
 
   // Global touch listeners to detect multi-touch even when second finger starts off-canvas
   useEffect(() => {
     const onTouchStart = (ev: TouchEvent) => {
-      activeTouchCountRef.current = ev.touches ? ev.touches.length : Math.max(activeTouchCountRef.current + 1, 1);
-      if (activeTouchCountRef.current >= 2) {
+      if (ev.touches && ev.touches.length >= 2) {
         multiTouchActiveRef.current = true;
         // Immediately suppress any eraser state/cursor
         eraseActiveRef.current = false;
@@ -77,16 +70,7 @@ export const usePointerInteractions = () => {
       }
     };
     const onTouchEndCancel = (ev: TouchEvent) => {
-      activeTouchCountRef.current = ev.touches ? ev.touches.length : Math.max(activeTouchCountRef.current - 1, 0);
-      if (activeTouchCountRef.current < 2) {
-        // End of multi-touch session; if 1 finger remains, briefly block eraser to avoid flicker
-        if (activeTouchCountRef.current === 1) {
-          multiTouchBlockUntilRef.current = Date.now() + 80; // small grace period
-        }
-        if (activeTouchCountRef.current === 0) {
-          multiTouchActiveRef.current = false;
-        }
-      }
+      if (!ev.touches || ev.touches.length < 2) multiTouchActiveRef.current = false;
     };
     window.addEventListener('touchstart', onTouchStart, { passive: true });
     window.addEventListener('touchend', onTouchEndCancel, { passive: true });
@@ -218,7 +202,7 @@ export const usePointerInteractions = () => {
         pendingEraserStartRef.current = null;
       } else {
         // Don't start erasing immediately on touch-down; wait for a small
-        // movement threshold so two-finger pinch/pan doesn't erase.
+        // movement threshold so two-finger pinch/pan doesn't erase. (No timer promotion.)
         eraseActiveRef.current = false;
         pendingEraserStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
         setIsPanning(false);
@@ -399,7 +383,7 @@ export const usePointerInteractions = () => {
         const start = pendingEraserStartRef.current;
         const dx = start ? Math.abs(e.clientX - start.x) : 0;
         const dy = start ? Math.abs(e.clientY - start.y) : 0;
-        // Promote only after a tiny move (no time-only promotion) and still single-finger
+        // Promote only after a small move and still single-finger
         if (start && (dx > 6 || dy > 6) && allowTouchErase()) {
           eraseActiveRef.current = true;
           pendingEraserStartRef.current = null;
