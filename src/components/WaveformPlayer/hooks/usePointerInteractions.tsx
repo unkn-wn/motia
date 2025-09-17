@@ -508,7 +508,7 @@ export const usePointerInteractions = () => {
         }
       }
     }
-  }, [setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform]);
+  }, [setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform, toolMode, ctx]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     // If a touch pointer is active, ignore wheel to avoid double-zoom on mobile
