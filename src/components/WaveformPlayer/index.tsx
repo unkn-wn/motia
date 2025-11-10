@@ -134,6 +134,19 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
   setDragging(null);
   setIsPanning(false);
   }, [toolMode]);
+  
+  // Add/remove drawing-mode class to body to prevent text selection on mobile
+  useEffect(() => {
+    if (toolMode === 'draw') {
+      document.body.classList.add('drawing-mode');
+    } else {
+      document.body.classList.remove('drawing-mode');
+    }
+    return () => {
+      document.body.classList.remove('drawing-mode');
+    };
+  }, [toolMode]);
+  
   const [selectedDrawingIds, setSelectedDrawingIds] = useState<Set<string>>(new Set());
   const [erasingStrokeIds, setErasingStrokeIds] = useState<{ noteId: string; strokeIndexes: number[] }[]>([]);
   const [eraserCursor, setEraserCursor] = useState<{ x: number; y: number } | null>(null);
@@ -287,14 +300,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
 
     // If already following playhead, reset x value as well
     if (isFollowingPlayhead) {
-      const timeProgress = duration > 0 ? currentTime / duration : 0;
-      const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
-      const targetPlayheadY = timeProgress * baseWaveformHeight; // Use default scale (1.0)
-      const playheadPositionY = canvasHeight * 0.33;
-
       setTransformSafe(prev => ({
         offsetX: 0, // Center X
-        offsetY: playheadPositionY - targetPlayheadY,
+        offsetY: prev.offsetY,
         scale: prev.scale
       }));
       return; // Keep following enabled

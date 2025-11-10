@@ -157,6 +157,14 @@ export const WaveformCanvas: React.FC = () => {
     };
   }, []);
 
+  // Prevent default touch behavior to stop text selection on mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    // Prevent text selection on double-tap-and-hold
+    if (toolMode === 'draw' || toolMode === 'select' || toolMode === 'erase') {
+      e.preventDefault();
+    }
+  }, [toolMode]);
+
   return (
     <canvas
       ref={canvasRef}
@@ -172,6 +180,7 @@ export const WaveformCanvas: React.FC = () => {
         }`}
       draggable={false}
       onDragStart={(e) => e.preventDefault()}
+      onTouchStart={handleTouchStart}
       onClick={handleCanvasClick}
       onMouseDown={(e) => { handleMouseDownForMenu(e); enhancedHandleMouseDown(e); }}
       onMouseMove={handleMouseMove}

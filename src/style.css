@@ -25,6 +25,15 @@ body.no-scroll {
   touch-action: none;
 }
 
+/* Prevent text selection and touch callouts during drawing mode */
+body.drawing-mode {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Use env(safe-area-inset-*) to avoid showing the default browser background */
 .safearea-bg {
   padding-top: env(safe-area-inset-top);
