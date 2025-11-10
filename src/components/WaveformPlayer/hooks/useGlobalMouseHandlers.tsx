@@ -49,6 +49,12 @@ export const useGlobalMouseHandlers = () => {
     const handleGlobalMouseMove = (e: MouseEvent | PointerEvent) => {
       // On desktop we prefer mousemove; skip duplicate pointer events from mouse
       if ('pointerType' in e && e.pointerType === 'mouse') return;
+      
+      // Prevent text selection during drawing or other drag operations
+      if ((isDrawing && isDrawingMode) || dragging || (selectionBox?.dragging)) {
+        if (e.cancelable) e.preventDefault();
+      }
+      
       const rect = canvasRef.current?.getBoundingClientRect();
       // Convert screen to world (canvas) coordinates
       const toCanvas = (clientX: number, clientY: number) => {
@@ -173,7 +179,11 @@ export const useGlobalMouseHandlers = () => {
       document.addEventListener('mousemove', handleGlobalMouseMove);
       document.addEventListener('mouseup', handleGlobalMouseUp as EventListener);
       document.addEventListener('contextmenu', handleGlobalMouseUp as EventListener, { capture: true } as AddEventListenerOptions);
-      document.addEventListener('pointermove', handleGlobalMouseMove as EventListener, { passive: true } as AddEventListenerOptions);
+      // Use non-passive listener when drawing/dragging to allow preventDefault
+      const pointerMoveOptions = (isDrawing || dragging || selectionBox?.dragging) 
+        ? { passive: false } 
+        : { passive: true };
+      document.addEventListener('pointermove', handleGlobalMouseMove as EventListener, pointerMoveOptions as AddEventListenerOptions);
       document.addEventListener('pointerup', handleGlobalMouseUp as EventListener);
 
       return () => {

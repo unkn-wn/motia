@@ -285,22 +285,37 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(({
     const canvas = canvasRef.current;
     const canvasHeight = canvas.height;
 
-    // Calculate where the playhead should be in canvas coordinates (accounting for current zoom)
+    // If already following playhead, reset x value as well
+    if (isFollowingPlayhead) {
+      const timeProgress = duration > 0 ? currentTime / duration : 0;
+      const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
+      const targetPlayheadY = timeProgress * baseWaveformHeight; // Use default scale (1.0)
+      const playheadPositionY = canvasHeight * 0.33;
+
+      setTransformSafe(prev => ({
+        offsetX: 0, // Center X
+        offsetY: playheadPositionY - targetPlayheadY,
+        scale: prev.scale
+      }));
+      return; // Keep following enabled
+    }
+
+    // First click: just follow Y axis with current scale
     const timeProgress = duration > 0 ? currentTime / duration : 0;
     const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
     const scaledWaveformHeight = baseWaveformHeight * transform.scale;
     const targetPlayheadY = timeProgress * scaledWaveformHeight;
-    const playheadPositionY = canvasHeight * 0.33; // Position at 33% from top
+    const playheadPositionY = canvasHeight * 0.33;
 
     setTransformSafe(prev => ({
-      offsetX: prev.offsetX, // Don't change X position - preserve user's horizontal view
-      offsetY: playheadPositionY - targetPlayheadY, // Position playhead at desired Y position
+      offsetX: prev.offsetX, // Preserve user's horizontal view
+      offsetY: playheadPositionY - targetPlayheadY,
       scale: prev.scale // Maintain current zoom level
     }));
 
     // Enable playhead following mode
     setIsFollowingPlayhead(true);
-  }, [currentTime, duration, transform.scale, setTransformSafe, setIsFollowingPlayhead]);
+  }, [currentTime, duration, transform.scale, isFollowingPlayhead, setTransformSafe, setIsFollowingPlayhead]);
 
   // Register the recenter function with the context
   useEffect(() => {

@@ -252,6 +252,7 @@ export const usePointerInteractions = () => {
     }
 
     if (isDrawingMode && toolMode === 'draw') {
+      e.preventDefault();
       handleDrawingStart(canvasX, canvasY);
       return;
     }
