@@ -102,15 +102,6 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
     currentKey: 'b',
     action: 'TOGGLE_SIDEBAR',
     category: 'navigation'
-  },
-  {
-    id: 'show-shortcuts',
-    label: 'Show Shortcuts',
-    description: 'Open keyboard shortcuts panel',
-    defaultKey: '?',
-    currentKey: '?',
-    action: 'SHOW_SHORTCUTS',
-    category: 'navigation'
   }
 ];
 

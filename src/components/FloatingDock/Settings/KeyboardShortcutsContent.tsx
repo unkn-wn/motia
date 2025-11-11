@@ -18,14 +18,14 @@ import { fetchUserSettings, saveUserSettings } from '@/lib/db';
 interface KeyboardShortcutsContentProps {
 	shortcuts: KeyboardShortcut[];
 	onUpdateShortcut: (id: string, newKey: string) => void;
-	onResetAll: () => void;
+	// onResetAll removed - was never used in this component (reset button was in modal header)
 }
 
 /**
  * Keyboard shortcuts content component - extracted from KeyboardShortcuts modal
  * Used within the Settings modal's Global Settings tab
  */
-export const KeyboardShortcutsContent: React.FC<KeyboardShortcutsContentProps> = ({ shortcuts, onUpdateShortcut, onResetAll }) => {
+export const KeyboardShortcutsContent: React.FC<KeyboardShortcutsContentProps> = ({ shortcuts, onUpdateShortcut }) => {
 	const { user } = useAuth();
 
 	const [editingId, setEditingId] = useState<string | null>(null);

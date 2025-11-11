@@ -15,7 +15,7 @@ import HomeLanding from '@components/Home/HomeLanding';
 import {
 	type KeyboardShortcut,
 	createKeyboardHandler,
-	resetAllShortcutsAndPreferences,
+	// resetAllShortcutsAndPreferences, // Deprecated - no longer using reset button
 	isUserTyping,
 	getShortcuts,
 	setShortcuts as setGlobalShortcuts,
@@ -189,10 +189,11 @@ function Home() {
 		});
 	}, []);
 
-	const handleResetShortcuts = useCallback(() => {
-		const defaults = resetAllShortcutsAndPreferences();
-		setShortcuts(defaults);
-	}, []);
+	// Reset shortcuts function deprecated (reset button removed from UI)
+	// const handleResetShortcuts = useCallback(() => {
+	// 	const defaults = resetAllShortcutsAndPreferences();
+	// 	setShortcuts(defaults);
+	// }, []);
 
 	// Sync local view with global store after sign-in/settings load
 	useEffect(() => {
@@ -208,7 +209,6 @@ function Home() {
 			TOOL_SELECT: handleSelectMode,
 			TOOL_ERASE: handleEraseMode,
 			TOGGLE_SIDEBAR: handleToggleSidebar,
-			SHOW_SHORTCUTS: () => setShowSettings(true),
 			TOGGLE_PLAYBACK: () => {
 				if (waveformPlayerRef.current) {
 					waveformPlayerRef.current.playPause();
@@ -394,7 +394,6 @@ function Home() {
 							projectId={projectId}
 							shortcuts={shortcuts}
 							onUpdateShortcut={handleUpdateShortcut}
-							onResetShortcuts={handleResetShortcuts}
 						/>
 						<div className="relative h-dvh overflow-hidden">
 							{/* Relink banner handled by TopBanner to avoid overlap */}
@@ -463,7 +462,6 @@ function Home() {
 						projectId={projectId}
 						shortcuts={shortcuts}
 						onUpdateShortcut={handleUpdateShortcut}
-						onResetShortcuts={handleResetShortcuts}
 					/>
 					<ProjectLoadingWrapper loadingProject={loadingProject} metadataLoaded={metadataLoaded}>
 						<div className="relative h-screen overflow-hidden">

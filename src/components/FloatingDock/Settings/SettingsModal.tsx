@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
-import { RotateCcwIcon, XIcon } from '@assets/icons';
+import { XIcon } from '@assets/icons'; // RotateCcwIcon commented out with reset button
 import Modal from '@/components/Modal';
 import { AudioTrimSettings } from './AudioTrimSettings';
 import { KeyboardShortcutsContent } from './KeyboardShortcutsContent';
@@ -11,7 +11,7 @@ interface SettingsModalProps {
 	projectId: string | null;
 	shortcuts: KeyboardShortcut[];
 	onUpdateShortcut: (id: string, newKey: string) => void;
-	onResetShortcuts: () => void;
+	// onResetShortcuts removed - reset button deprecated (commented out in UI)
 }
 
 type SettingsTab = 'project' | 'global';
@@ -21,14 +21,7 @@ type SettingsTab = 'project' | 'global';
  * - Project Settings: Audio trimming
  * - Global Settings: Keyboard shortcuts and preferences
  */
-export const SettingsModal: React.FC<SettingsModalProps> = ({
-	isOpen,
-	onClose,
-	projectId,
-	shortcuts,
-	onUpdateShortcut,
-	onResetShortcuts,
-}) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, projectId, shortcuts, onUpdateShortcut }) => {
 	const [activeTab, setActiveTab] = useState<SettingsTab>('project');
 
 	if (!isOpen) return null;
@@ -60,7 +53,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
 					{/* Controls */}
 					<div className="flex items-center space-x-1 ">
-						{activeTab === 'global' && (
+						{/* Reset button temporarily disabled - users rarely need it */}
+						{/* {activeTab === 'global' && (
 							<button
 								onClick={onResetShortcuts}
 								className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
@@ -68,7 +62,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 							>
 								<RotateCcwIcon className="w-3.5 h-3.5" />
 							</button>
-						)}
+						)} */}
 						<button
 							onClick={onClose}
 							className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
@@ -88,7 +82,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 						</div>
 					) : (
 						<div className="p-3">
-							<KeyboardShortcutsContent shortcuts={shortcuts} onUpdateShortcut={onUpdateShortcut} onResetAll={onResetShortcuts} />
+							<KeyboardShortcutsContent shortcuts={shortcuts} onUpdateShortcut={onUpdateShortcut} />
 						</div>
 					)}
 				</div>
