@@ -26,6 +26,7 @@ import {
   Undo2,
   Redo2,
   AudioLines,
+  Scissors,
 } from 'lucide-react';
 import { Eye, EyeOff, User, Home, Eraser, Square } from 'lucide-react';
 
@@ -205,3 +206,9 @@ export const SelectionIcon = memo(({ className = "w-5 h-5" }: { className?: stri
   <Square className={className} />
 ));
 SelectionIcon.displayName = 'SelectionIcon';
+
+// Scissors Icon for trimming
+export const ScissorsIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <Scissors className={className} />
+));
+ScissorsIcon.displayName = 'ScissorsIcon';

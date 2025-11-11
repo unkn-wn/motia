@@ -1,19 +1,26 @@
 import React, { memo, useCallback } from 'react';
-import { useTimeState } from './hooks';
+import { useAudio } from '@/contexts/objects/AudioContextObject';
 
 interface ProgressBarProps {
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
+  trimStart?: number;
+  trimEnd?: number;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = memo(({ currentTime, duration, onSeek }) => {
+const ProgressBar: React.FC<ProgressBarProps> = memo(({ currentTime, duration, onSeek, trimStart = 0, trimEnd }) => {
+  const effectiveTrimEnd = trimEnd || duration;
+  const effectiveDuration = effectiveTrimEnd - trimStart;
+  const relativeTime = Math.max(0, currentTime - trimStart);
+  
   const handleProgressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
-    onSeek(newTime);
-  }, [onSeek]);
+    const relativeValue = parseFloat(e.target.value);
+    const absoluteTime = trimStart + relativeValue;
+    onSeek(absoluteTime);
+  }, [onSeek, trimStart]);
 
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercentage = effectiveDuration > 0 ? (relativeTime / effectiveDuration) * 100 : 0;
 
   return (
     <div className="flex-1">
@@ -21,9 +28,9 @@ const ProgressBar: React.FC<ProgressBarProps> = memo(({ currentTime, duration, o
         id="playback-progress"
         type="range"
         min="0"
-        max={duration || 0}
+        max={effectiveDuration || 0}
         step="0.1"
-        value={currentTime}
+        value={relativeTime}
         onChange={handleProgressChange}
         className="w-full h-3 md:h-2 bg-neutral-700 rounded-full appearance-none md:-translate-y-0.5 cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 md:[&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-4
@@ -45,13 +52,15 @@ ProgressBar.displayName = 'ProgressBar';
 
 // Connected version that uses context internally
 export const ConnectedProgressBar: React.FC = memo(() => {
-  const { currentTime, duration, seekToTime } = useTimeState();
+  const { currentTime, duration, seekToTime, trimStart, trimEnd } = useAudio();
 
   return (
     <ProgressBar
       currentTime={currentTime}
       duration={duration}
       onSeek={seekToTime}
+      trimStart={trimStart}
+      trimEnd={trimEnd}
     />
   );
 });

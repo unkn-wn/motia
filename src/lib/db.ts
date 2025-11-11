@@ -170,6 +170,23 @@ export async function updateProjectThumbnail(
   await setDoc(userProjectDoc(uid, projectId), { thumbnail: dataUrl } as unknown as ProjectMetaDoc, { merge: true });
 }
 
+// Update audio trim points (in and out times in seconds)
+export async function updateAudioTrim(
+  uid: string,
+  projectId: string,
+  trimStart: number,
+  trimEnd: number
+): Promise<void> {
+  await setDoc(
+    userProjectDoc(uid, projectId),
+    {
+      audio: { trimStart, trimEnd },
+      updatedAt: serverTimestamp()
+    } as unknown as ProjectMetaDoc,
+    { merge: true }
+  );
+}
+
 // --- Storage ---
 // Removed: uploadProjectAudio (Firebase Storage)
 
