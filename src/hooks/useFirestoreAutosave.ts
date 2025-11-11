@@ -46,7 +46,6 @@ export function useFirestoreAutosave(params: {
 	const [saving, setSaving] = useState(false);
 	const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 	const lastTouchedAtRef = useRef<number | null>(null);
-	const lastSavedSignatureRef = useRef<string | null>(null);
 	const durationPatchedRef = useRef<string | null>(null); // track by projectId
 	const mounted = useRef(true);
 	useEffect(() => {
@@ -56,10 +55,9 @@ export function useFirestoreAutosave(params: {
 		};
 	}, []);
 
-	// When project changes, reset duration patch flag and signatures
+	// When project changes, reset duration patch flag
 	useEffect(() => {
 		durationPatchedRef.current = null;
-		lastSavedSignatureRef.current = null;
 	}, [projectId]);
 
 	// Debounced notes saver
@@ -77,8 +75,6 @@ export function useFirestoreAutosave(params: {
 			if (mounted.current) {
 				setLastSavedAt(new Date());
 				setSaving(false);
-				// Update saved signature on success
-				lastSavedSignatureRef.current = buildNotesSignature(notes);
 			}
 		} catch {
 			if (mounted.current) setSaving(false);
@@ -88,11 +84,8 @@ export function useFirestoreAutosave(params: {
 	// Trigger on notes changes
 	useEffect(() => {
 		if (!uid || !projectId) return;
-		// Skip scheduling save if nothing meaningfully changed since last successful save
-		const nextSig = buildNotesSignature(notes);
-		if (lastSavedSignatureRef.current && lastSavedSignatureRef.current === nextSig) {
-			return;
-		}
+
+		// Always schedule save when notes change (debouncing handles batching)
 		saveNotes();
 		// flush on unload to minimize data loss
 		const onBeforeUnload = () => {
@@ -128,18 +121,4 @@ export function useFirestoreAutosave(params: {
 	}, [uid, projectId, audioMeta?.durationSec]);
 
 	return { saving, lastSavedAt, flush: saveNotes.flush } as const;
-}
-
-// Build a lightweight signature of notes to detect meaningful changes without hashing large stroke arrays
-function buildNotesSignature(notes: Note[]): string {
-	// Project each note into a small tuple and stringify
-	const proj = notes.map((n) => {
-		if (n.type === 'drawing' && n.drawing) {
-			const comp = n.drawing.compressed;
-			const compLen = Array.isArray(comp) ? comp.length : typeof comp === 'string' ? comp.length : 0;
-			return ['d', n.id, n.canvasX, n.canvasY, compLen, n.drawing.bounds?.width ?? 0, n.drawing.bounds?.height ?? 0];
-		}
-		return ['t', n.id, n.canvasX, n.canvasY, n.content, n.color];
-	});
-	return JSON.stringify(proj);
 }

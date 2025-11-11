@@ -19,7 +19,11 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentTime, duration, onSeek
     const relativeValue = parseFloat(e.target.value);
     const absoluteTime = trimStart + relativeValue;
     onSeek(absoluteTime);
-  }, [onSeek, trimStart]);
+    
+    // Immediately update the background gradient to match the new position
+    const percentage = effectiveDuration > 0 ? (relativeValue / effectiveDuration) * 100 : 0;
+    e.target.style.background = `linear-gradient(to right, #737373 0%, #737373 ${percentage}%, #27272a ${percentage}%, #27272a 100%)`;
+  }, [onSeek, trimStart, effectiveDuration]);
 
   const progressPercentage = effectiveDuration > 0 ? (relativeTime / effectiveDuration) * 100 : 0;
 

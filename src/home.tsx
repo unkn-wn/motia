@@ -289,11 +289,12 @@ function Home() {
 	});
 
 	// Reset unsaved changes flag when save completes
+	// Triggers whenever lastSavedAt updates (new save) regardless of saving state
 	useEffect(() => {
-		if (!saving && lastSavedAt) {
+		if (lastSavedAt) {
 			setHasUnsavedChanges(false);
 		}
-	}, [saving, lastSavedAt]);
+	}, [lastSavedAt]);
 
 	// Manual save via Ctrl/Cmd+S
 	useEffect(() => {

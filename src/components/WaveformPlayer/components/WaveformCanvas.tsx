@@ -158,11 +158,22 @@ export const WaveformCanvas: React.FC = () => {
   }, []);
 
   // Prevent default touch behavior to stop text selection on mobile
-  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    // Prevent text selection on double-tap-and-hold
-    if (toolMode === 'draw' || toolMode === 'select' || toolMode === 'erase') {
-      e.preventDefault();
-    }
+  // Must use native event listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Prevent text selection on double-tap-and-hold
+      if (toolMode === 'draw' || toolMode === 'select' || toolMode === 'erase') {
+        e.preventDefault();
+      }
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchstart', handleTouchStart);
+    };
   }, [toolMode]);
 
   return (
@@ -180,7 +191,6 @@ export const WaveformCanvas: React.FC = () => {
         }`}
       draggable={false}
       onDragStart={(e) => e.preventDefault()}
-      onTouchStart={handleTouchStart}
       onClick={handleCanvasClick}
       onMouseDown={(e) => { handleMouseDownForMenu(e); enhancedHandleMouseDown(e); }}
       onMouseMove={handleMouseMove}
