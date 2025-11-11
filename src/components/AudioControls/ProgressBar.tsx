@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useAudio } from '@/contexts/objects/AudioContextObject';
 
 interface ProgressBarProps {
@@ -9,7 +9,8 @@ interface ProgressBarProps {
   trimEnd?: number;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = memo(({ currentTime, duration, onSeek, trimStart = 0, trimEnd }) => {
+// No memo here - needs to update on every currentTime change for smooth progress bar
+const ProgressBar: React.FC<ProgressBarProps> = ({ currentTime, duration, onSeek, trimStart = 0, trimEnd }) => {
   const effectiveTrimEnd = trimEnd || duration;
   const effectiveDuration = effectiveTrimEnd - trimStart;
   const relativeTime = Math.max(0, currentTime - trimStart);
@@ -46,12 +47,12 @@ const ProgressBar: React.FC<ProgressBarProps> = memo(({ currentTime, duration, o
       />
     </div>
   );
-});
+};
 
 ProgressBar.displayName = 'ProgressBar';
 
-// Connected version that uses context internally
-export const ConnectedProgressBar: React.FC = memo(() => {
+// Connected version uses memo since it only re-renders when context values change
+export const ConnectedProgressBar: React.FC = () => {
   const { currentTime, duration, seekToTime, trimStart, trimEnd } = useAudio();
 
   return (
@@ -63,7 +64,7 @@ export const ConnectedProgressBar: React.FC = memo(() => {
       trimEnd={trimEnd}
     />
   );
-});
+};
 
 ConnectedProgressBar.displayName = 'ConnectedProgressBar';
 
