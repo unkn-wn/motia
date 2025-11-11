@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { AudioLinesIcon, Trash2Icon } from '@/assets/icons';
+import { MAX_PROJECT_TITLE_LENGTH } from '@/types/firebase';
 
 export interface ProjectCardProps {
   id: string;
@@ -21,7 +22,6 @@ function formatMeta(updatedAt?: Date | number | null, durationSec?: number | nul
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, durationSec, thumbnailUrl, onRename, onDelete, isBusy }) => {
-  const MAX_TITLE_LEN = 64;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +43,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
 
   const commit = useCallback(async () => {
     if (!onRename) return setEditing(false);
-    const next = draft.slice(0, MAX_TITLE_LEN).trim();
+    const next = draft.slice(0, MAX_PROJECT_TITLE_LENGTH).trim();
     setEditing(false);
     if (next && next !== title) {
       await onRename(id, next);
@@ -80,7 +80,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                maxLength={MAX_TITLE_LEN}
+                maxLength={MAX_PROJECT_TITLE_LENGTH}
                 draggable={false}
                 onPointerDownCapture={(e) => e.stopPropagation()}
                 onMouseDownCapture={(e) => e.stopPropagation()}
@@ -97,7 +97,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
               <button
                 type="button"
                 onClick={startEditing}
-                className="text-left w-fit text-neutral-100 font-medium truncate hover:underline decoration-neutral-500/60 cursor-text text-wrap"
+                className="text-left w-full text-neutral-100 font-medium truncate hover:underline decoration-neutral-500/60 cursor-text"
                 title="Click to rename"
               >
                 {title}
@@ -105,7 +105,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, 
             )}
             <p className="text-sm text-neutral-400 mt-1 truncate">{formatMeta(updatedAt, durationSec) || ' '}</p>
           </div>
-          <div className="flex items-center gap-2 self-end">
+          <div className="flex items-center gap-2 justify-between">
             {onDelete && (
               <button
                 type="button"

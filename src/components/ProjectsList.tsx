@@ -227,7 +227,7 @@ export default ProjectsList;
 const DeleteModal: React.FC<{ open: boolean; title: string; onClose: () => void; onConfirm: () => void }> = ({ open, title, onClose, onConfirm }) => {
   return (
     <Modal open={open} onClose={onClose} title="Delete project">
-      <p>Are you sure you want to delete “{title}”? This will remove the project and all its notes.</p>
+      <p className='break-words'>Are you sure you want to delete “{title}”? This will remove the project and all its notes.</p>
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="px-3 py-1.5 rounded border border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700">Cancel</button>
         <button onClick={onConfirm} className="px-3 py-1.5 rounded border border-red-600/40 bg-red-600/20 text-red-100 hover:bg-red-600/30">Delete</button>

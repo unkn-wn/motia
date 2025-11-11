@@ -17,8 +17,8 @@ import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 import { useNotesState } from '@/hooks/useNotesState';
 import { useProjectLifecycle } from '@/hooks/useProjectLifecycle';
-import { fetchProjectMeta, updateProjectThumbnail } from '@/lib/db';
-import AutosaveIndicator from '@/components/AutosaveIndicator';
+import { fetchProjectMeta, updateProjectThumbnail, renameProject } from '@/lib/db';
+import { TitleBar } from '@/components/TitleBar';
 import SidebarToggle from '@/components/SidebarToggle';
 
 function Home() {
@@ -28,6 +28,8 @@ function Home() {
   const [isDrawingMode, setIsDrawingMode] = useState(false); // legacy
   const [toolMode, setToolMode] = useState<'draw' | 'select' | 'erase' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [projectTitle, setProjectTitle] = useState<string>('Untitled Project');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const handleOpenProfile = useCallback(() => setProfileOpen(true), []);
@@ -68,6 +70,44 @@ function Home() {
     handleRelinkSelected,
     handleSignOut,
   } = useProjectLifecycle({ setNotes, onCurrentTimeChange: () => { } });
+
+  // Mark as unsaved whenever notes change (user interaction)
+  useEffect(() => {
+    if (projectId && notes.length > 0) {
+      setHasUnsavedChanges(true);
+    }
+  }, [notes, projectId]);
+
+  // Fetch project metadata (title + thumbnail check) when project loads - consolidated to avoid duplicate fetches
+  const projectMetaRef = useRef<{ title: string; thumbnail: string | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user || !projectId) {
+        setProjectTitle('Untitled Project');
+        projectMetaRef.current = null;
+        return;
+      }
+      try {
+        const meta = await fetchProjectMeta(user.uid, projectId);
+        if (cancelled) return;
+        const title = meta?.title || audioFile?.name || 'Untitled Project';
+        setProjectTitle(title);
+        projectMetaRef.current = { title, thumbnail: meta?.thumbnail ?? null };
+      } catch {
+        setProjectTitle('Untitled Project');
+        projectMetaRef.current = null;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, projectId, audioFile?.name]);
+
+  // Handle project title change
+  const handleTitleChange = useCallback(async (newTitle: string) => {
+    if (!user || !projectId) return;
+    await renameProject(user.uid, projectId, newTitle);
+    setProjectTitle(newTitle);
+  }, [user, projectId]);
 
   // Add note via player button
 
@@ -209,6 +249,14 @@ function Home() {
     projectId,
     notes,
   });
+  
+  // Reset unsaved changes flag when save completes
+  useEffect(() => {
+    if (!saving && lastSavedAt) {
+      setHasUnsavedChanges(false);
+    }
+  }, [saving, lastSavedAt]);
+  
   // Manual save via Ctrl/Cmd+S
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -234,7 +282,8 @@ function Home() {
   }, [handleRelinkSelected]);
 
   const showGlobalProjectOverlay = useMemo(() => params.projectId && (authLoading || loadingProject || loadingWaveform), [params.projectId, authLoading, loadingProject, loadingWaveform]);
-  // Generate and persist a small thumbnail once when waveform is ready
+  
+  // Generate and persist a small thumbnail once when waveform is ready - uses cached metadata to avoid duplicate fetch
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -243,13 +292,18 @@ function Home() {
       const ref = waveformPlayerRef.current;
       if (!ref || !ref.exportThumbnail) return;
       try {
-        const currentMeta = await fetchProjectMeta(user.uid, projectId);
-        if (cancelled) return;
-        const existing = currentMeta?.thumbnail ?? null;
+        // Use cached metadata if available, otherwise fetch
+        const existing = projectMetaRef.current?.thumbnail ?? null;
         const dataUrl = ref.exportThumbnail(480, 120);
         if (!dataUrl) return;
-        if (existing && existing.startsWith('data:') && existing.length === dataUrl.length) return; // cheap equality heuristic
+        if (cancelled) return;
+        // Skip update if thumbnail appears unchanged (cheap heuristic)
+        if (existing && existing.startsWith('data:') && existing.length === dataUrl.length) return;
         await updateProjectThumbnail(user.uid, projectId, dataUrl);
+        // Update cache
+        if (projectMetaRef.current) {
+          projectMetaRef.current.thumbnail = dataUrl;
+        }
       } catch {
         // ignore thumbnail errors
       }
@@ -354,7 +408,15 @@ function Home() {
             {loadingProject && (
               <FullscreenOverlay message="Loading project…" />
             )}
-            <AutosaveIndicator saving={saving} lastSavedAt={lastSavedAt} onClick={flushAutosave} />
+            <TitleBar
+              projectTitle={projectTitle}
+              onTitleChange={handleTitleChange}
+              saving={saving}
+              lastSavedAt={lastSavedAt}
+              onSaveClick={flushAutosave}
+              disabled={!user || !projectId}
+              hasUnsavedChanges={hasUnsavedChanges}
+            />
             <WaveformPlayer
               ref={waveformPlayerRef}
               audioFile={audioFile}

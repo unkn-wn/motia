@@ -2,6 +2,9 @@ import type { Note } from './notes';
 import type { Preferences } from '@utils/shortcutsUtils';
 import type { Timestamp } from 'firebase/firestore';
 
+// Constants
+export const MAX_PROJECT_TITLE_LENGTH = 64;
+
 export type UserProfileDoc = {
   createdAt: Timestamp;
   updatedAt: Timestamp;
