@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useEffect } from 'react';
 import { useAudio } from '@/contexts/objects/AudioContextObject';
 
 interface ProgressBarProps {
@@ -15,44 +15,36 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentTime, duration, onSeek
   const effectiveDuration = effectiveTrimEnd - trimStart;
   const relativeTime = Math.max(0, currentTime - trimStart);
   
-  // Track if user is actively dragging - use ref to avoid re-renders
-  const isDraggingRef = useRef(false);
-  const [localValue, setLocalValue] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   
   const handleProgressChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const relativeValue = parseFloat(e.target.value);
-    setLocalValue(relativeValue); // Store locally while dragging
     const absoluteTime = trimStart + relativeValue;
     onSeek(absoluteTime);
   }, [onSeek, trimStart]);
 
-  const handleMouseDown = useCallback(() => {
-    isDraggingRef.current = true;
-  }, []);
+  const progressPercentage = effectiveDuration > 0 ? (relativeTime / effectiveDuration) * 100 : 0;
 
-  const handleMouseUp = useCallback(() => {
-    isDraggingRef.current = false;
-    setLocalValue(null); // Clear local value when done dragging
-  }, []);
-
-  // Use local value while dragging, otherwise use prop value
-  const displayValue = isDraggingRef.current && localValue !== null ? localValue : relativeTime;
-  const progressPercentage = effectiveDuration > 0 ? (displayValue / effectiveDuration) * 100 : 0;
+  // Update background whenever the value or percentage changes
+  useEffect(() => {
+    if (inputRef.current) {
+      const currentValue = parseFloat(inputRef.current.value);
+      const percentage = effectiveDuration > 0 ? (currentValue / effectiveDuration) * 100 : 0;
+      inputRef.current.style.background = `linear-gradient(to right, #737373 0%, #737373 ${percentage}%, #27272a ${percentage}%, #27272a 100%)`;
+    }
+  }, [relativeTime, effectiveDuration]);
 
   return (
     <div className="flex-1">
       <input
+        ref={inputRef}
         id="playback-progress"
         type="range"
         min="0"
         max={effectiveDuration || 0}
         step="0.1"
-        value={displayValue}
+        value={relativeTime}
         onChange={handleProgressChange}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchEnd={handleMouseUp}
         className="w-full h-3 md:h-2 bg-neutral-700 rounded-full appearance-none md:-translate-y-0.5 cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 md:[&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-4
                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer
