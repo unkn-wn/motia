@@ -9,10 +9,12 @@ export function handleDrawMove(ctx: Ctx, canvasX: number, canvasY: number) {
   if (!lastPoint) return;
 
   const distance = Math.hypot(canvasX - lastPoint.x, canvasY - lastPoint.y);
-  if (distance > 2) {
+  // Reduced distance threshold for smoother curves
+  if (distance > 1) {
     const newPoints = [...currentStroke, { x: canvasX, y: canvasY }];
-    if (newPoints.length > 1000) {
-      const optimizedPoints = optimizeDrawingPoints(newPoints, 1.5);
+    // Only simplify if stroke gets extremely long, and use much gentler tolerance
+    if (newPoints.length > 2000) {
+      const optimizedPoints = optimizeDrawingPoints(newPoints, 0.5);
       setCurrentStroke(optimizedPoints);
     } else {
       setCurrentStroke(newPoints);

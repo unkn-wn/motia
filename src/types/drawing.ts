@@ -37,10 +37,9 @@ export type CompressionType =
   | 'integer'
   | 'delta'
   | 'ultraCompact'
-  | 'ultraCompact20'
+  | 'ultraCompact200'
   | 'rle'
   | 'vectorQuantization'
-  | 'vectorQuantization2'
   | 'session';
 
 export interface CompressedStroke {

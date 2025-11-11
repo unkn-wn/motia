@@ -39,7 +39,7 @@ export interface VectorQuantCompressedStroke {
  */
 export const compressStrokeUltraCompact = (
   stroke: DrawingStroke,
-  precision: number = 10
+  precision: number = 100
 ): UltraCompactCompressedStroke | DrawingStroke => {
   if (stroke.points.length === 0) return stroke;
 
@@ -210,11 +210,10 @@ export const compressStrokeAdvancedAdaptive = (stroke: DrawingStroke): Compresse
   // Test all compression methods (without wrapper overhead for testing)
   const methods: { name: string; data: unknown }[] = [
     { name: 'raw', data: stroke },
-    { name: 'ultraCompact', data: compressStrokeUltraCompact(stroke, 10) },
+    { name: 'ultraCompact', data: compressStrokeUltraCompact(stroke, 100) },
     { name: 'rle', data: compressStrokeRLE(stroke) },
-    { name: 'vectorQuantization', data: compressStrokeVectorQuantization(stroke, 1) },
-    { name: 'vectorQuantization2', data: compressStrokeVectorQuantization(stroke, 2) },
-    { name: 'ultraCompact20', data: compressStrokeUltraCompact(stroke, 20) }
+    { name: 'vectorQuantization', data: compressStrokeVectorQuantization(stroke, 0.5) },
+    { name: 'ultraCompact200', data: compressStrokeUltraCompact(stroke, 200) }
   ];
 
   // Find the best compression
@@ -243,12 +242,11 @@ export const decompressStrokeAdvancedAdaptive = (compressed: CompressedStroke): 
     case 'raw':
   return compressed.data as DrawingStroke;
     case 'ultraCompact':
-    case 'ultraCompact20':
+    case 'ultraCompact200':
   return decompressStrokeUltraCompact(compressed.data as UltraCompactCompressedStroke);
     case 'rle':
   return decompressStrokeRLE(compressed.data as RLECompressedStroke);
     case 'vectorQuantization':
-    case 'vectorQuantization2':
   return decompressStrokeVectorQuantization(compressed.data as VectorQuantCompressedStroke);
     case 'session':
       // This is handled at the session level, not individual stroke level
