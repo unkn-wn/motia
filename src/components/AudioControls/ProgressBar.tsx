@@ -19,21 +19,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentTime, duration, onSeek
     const relativeValue = parseFloat(e.target.value);
     const absoluteTime = trimStart + relativeValue;
     onSeek(absoluteTime);
-    
-    // Immediately update the background gradient to match the new position
-    const percentage = effectiveDuration > 0 ? (relativeValue / effectiveDuration) * 100 : 0;
-    e.target.style.background = `linear-gradient(to right, #737373 0%, #737373 ${percentage}%, #27272a ${percentage}%, #27272a 100%)`;
-  }, [onSeek, trimStart, effectiveDuration]);
-
-  // Handle input event for real-time updates during dragging (especially on mobile)
-  const handleProgressInput = useCallback((e: React.FormEvent<HTMLInputElement>) => {
-    const target = e.target as HTMLInputElement;
-    const relativeValue = parseFloat(target.value);
-    
-    // Update background gradient immediately during drag
-    const percentage = effectiveDuration > 0 ? (relativeValue / effectiveDuration) * 100 : 0;
-    target.style.background = `linear-gradient(to right, #737373 0%, #737373 ${percentage}%, #27272a ${percentage}%, #27272a 100%)`;
-  }, [effectiveDuration]);
+  }, [onSeek, trimStart]);
 
   const progressPercentage = effectiveDuration > 0 ? (relativeTime / effectiveDuration) * 100 : 0;
 
@@ -47,7 +33,6 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentTime, duration, onSeek
         step="0.1"
         value={relativeTime}
         onChange={handleProgressChange}
-        onInput={handleProgressInput}
         className="w-full h-3 md:h-2 bg-neutral-700 rounded-full appearance-none md:-translate-y-0.5 cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 md:[&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-4
                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer

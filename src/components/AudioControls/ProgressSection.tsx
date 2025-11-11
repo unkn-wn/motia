@@ -1,10 +1,10 @@
-import React, { memo } from 'react';
+import React from 'react';
 import { useTimeState } from './hooks';
 import ProgressBar from './ProgressBar';
 import { formatTime } from '@utils/timeUtils';
 
-// Optimized ProgressSection that uses hooks directly to avoid prop drilling
-const ProgressSection: React.FC = memo(() => {
+// No memo - needs to re-render frequently as currentTime updates
+const ProgressSection: React.FC = () => {
   const { currentTime, duration, seekToTime } = useTimeState();
 
   return (
@@ -22,7 +22,7 @@ const ProgressSection: React.FC = memo(() => {
       </span>
     </div>
   );
-});
+};
 
 ProgressSection.displayName = 'ProgressSection';
 
