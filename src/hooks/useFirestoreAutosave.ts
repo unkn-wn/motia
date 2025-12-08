@@ -41,9 +41,12 @@ export function useFirestoreAutosave(params: {
 	projectId: string | null;
 	notes: Note[];
 	audioMeta?: { durationSec?: number };
+	notesVersion?: number;
+	setNotesVersion?: (v: number) => void;
 }) {
-	const { uid, projectId, notes, audioMeta } = params;
+	const { uid, projectId, notes, audioMeta, notesVersion, setNotesVersion } = params;
 	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState<Error | null>(null);
 	const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 	const lastTouchedAtRef = useRef<number | null>(null);
 	const durationPatchedRef = useRef<string | null>(null); // track by projectId
@@ -65,7 +68,10 @@ export function useFirestoreAutosave(params: {
 		if (!uid || !projectId) return;
 		try {
 			setSaving(true);
-			await saveProjectNotes(uid, projectId, notes);
+			setSaveError(null);
+			const newVersion = await saveProjectNotes(uid, projectId, notes, notesVersion);
+			if (setNotesVersion) setNotesVersion(newVersion);
+
 			// Ensure project shows as recently updated in lists (throttled)
 			const now = Date.now();
 			if (!lastTouchedAtRef.current || now - lastTouchedAtRef.current > 60_000) {
@@ -76,8 +82,12 @@ export function useFirestoreAutosave(params: {
 				setLastSavedAt(new Date());
 				setSaving(false);
 			}
-		} catch {
-			if (mounted.current) setSaving(false);
+		} catch (err) {
+			console.error('Autosave failed:', err);
+			if (mounted.current) {
+				setSaving(false);
+				setSaveError(err instanceof Error ? err : new Error('Unknown save error'));
+			}
 		}
 	}, 2500);
 
@@ -120,5 +130,5 @@ export function useFirestoreAutosave(params: {
 			.catch(() => undefined);
 	}, [uid, projectId, audioMeta?.durationSec]);
 
-	return { saving, lastSavedAt, flush: saveNotes.flush } as const;
+	return { saving, lastSavedAt, saveError, flush: saveNotes.flush } as const;
 }

@@ -38,6 +38,7 @@ function Home() {
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [projectTitle, setProjectTitle] = useState<string>('Untitled Project');
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+	const [notesVersion, setNotesVersion] = useState<number | undefined>(undefined);
 
 	const [profileOpen, setProfileOpen] = useState(false);
 	const handleOpenProfile = useCallback(() => setProfileOpen(true), []);
@@ -77,7 +78,7 @@ function Home() {
 		handleFileSelect,
 		handleRelinkSelected,
 		handleSignOut,
-	} = useProjectLifecycle({ setNotes, onCurrentTimeChange: () => {} });
+	} = useProjectLifecycle({ setNotes, onCurrentTimeChange: () => {}, setNotesVersion });
 
 	// Mark as unsaved whenever notes change (user interaction)
 	useEffect(() => {
@@ -281,11 +282,14 @@ function Home() {
 	const {
 		saving,
 		lastSavedAt,
+		saveError,
 		flush: flushAutosave,
 	} = useFirestoreAutosave({
 		uid: user?.uid,
 		projectId,
 		notes,
+		notesVersion,
+		setNotesVersion,
 	});
 
 	// Reset unsaved changes flag when save completes
@@ -466,6 +470,15 @@ function Home() {
 					/>
 					<ProjectLoadingWrapper loadingProject={loadingProject} metadataLoaded={metadataLoaded}>
 						<div className="relative h-screen overflow-hidden">
+							{saveError && (
+								<div className="absolute top-1/2 left-0 right-0 z-50 flex justify-center pointer-events-none">
+									<div className="bg-red-900 text-white px-4 py-2 rounded shadow-lg font-bold pointer-events-auto">
+										{saveError.message === 'Conflict: Remote version is newer'
+											? 'Sync Conflict: This project was updated on another device. Please refresh to avoid overwriting data.'
+											: 'Error saving changes. Please check your connection.'}
+									</div>
+								</div>
+							)}
 							<TitleBar
 								projectTitle={projectTitle}
 								onTitleChange={handleTitleChange}
