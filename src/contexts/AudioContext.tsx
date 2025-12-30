@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { isPlayingStore, volumeStore, currentTimeStore, durationStore } from '@components/AudioControls/state';
 import { AudioContext, type AudioContextType, AudioActionsContext, type AudioActionsOnly } from './objects/AudioContextObject';
+import { useAuth } from './objects/FirebaseAuthContextObject';
+import { saveUserSettings } from '@/lib/db';
 
 interface AudioProviderProps {
 	children: ReactNode;
@@ -10,6 +12,7 @@ interface AudioProviderProps {
 	onPlayStateChange?: (isPlaying: boolean) => void;
 	initialTrimStart?: number;
 	initialTrimEnd?: number;
+	initialVolume?: number;
 }
 
 export const AudioProvider: React.FC<AudioProviderProps> = ({
@@ -18,12 +21,16 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 	onPlayStateChange,
 	initialTrimStart,
 	initialTrimEnd,
+	initialVolume,
 }) => {
+	// Need user ID for persistence
+	const { user } = useAuth();
+
 	// Audio state
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [currentTime, setCurrentTime] = useState(0);
 	const [duration, setDuration] = useState(0);
-	const [volume, setVolumeState] = useState(0.5);
+	const [volume, setVolumeState] = useState(initialVolume ?? 0.5);
 	const [waveformData, setWaveformData] = useState<number[]>([]);
 	const [trimStart, setTrimStart] = useState(initialTrimStart ?? 0);
 	const [trimEnd, setTrimEnd] = useState(initialTrimEnd ?? 0);
@@ -39,6 +46,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 	const trimEndRef = useRef(trimEnd);
 	const onCurrentTimeChangeRef = useRef(onCurrentTimeChange);
 	const onPlayStateChangeRef = useRef(onPlayStateChange);
+	const saveVolumeTimeoutRef = useRef<number | undefined>(undefined);
 
 	// Keep refs in sync with state
 	currentTimeRef.current = currentTime;
@@ -110,13 +118,33 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 		[setCurrentTimeInternal]
 	);
 
+	// Persist volume helper
+	const persistVolume = useCallback(
+		(vol: number) => {
+			if (!user?.uid) return;
+			if (saveVolumeTimeoutRef.current) {
+				window.clearTimeout(saveVolumeTimeoutRef.current);
+			}
+			saveVolumeTimeoutRef.current = window.setTimeout(() => {
+				saveUserSettings(user.uid, { preferences: { volume: vol } }).catch(() => {
+					/* ignore persistence errors */
+				});
+			}, 1000);
+		},
+		[user?.uid]
+	);
+
 	// Volume controls - now stable
-	const setVolume = useCallback((newVolume: number) => {
-		setVolumeState(newVolume);
-		if (wavesurferRef.current) {
-			wavesurferRef.current.setVolume(newVolume);
-		}
-	}, []);
+	const setVolume = useCallback(
+		(newVolume: number) => {
+			setVolumeState(newVolume);
+			if (wavesurferRef.current) {
+				wavesurferRef.current.setVolume(newVolume);
+			}
+			persistVolume(newVolume);
+		},
+		[persistVolume]
+	);
 
 	const volumeUp = useCallback(() => {
 		const newVolume = Math.min(1, volumeRef.current + 0.1);
@@ -142,6 +170,10 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 	// Wavesurfer ref management
 	const setWavesurferRef = useCallback((ref: WaveSurfer | null) => {
 		wavesurferRef.current = ref;
+		// Sync initial volume
+		if (ref) {
+			ref.setVolume(volumeRef.current);
+		}
 	}, []);
 
 	const getWavesurfer = useCallback(() => {
@@ -160,6 +192,16 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 			setTrimEnd(initialTrimEnd);
 		}
 	}, [initialTrimEnd]);
+
+	// Sync initial volume if provided later
+	useEffect(() => {
+		if (initialVolume !== undefined) {
+			setVolumeState(initialVolume);
+			if (wavesurferRef.current) {
+				wavesurferRef.current.setVolume(initialVolume);
+			}
+		}
+	}, [initialVolume]);
 
 	// Seek audio to trimStart when trim data loads from Firebase
 	useEffect(() => {

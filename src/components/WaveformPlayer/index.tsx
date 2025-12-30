@@ -25,7 +25,7 @@ export interface WaveformPlayerProps {
 
 export interface WaveformPlayerRef {
 	seekToTime: (time: number) => void;
-  getCanvasTransform: () => { offsetX: number; offsetY: number; scale: number };
+	getCanvasTransform: () => { offsetX: number; offsetY: number; scale: number };
 	playPause: () => void;
 	skipBack: () => void;
 	skipForward: () => void;
@@ -82,6 +82,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
 		const [isFollowingPlayhead, setIsFollowingPlayhead] = useState(true); // Start with auto-tracking enabled
 		const transformRef = useRef(transform);
+
+		// Shared layout cache for notes (renderer populates, hit-test reads)
+		const noteLayoutCacheRef = useRef<Map<string, { key: string; lines: string[]; noteHeight: number }>>(new Map());
 
 		// Note interaction state
 		const [editingNote, setEditingNote] = useState<string | null>(null);
@@ -499,6 +502,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			// Delete confirmation
 			deleteConfirmNoteId,
 			setDeleteConfirmNoteId,
+
+			// Shared Layout Cache
+			noteLayoutCache: noteLayoutCacheRef.current,
 		};
 
 		return (

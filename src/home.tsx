@@ -25,7 +25,7 @@ import { Navigate, useNavigate } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 import { useNotesState } from '@/hooks/useNotesState';
 import { useProjectLifecycle } from '@/hooks/useProjectLifecycle';
-import { fetchProjectMeta, updateProjectThumbnail, renameProject } from '@/lib/db';
+import { fetchProjectMeta, updateProjectThumbnail, renameProject, fetchUserSettings } from '@/lib/db';
 import { TitleBar } from '@/components/TitleBar';
 import SidebarToggle from '@/components/SidebarToggle';
 
@@ -87,22 +87,45 @@ function Home() {
 		}
 	}, [notes, projectId]);
 
-	// Fetch project metadata (title + thumbnail + trim data) when project loads
+	// Fetch project metadata (title + thumbnail + trim data) + User Settings (volume) when project loads
 	const projectMetaRef = useRef<{ title: string; thumbnail: string | null } | null>(null);
 	const [trimStart, setTrimStart] = useState<number | undefined>(undefined);
 	const [trimEnd, setTrimEnd] = useState<number | undefined>(undefined);
+	const [initialVolume, setInitialVolume] = useState<number | undefined>(undefined);
 	const [metadataLoaded, setMetadataLoaded] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
 		setMetadataLoaded(false); // Start loading
 		(async () => {
-			if (!user || !projectId) {
+			if (!user) {
 				setProjectTitle('Untitled Project');
 				projectMetaRef.current = null;
 				setTrimStart(0);
 				setTrimEnd(0);
-				setMetadataLoaded(true); // No project to load, mark as loaded
+				setInitialVolume(0.5);
+				setMetadataLoaded(true);
+				return;
+			}
+
+			// Always fetch user settings (volume) if user exists
+			try {
+				const settings = await fetchUserSettings(user.uid);
+				if (!cancelled && settings?.preferences?.volume !== undefined) {
+					setInitialVolume(settings.preferences.volume);
+				} else if (!cancelled) {
+					setInitialVolume(0.5);
+				}
+			} catch {
+				if (!cancelled) setInitialVolume(0.5);
+			}
+
+			if (!projectId) {
+				setProjectTitle('Untitled Project');
+				projectMetaRef.current = null;
+				setTrimStart(0);
+				setTrimEnd(0);
+				setMetadataLoaded(true);
 				return;
 			}
 			try {
@@ -391,7 +414,7 @@ function Home() {
 
 			{!audioFile ? (
 				params.projectId ? (
-					<AudioProvider initialTrimStart={trimStart} initialTrimEnd={trimEnd}>
+					<AudioProvider initialTrimStart={trimStart} initialTrimEnd={trimEnd} initialVolume={initialVolume}>
 						{/* Settings Modal - unified settings with tabs */}
 						<SettingsModal
 							isOpen={showSettings}
@@ -459,7 +482,7 @@ function Home() {
 					<HomeLanding onUpload={handleFileSelect} uploading={isLoading} onSignOut={handleSignOut} />
 				)
 			) : (
-				<AudioProvider initialTrimStart={trimStart} initialTrimEnd={trimEnd}>
+				<AudioProvider initialTrimStart={trimStart} initialTrimEnd={trimEnd} initialVolume={initialVolume}>
 					{/* Settings Modal - unified settings with tabs */}
 					<SettingsModal
 						isOpen={showSettings}

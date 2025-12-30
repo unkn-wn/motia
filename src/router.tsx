@@ -5,33 +5,33 @@ import ProjectsList from '@components/ProjectsList';
 const rootRoute = createRootRoute({ component: Outlet });
 
 const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/',
-  component: Home,
+	getParentRoute: () => rootRoute,
+	path: '/',
+	component: Home,
 });
 
 const projectRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/project/$projectId',
-  component: Home,
+	getParentRoute: () => rootRoute,
+	path: '/project/$projectId',
+	component: Home,
 });
 
 const projectsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/projects',
-  component: ProjectsList,
+	getParentRoute: () => rootRoute,
+	path: '/projects',
+	component: ProjectsList,
 });
 
 const routeTree = rootRoute.addChildren([indexRoute, projectRoute, projectsRoute]);
 
 export const router = createRouter({
-  routeTree,
-  // Ensure routes match when hosted under a subpath (e.g., /motia/ on GitHub Pages)
-  basepath: import.meta.env.BASE_URL,
+	routeTree,
+	// Ensure routes match correctly
+	basepath: import.meta.env.BASE_URL,
 });
 
 declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router;
-  }
+	interface Register {
+		router: typeof router;
+	}
 }

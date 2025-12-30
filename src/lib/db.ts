@@ -181,7 +181,9 @@ export async function saveProjectNotes(uid: string, projectId: string, notes: No
 				let comp = d.compressed as unknown;
 				if (typeof comp === 'string') comp = JSON.parse(comp);
 				const strokes = decompressSession(comp as unknown as import('@types').CompressedStroke[]);
-				for (const s of strokes as unknown as import('@types').DrawingStroke[]) allStrokes.push(s);
+				if (strokes) {
+					for (const s of strokes as unknown as import('@types').DrawingStroke[]) allStrokes.push(s);
+				}
 			} catch {
 				/* ignore parse errors for this note */
 			}
@@ -303,6 +305,12 @@ export async function fetchProjectNotes(uid: string, projectId: string): Promise
 		}
 	}
 	return { notes, version };
+}
+
+export async function getProjectNotesVersion(uid: string, projectId: string): Promise<number | null> {
+	const snap = await getDoc(userProjectNotesDoc(uid, projectId));
+	if (!snap.exists()) return null;
+	return (snap.data() as ProjectNotesDoc).version || 0;
 }
 
 // --- Migration ---

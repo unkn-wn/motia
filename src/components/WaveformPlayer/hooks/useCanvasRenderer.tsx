@@ -29,7 +29,9 @@ export const useCanvasRenderer = () => {
 	// Small caches to avoid repeated layout/decompression work between frames
 	const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
 	const decompressedCacheRef = useRef<Map<string, { key: string; strokes: import('@types').DrawingStroke[] }>>(new Map());
-	const noteLayoutCacheRef = useRef<Map<string, { key: string; lines: string[]; noteHeight: number }>>(new Map());
+	// Use shared cache if available, otherwise local fallback (though practically context should always have it)
+	const localNoteLayoutCacheRef = useRef<Map<string, { key: string; lines: string[]; noteHeight: number }>>(new Map());
+	const noteLayoutCache = useWaveformContext().noteLayoutCache || localNoteLayoutCacheRef.current;
 
 	// Waveform dimensions in world space
 	const getWaveformDims = useCallback(
@@ -158,7 +160,7 @@ export const useCanvasRenderer = () => {
 					const headerHeight = 40;
 					const contentLineHeight = 24;
 					const layoutKey = `${note.id}:${note.content ?? ''}`;
-					let layout = noteLayoutCacheRef.current.get(note.id);
+					let layout = noteLayoutCache.get(note.id);
 					if (!layout || layout.key !== layoutKey) {
 						// Basic word wrap, preserving blank lines
 						const rawLines = note.content ? note.content.split(/\r?\n/) : ['Empty note'];
@@ -190,7 +192,7 @@ export const useCanvasRenderer = () => {
 						const contentHeight = Math.max(24, lines.length * contentLineHeight);
 						const noteHeight = headerHeight + contentHeight + padding;
 						layout = { key: layoutKey, lines, noteHeight };
-						noteLayoutCacheRef.current.set(note.id, layout);
+						noteLayoutCache.set(note.id, layout);
 					}
 					const noteHeight = layout.noteHeight;
 					ctx.lineTo(note.canvasX + noteWidth / 2, note.canvasY + noteHeight / 2);
@@ -219,7 +221,7 @@ export const useCanvasRenderer = () => {
 				const headerHeight = 40;
 				const contentLineHeight = 24;
 				const layoutKey = `${note.id}:${note.content ?? ''}`;
-				let layout = noteLayoutCacheRef.current.get(note.id)!;
+				let layout = noteLayoutCache.get(note.id)!;
 				if (!layout || layout.key !== layoutKey) {
 					// Support CRLF and preserve explicit blank lines
 					const rawLines = note.content ? note.content.split(/\r?\n/) : ['Empty note'];
@@ -250,7 +252,7 @@ export const useCanvasRenderer = () => {
 					const contentHeight = Math.max(24, lines.length * contentLineHeight);
 					const noteHeight = headerHeight + contentHeight + padding;
 					layout = { key: layoutKey, lines, noteHeight };
-					noteLayoutCacheRef.current.set(note.id, layout);
+					noteLayoutCache.set(note.id, layout);
 				}
 				const contentLines = layout.lines;
 				const noteHeight = layout.noteHeight;
@@ -313,8 +315,8 @@ export const useCanvasRenderer = () => {
 		for (const key of decompressedCacheRef.current.keys()) {
 			if (!idSet.has(key)) decompressedCacheRef.current.delete(key);
 		}
-		for (const key of noteLayoutCacheRef.current.keys()) {
-			if (!idSet.has(key)) noteLayoutCacheRef.current.delete(key);
+		for (const key of noteLayoutCache.keys()) {
+			if (!idSet.has(key)) noteLayoutCache.delete(key);
 		}
 
 		const rect = canvas.getBoundingClientRect();

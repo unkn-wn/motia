@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { saveProjectNotes, updateProjectMeta, touchProjectUpdatedAt } from '@/lib/db';
+import { saveProjectNotes, updateProjectMeta, touchProjectUpdatedAt, getProjectNotesVersion } from '@/lib/db';
 import type { Note } from '@types';
 
 type Debounced<T extends (...args: unknown[]) => void> = ((...args: Parameters<T>) => void) & { flush: () => void };
@@ -51,6 +51,10 @@ export function useFirestoreAutosave(params: {
 	const lastTouchedAtRef = useRef<number | null>(null);
 	const durationPatchedRef = useRef<string | null>(null); // track by projectId
 	const mounted = useRef(true);
+
+	// Track last successfully saved content to avoid redundant writes
+	const lastSavedContentRef = useRef<string>('');
+
 	useEffect(() => {
 		mounted.current = true;
 		return () => {
@@ -58,18 +62,39 @@ export function useFirestoreAutosave(params: {
 		};
 	}, []);
 
-	// When project changes, reset duration patch flag
+	// When project changes, reset duration patch flag and last saved content
 	useEffect(() => {
 		durationPatchedRef.current = null;
+		lastSavedContentRef.current = ''; // Force next save to execute (or establish baseline)
 	}, [projectId]);
 
+	// Guard against parallel save execution from multiple exit hooks
+	const isSavingRef = useRef(false);
+
 	// Debounced notes saver
-	const saveNotes = useDebounced(async () => {
+	const saveNotes = useDebounced(async (force = false) => {
 		if (!uid || !projectId) return;
+
+		// Serialize current notes to check for changes
+		const currentContent = JSON.stringify(notes);
+
+		// If content hasn't changed and we are not forcing (e.g. exit timestamp bump), skip
+		if (!force && currentContent === lastSavedContentRef.current) {
+			return;
+		}
+
+		// Prevent re-entry if a save is already strictly in progress
+		if (isSavingRef.current) return;
+
 		try {
+			isSavingRef.current = true;
 			setSaving(true);
 			setSaveError(null);
 			const newVersion = await saveProjectNotes(uid, projectId, notes, notesVersion);
+
+			// Update our baseline
+			lastSavedContentRef.current = currentContent;
+
 			if (setNotesVersion) setNotesVersion(newVersion);
 
 			// Ensure project shows as recently updated in lists (throttled)
@@ -88,35 +113,67 @@ export function useFirestoreAutosave(params: {
 				setSaving(false);
 				setSaveError(err instanceof Error ? err : new Error('Unknown save error'));
 			}
+		} finally {
+			isSavingRef.current = false;
 		}
-	}, 2500);
+	}, 4000);
 
-	// Trigger on notes changes
+	// 1. Trigger autosave on notes changes
 	useEffect(() => {
 		if (!uid || !projectId) return;
-
-		// Always schedule save when notes change (debouncing handles batching)
 		saveNotes();
-		// flush on unload to minimize data loss
-		const onBeforeUnload = () => {
-			saveNotes.flush();
-			if (uid && projectId) {
-				// Fire a best-effort final timestamp bump; ignore errors in unload
-				touchProjectUpdatedAt(uid, projectId).catch(() => undefined);
+	}, [uid, projectId, notes, saveNotes]);
+
+	// Refs for event listeners to avoid re-attaching freqently
+	const stateRef = useRef({ uid, projectId, notesVersion, saving });
+	useEffect(() => {
+		stateRef.current = { uid, projectId, notesVersion, saving };
+	}, [uid, projectId, notesVersion, saving]);
+
+	// 2. Lifecycle event listeners (Window focus, visibility, pagehide)
+	useEffect(() => {
+		const onWindowFocus = async () => {
+			const { uid, projectId, notesVersion, saving } = stateRef.current;
+			if (!uid || !projectId || typeof notesVersion !== 'number') return;
+			if (isSavingRef.current || saving) return;
+
+			try {
+				const remoteVersion = await getProjectNotesVersion(uid, projectId);
+				if (remoteVersion !== null && remoteVersion > notesVersion) {
+					setSaveError(new Error('Sync Conflict: Remote data is newer. Please refresh to avoid overwriting.'));
+				}
+			} catch (e) {
+				// Ignore network errors
 			}
 		};
+
+		const flushOnce = () => saveNotes.flush();
+
 		const onVisibilityChange = () => {
-			if (document.visibilityState === 'hidden') {
-				saveNotes.flush();
-			}
+			if (document.visibilityState === 'hidden') flushOnce();
+			if (document.visibilityState === 'visible') onWindowFocus();
 		};
-		window.addEventListener('beforeunload', onBeforeUnload);
+
+		window.addEventListener('beforeunload', flushOnce);
+		window.addEventListener('pagehide', flushOnce);
+		window.addEventListener('focus', onWindowFocus);
 		document.addEventListener('visibilitychange', onVisibilityChange);
+
 		return () => {
-			window.removeEventListener('beforeunload', onBeforeUnload);
+			window.removeEventListener('beforeunload', flushOnce);
+			window.removeEventListener('pagehide', flushOnce);
+			window.removeEventListener('focus', onWindowFocus);
 			document.removeEventListener('visibilitychange', onVisibilityChange);
 		};
-	}, [uid, projectId, notes, saveNotes]);
+	}, [saveNotes]); // Only strictly stable dependencies for listeners
+
+	// 3. Unmount flush triggers
+	// We want to ensure this ONLY runs on unmount, not on dependency changes.
+	useEffect(() => {
+		return () => {
+			saveNotes.flush();
+		};
+	}, [saveNotes]);
 
 	// Update meta when audio duration available
 	useEffect(() => {

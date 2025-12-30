@@ -20,6 +20,7 @@ export const useMouseInteractions = () => {
 		setIsFollowingPlayhead,
 		notes,
 		NOTE_LABEL_HIDE_THRESHOLD,
+		noteLayoutCache,
 	} = useWaveformContext();
 
 	const handleMouseDown = useCallback(
@@ -34,7 +35,15 @@ export const useMouseInteractions = () => {
 			const rect = canvasRef.current?.getBoundingClientRect();
 			if (!rect) return;
 			const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
-			const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
+			const clickedNote = findNoteAtPosition(
+				canvasX,
+				canvasY,
+				notes,
+				transform.scale,
+				NOTE_LABEL_HIDE_THRESHOLD,
+				!isDrawingMode,
+				noteLayoutCache
+			);
 
 			// If clicking on a note with left button and no active tool, start dragging the note (takes priority over panning)
 			if (buttonLabel === 'Left' && clickedNote && !isDrawingMode && !toolMode) {

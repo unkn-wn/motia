@@ -111,10 +111,12 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 		]);
 
 		// Draw waveform bars with playhead
+		// Note: drawWaveformBars handles its own width scaling, but for consistency we should check if it needs padding too.
+		// For now, we leave the background bars stretching full width, but align handles slightly inset.
 		drawWaveformBars({
 			ctx,
 			waveformData,
-			width,
+			width, // visual width
 			height,
 			duration,
 			currentTime,
@@ -123,11 +125,15 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 			showPlayhead: true,
 		});
 
-		// Calculate handle positions
-		const startX = (trimStart / duration) * width;
-		const endX = (trimEnd / duration) * width;
-		const startHandleX = Math.max(HANDLE_WIDTH / 2, startX);
-		const endHandleX = Math.min(width - HANDLE_WIDTH / 2, endX);
+		// Calculate handle positions using same effective width logic
+		const effectiveWidth = width - HANDLE_WIDTH;
+
+		const startX = (trimStart / duration) * effectiveWidth + HANDLE_WIDTH / 2;
+		const endX = (trimEnd / duration) * effectiveWidth + HANDLE_WIDTH / 2;
+
+		// Handles are now centered on the exact time position from the logic above
+		const startHandleX = startX;
+		const endHandleX = endX;
 		const startGripY = (height - HANDLE_GRIP_HEIGHT) / 2;
 		const endGripY = (height - HANDLE_GRIP_HEIGHT) / 2;
 
@@ -220,20 +226,24 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 
 			const rect = canvasRef.current.getBoundingClientRect();
 			const x = e.clientX - rect.left;
-			const clickTime = (x / rect.width) * duration;
+			// Compensate for handle widths to ensure precise time mapping
+			const effectiveWidth = rect.width - HANDLE_WIDTH; // usable track width
+			const offsetX = x - HANDLE_WIDTH / 2; // offset by half handle
 
-			const startX = (trimStart / duration) * rect.width;
-			const endX = (trimEnd / duration) * rect.width;
+			// Map visual position to time: clamp to ensure valid range
+			// Using effectiveWidth ensures dragging to far right reaches exactly duration
+			const clickTime = Math.max(0, Math.min(duration, (offsetX / effectiveWidth) * duration));
 
-			const startHandleX = Math.max(HANDLE_WIDTH / 2, startX);
-			const endHandleX = Math.min(rect.width - HANDLE_WIDTH / 2, endX);
+			const startX = (trimStart / duration) * effectiveWidth + HANDLE_WIDTH / 2;
+			const endX = (trimEnd / duration) * effectiveWidth + HANDLE_WIDTH / 2;
 
-			if (Math.abs(x - startHandleX) < HANDLE_GRIP_WIDTH) {
+			// Use larger grip area for touch/mouse
+			if (Math.abs(x - startX) < HANDLE_GRIP_WIDTH) {
 				setDragging('start');
 				activePointerIdRef.current = e.pointerId;
 				canvasRef.current.setPointerCapture(e.pointerId);
 				e.preventDefault();
-			} else if (Math.abs(x - endHandleX) < HANDLE_GRIP_WIDTH) {
+			} else if (Math.abs(x - endX) < HANDLE_GRIP_WIDTH) {
 				setDragging('end');
 				activePointerIdRef.current = e.pointerId;
 				canvasRef.current.setPointerCapture(e.pointerId);
@@ -258,7 +268,10 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 
 			const rect = canvasRef.current.getBoundingClientRect();
 			const x = e.clientX - rect.left;
-			const time = Math.max(0, Math.min(duration, (x / rect.width) * duration));
+
+			const effectiveWidth = rect.width - HANDLE_WIDTH;
+			const offsetX = x - HANDLE_WIDTH / 2;
+			const time = Math.max(0, Math.min(duration, (offsetX / effectiveWidth) * duration));
 
 			if (dragging === 'start') {
 				const newStart = Math.min(time, trimEnd - 0.5);
