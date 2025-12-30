@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -44,13 +44,7 @@ jobs:
         run: npm ci
 
       - name: Determine BASE_PATH
-        run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          if [[ "$REPO_NAME" == *.github.io ]]; then
-            echo "BASE_PATH=/" >> $GITHUB_ENV
-          else
-            echo "BASE_PATH=/${REPO_NAME}/" >> $GITHUB_ENV
-          fi
+        run: echo "BASE_PATH=/" >> $GITHUB_ENV
       - name: Build
         env:
           BASE_PATH: ${{ env.BASE_PATH }}
