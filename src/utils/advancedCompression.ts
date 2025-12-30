@@ -209,7 +209,7 @@ export const compressStrokeAdvancedAdaptive = (stroke: DrawingStroke): Compresse
 		{ name: 'raw', data: stroke },
 		{ name: 'ultraCompact', data: compressStrokeUltraCompact(stroke, 100) },
 		{ name: 'rle', data: compressStrokeRLE(stroke) },
-		{ name: 'vectorQuantization', data: compressStrokeVectorQuantization(stroke, 0.5) },
+		{ name: 'vectorQuantization', data: compressStrokeVectorQuantization(stroke) },
 		{ name: 'ultraCompact200', data: compressStrokeUltraCompact(stroke, 200) },
 	];
 
