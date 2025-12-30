@@ -159,10 +159,10 @@ export const decompressStrokeRLE = (compressed: RLECompressedStroke): DrawingStr
 /**
  * Vector quantization - round coordinates to a grid
  */
-export const compressStrokeVectorQuantization = (stroke: DrawingStroke, gridSize: number = 2): VectorQuantCompressedStroke => {
+export const compressStrokeVectorQuantization = (stroke: DrawingStroke): VectorQuantCompressedStroke => {
 	// Adjust grid size to maintain constant visual precision (approx 0.5 screen pixels)
-	// Base gridSize passed in is usually 2 (world units), but we want it responsive to scale.
-	// Actually, let's just enforce a visual target: 0.5px.
+	// Base gridSize passed in is usually 2 (world units), but we dont want it responsive to scale.
+	// So, let's just enforce a visual target: 0.5px.
 	const effectiveGrid = 0.5;
 
 	const quantized = stroke.points.map((p) => [
