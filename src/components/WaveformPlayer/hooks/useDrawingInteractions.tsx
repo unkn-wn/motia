@@ -21,7 +21,6 @@ export const useDrawingInteractions = () => {
 		onUpdateDrawing,
 		canvasRef,
 		notes,
-		transform,
 	} = useWaveformContext();
 
 	const handleDrawingStart = useCallback(

@@ -12,34 +12,7 @@ import { handleSelectionCreate, handleSelectionMove, finalizeSelectionMove } fro
 export const useGlobalMouseHandlers = () => {
 	// Grab the full typed context once so we can pass it to helpers without casts
 	const ctx = useWaveformContext();
-	const {
-		dragging,
-		setDragging,
-		setDragOccurred,
-		isDrawing,
-		isDrawingMode,
-		toolMode,
-		isPanning,
-		setIsPanning,
-		onMoveNote,
-		transform,
-		currentStroke,
-		setCurrentStroke,
-		canvasRef,
-		selectionBox,
-		setSelectionBox,
-		setSelectedDrawingIds,
-		selectedStrokeGroups,
-		setSelectedStrokeGroups,
-		movingStrokePreview,
-		setMovingStrokePreview,
-		erasingStrokeIds,
-		setErasingStrokeIds,
-		setEraserCursor,
-		notes,
-		onUpdateDrawing,
-		setTransform,
-	} = ctx;
+	const { dragging, isDrawing, toolMode, isPanning, selectionBox } = ctx;
 
 	// Used as a safe way to trigger a canvas rerender when caches might hide updates
 	const { handleDrawingEnd } = useDrawingInteractions();
@@ -56,8 +29,7 @@ export const useGlobalMouseHandlers = () => {
 		const handleGlobalMouseMove = (e: MouseEvent | PointerEvent) => {
 			// Access fresh context
 			const currentCtx = ctxRef.current;
-			const { canvasRef, transform, toolMode, selectionBox, setDragOccurred, dragging, onMoveNote, isDrawing, isDrawingMode, setDragging } =
-				currentCtx;
+			const { canvasRef, transform, toolMode, selectionBox, setDragOccurred, dragging, onMoveNote, isDrawing, isDrawingMode } = currentCtx;
 
 			// On desktop we prefer mousemove; skip duplicate pointer events from mouse
 			if ('pointerType' in e && e.pointerType === 'mouse') return;
