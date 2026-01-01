@@ -225,7 +225,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			wavesurferLocalRef.current = wavesurfer;
 
 			const audioUrl = URL.createObjectURL(audioFile);
-			wavesurfer.load(audioUrl);
+			wavesurfer.load(audioUrl).catch(() => {
+				// Prevent AbortError from spamming console on unmount/remount
+			});
 
 			wavesurfer.on('ready', () => {
 				const audioDuration = wavesurfer.getDuration();

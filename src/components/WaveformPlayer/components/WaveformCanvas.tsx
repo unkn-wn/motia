@@ -13,7 +13,7 @@ export const WaveformCanvas: React.FC = () => {
 	const { selectionBox, setSelectionBox, selectedDrawingIds } = useWaveformContext();
 
 	const { duration, seekToTime } = useAudio();
-	const { handleMouseDown, handleMouseMove, handleWheel } = useMouseInteractions();
+	const { handleMouseDown, handleMouseMove } = useMouseInteractions();
 	const { handlePointerDown, handlePointerMove, handlePointerUp } = usePointerInteractions();
 	const { handleDrawingStart } = useDrawingInteractions();
 	const { setContextMenu, setIsPanning } = useWaveformContext();
@@ -229,7 +229,6 @@ export const WaveformCanvas: React.FC = () => {
 			onPointerMove={handlePointerMove}
 			onPointerUp={handlePointerUp}
 			onPointerCancel={handlePointerUp}
-			onWheel={handleWheel}
 			onContextMenu={handleContextMenu}
 		/>
 	);

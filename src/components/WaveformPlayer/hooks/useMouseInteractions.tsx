@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
 import { history } from '@utils/history';
@@ -130,20 +130,22 @@ export const useMouseInteractions = () => {
 		[isPanning, lastPanPoint, setTransform, setLastPanPoint]
 	);
 
-	const handleWheel = useCallback(
-		(e: React.WheelEvent) => {
-			if (e.cancelable) {
-				e.preventDefault();
-			}
+	// Native wheel listener to support non-passive prevention of browser zoom (trackpad pinch)
+	useEffect(() => {
+		const canvas = canvasRef.current;
+		if (!canvas) return;
+
+		const onWheel = (e: WheelEvent) => {
+			e.preventDefault();
+
 			const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
-			const rect = canvasRef.current?.getBoundingClientRect();
-			if (!rect) return;
+			const rect = canvas.getBoundingClientRect();
 
 			const mouseX = e.clientX - rect.left - rect.width / 2;
 			const mouseY = e.clientY - rect.top;
 
 			setTransform((prev) => {
-				const newScale = Math.max(0.1, Math.min(3, prev.scale * scaleFactor)); // Allow more zoom out
+				const newScale = Math.max(0.1, Math.min(3, prev.scale * scaleFactor));
 				const scaleChange = newScale / prev.scale;
 
 				return {
@@ -152,13 +154,16 @@ export const useMouseInteractions = () => {
 					offsetY: prev.offsetY - (mouseY - prev.offsetY) * (scaleChange - 1),
 				};
 			});
-		},
-		[canvasRef, setTransform]
-	);
+		};
+
+		canvas.addEventListener('wheel', onWheel, { passive: false });
+		return () => {
+			canvas.removeEventListener('wheel', onWheel);
+		};
+	}, [canvasRef, setTransform]);
 
 	return {
 		handleMouseDown,
 		handleMouseMove,
-		handleWheel,
 	};
 };
