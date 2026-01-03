@@ -111,6 +111,12 @@ export const useMouseInteractions = () => {
 	const handleMouseMove = useCallback(
 		(e: React.MouseEvent<HTMLCanvasElement>) => {
 			if (isPanning) {
+				// Safety check: if no buttons are pressed (e.g. released outside window), stop panning
+				if (e.buttons === 0) {
+					setIsPanning(false);
+					return;
+				}
+
 				e.preventDefault();
 
 				// Use movementX/Y to get raw mouse movement without OS acceleration
@@ -135,25 +141,66 @@ export const useMouseInteractions = () => {
 		const canvas = canvasRef.current;
 		if (!canvas) return;
 
+		// Heuristic to detect Mac platform
+		// Note: 'navigator.platform' is deprecated but still widely supported for this check.
+		// Fallback to basic 'navigator.userAgent' if needed, but for now this is standard legacy check.
+		const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
 		const onWheel = (e: WheelEvent) => {
 			e.preventDefault();
 
-			const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
-			const rect = canvas.getBoundingClientRect();
+			let isZoom = true;
 
-			const mouseX = e.clientX - rect.left - rect.width / 2;
-			const mouseY = e.clientY - rect.top;
+			if (isMac) {
+				// Check for Pinch gesture (Ctrl key is usually strictly associated with pinch on Mac browsers)
+				if (e.ctrlKey) {
+					isZoom = true;
+				} else {
+					// Heuristics for physical mouse wheel vs trackpad
+					// 1. deltaMode: 1 (DOM_DELTA_LINE) is typical for wheels. 0 (DOM_DELTA_PIXEL) is typical for trackpads AND magic mouse/some high-res mice.
+					// 2. Integer checks: Trackpads often give fractional values. Mouse wheels mostly give integers (though smooth-scroll drivers vary).
+					// 3. Magnitude: Mouse wheels often have larger step sizes.
+					// We'll treat deltaMode 1 or large integer deltas as "Mouse Wheel" -> Zoom.
+					const isMouseWheel = e.deltaMode === 1 || (Math.abs(e.deltaY) > 50 && Number.isInteger(e.deltaY));
 
-			setTransform((prev) => {
-				const newScale = Math.max(0.1, Math.min(3, prev.scale * scaleFactor));
-				const scaleChange = newScale / prev.scale;
+					// If it looks like a mouse wheel, Zoom. Else (Trackpad/Magic Mouse scroll), Pan.
+					if (isMouseWheel) {
+						isZoom = true;
+					} else {
+						isZoom = false;
+					}
+				}
+			}
+			// On non-Mac (PC), we default to Zoom for all wheel events as requested.
 
-				return {
-					scale: newScale,
-					offsetX: prev.offsetX - (mouseX - prev.offsetX) * (scaleChange - 1),
-					offsetY: prev.offsetY - (mouseY - prev.offsetY) * (scaleChange - 1),
-				};
-			});
+			if (isZoom) {
+				// ZOOM Logic
+				const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+				const rect = canvas.getBoundingClientRect();
+
+				const mouseX = e.clientX - rect.left - rect.width / 2;
+				const mouseY = e.clientY - rect.top;
+
+				setTransform((prev) => {
+					const newScale = Math.max(0.1, Math.min(3, prev.scale * scaleFactor));
+					const scaleChange = newScale / prev.scale;
+
+					return {
+						scale: newScale,
+						offsetX: prev.offsetX - (mouseX - prev.offsetX) * (scaleChange - 1),
+						offsetY: prev.offsetY - (mouseY - prev.offsetY) * (scaleChange - 1),
+					};
+				});
+			} else {
+				// PAN Logic (Trackpad 2-finger)
+				// We subtract deltas to simulate natural panning (scrolling down moves view down / content up)
+				// Adjust sign based on preference if needed, but '-=' is standard "scroll view".
+				setTransform((prev) => ({
+					...prev,
+					offsetX: prev.offsetX - e.deltaX,
+					offsetY: prev.offsetY - e.deltaY,
+				}));
+			}
 		};
 
 		canvas.addEventListener('wheel', onWheel, { passive: false });
