@@ -187,6 +187,7 @@ export const useMouseInteractions = () => {
 				});
 			} else {
 				// PAN
+				setIsFollowingPlayhead(false);
 				setTransform((prev) => ({
 					...prev,
 					offsetX: prev.offsetX - e.deltaX,
@@ -199,7 +200,7 @@ export const useMouseInteractions = () => {
 		return () => {
 			canvas.removeEventListener('wheel', onWheel);
 		};
-	}, [canvasRef, setTransform]);
+	}, [canvasRef, setTransform, setIsFollowingPlayhead]);
 
 	return {
 		handleMouseDown,
