@@ -157,7 +157,7 @@ export const useMouseInteractions = () => {
 		const getZoomFactors = (e: WheelEvent) => {
 			// Mac Pinch (CtrlKey) fires high frequency events -> Low Sensitivity
 			if (isMac && e.ctrlKey) {
-				return { in: 1.04, out: 0.96 };
+				return { in: 1.02, out: 0.98 };
 			}
 			// Mouse Wheel / PC -> Standard Sensitivity
 			return { in: 1.1, out: 0.9 };
