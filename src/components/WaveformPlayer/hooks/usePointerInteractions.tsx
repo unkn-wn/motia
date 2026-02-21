@@ -4,7 +4,7 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
 import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFromCanvasY, getWaveformDimensions } from '@utils/canvasUtils';
 import { useDrawingInteractions } from './useDrawingInteractions';
-import { handleSelectionCreate, handleSelectionMove } from './mouse/selectionMouseHandlers';
+import { handleSelectionCreate, handleSelectionMove, finalizeSelectionMove } from './mouse/selectionMouseHandlers';
 import { updateEraserPreview } from './mouse/eraserMouseHandlers';
 import { useAudio } from '@contexts/objects/AudioContextObject';
 import { history } from '@utils/history';
@@ -96,6 +96,8 @@ export const usePointerInteractions = () => {
 		initialCanvasX: number;
 		initialCanvasY: number;
 	}>(null);
+	// Deferred selection create for touch — prevents 2-finger pan from starting/cancelling a selection
+	const pendingSelectionCreateRef = useRef<{ canvasX: number; canvasY: number; clientX: number; clientY: number } | null>(null);
 
 	// touch-action is handled by CSS (touch-none on canvas). No effect needed.
 
@@ -138,8 +140,11 @@ export const usePointerInteractions = () => {
 					ctx.setErasingStrokeIds?.([]);
 				}
 				if (selectionBox?.dragging) {
-					setSelectionBox?.(null);
+					// Cancel any in-progress selection drag on pinch start
+					setSelectionBox?.(sb => sb ? { ...sb, dragging: false } : sb);
 				}
+				// Cancel deferred selection create
+				pendingSelectionCreateRef.current = null;
 				// Cancel long-press and candidate drag on pinch start
 				if (longPressTimerRef.current) {
 					window.clearTimeout(longPressTimerRef.current);
@@ -161,13 +166,14 @@ export const usePointerInteractions = () => {
 				return;
 			}
 
-			// Selection tool start (touch): begin create or move, and stop panning
+			// Selection tool start (touch): begin move or defer create
 			if (toolMode === 'select') {
 				// Prevent panning while selecting
 				setIsPanning(false);
 				setDragOccurred(false);
 				if (
 					selectionBox &&
+					!selectionBox.dragging &&
 					canvasX >= selectionBox.x &&
 					canvasX <= selectionBox.x + selectionBox.w &&
 					canvasY >= selectionBox.y &&
@@ -188,8 +194,10 @@ export const usePointerInteractions = () => {
 						}),
 					});
 				} else {
-					// Start new selection box
-					setSelectionBox?.({ x: canvasX, y: canvasY, w: 0, h: 0, dragging: true, mode: 'create', anchorX: canvasX, anchorY: canvasY });
+					// Touched outside selection — defer create until we confirm single-finger drag.
+					// If a second finger arrives (pinch), we'll cancel without affecting the old selection.
+					pendingSelectionCreateRef.current = { canvasX, canvasY, clientX: e.clientX, clientY: e.clientY };
+					ctx.setShowSelectionActions?.(false);
 				}
 				return;
 			}
@@ -385,6 +393,21 @@ export const usePointerInteractions = () => {
 				}
 			}
 
+			// Promote deferred selection create once user drags far enough (single finger only)
+			if (toolMode === 'select' && pendingSelectionCreateRef.current && pointers.current.size === 1 && !selectionBox?.dragging) {
+				const pending = pendingSelectionCreateRef.current;
+				const dx0 = Math.abs(e.clientX - pending.clientX);
+				const dy0 = Math.abs(e.clientY - pending.clientY);
+				if (dx0 > 6 || dy0 > 6) {
+					// User is dragging with one finger — start actual selection create
+					ctx.setSelectedStrokeGroups?.([]);
+					ctx.setSelectedDrawingIds?.(new Set());
+					setSelectionBox?.({ x: pending.canvasX, y: pending.canvasY, w: 0, h: 0, dragging: true, mode: 'create', anchorX: pending.canvasX, anchorY: pending.canvasY });
+					pendingSelectionCreateRef.current = null;
+					// Fall through to let the existing handler process this move
+				}
+			}
+
 			// Selection box create/resize/move (touch parity with mouse)
 			if (toolMode === 'select' && selectionBox?.dragging) {
 				setDragOccurred(true);
@@ -513,6 +536,51 @@ export const usePointerInteractions = () => {
 			pendingEraserStartRef.current = null;
 			ctx.setEraserCursor?.(null);
 			ctx.setErasingStrokeIds?.([]);
+
+			// Touch selection finalization
+			if (toolMode === 'select') {
+				// Handle deferred tap-outside: user tapped outside selection but didn't drag
+				if (pendingSelectionCreateRef.current) {
+					pendingSelectionCreateRef.current = null;
+					// Clear selection entirely (tap-outside-to-deselect)
+					setSelectionBox?.(null);
+					ctx.setSelectedStrokeGroups?.([]);
+					ctx.setSelectedDrawingIds?.(new Set());
+					ctx.setShowSelectionActions?.(false);
+				}
+
+				// Finalize selection move/create (set dragging:false)
+				if (selectionBox?.dragging) {
+					const isCreate = selectionBox.mode === 'create';
+					const hasHits = !!(ctx.selectedStrokeGroups && ctx.selectedStrokeGroups.length > 0);
+					if (isCreate && !hasHits) {
+						// Created a box with no hits — clear everything
+						setSelectionBox?.(null);
+						ctx.setSelectedStrokeGroups?.([]);
+						ctx.setSelectedDrawingIds?.(new Set());
+					} else {
+						// Keep box, just stop dragging
+						setSelectionBox?.(sb => sb ? { ...sb, dragging: false } : sb);
+						// Finalize move if applicable
+						if (selectionBox.mode === 'move' && ctx.selectedStrokeGroups && ctx.selectedStrokeGroups.length === 1) {
+							finalizeSelectionMove(ctx as Ctx);
+						}
+					}
+					ctx.setMovingStrokePreview?.(null);
+				}
+
+				// Detect tap-inside-selection: move mode, minimal displacement → toggle delete popup
+				if (selectionBox?.mode === 'move') {
+					const start = tapStarts.current.get(e.pointerId);
+					if (start) {
+						const tapDx = Math.abs(e.clientX - start.x);
+						const tapDy = Math.abs(e.clientY - start.y);
+						if (tapDx < 6 && tapDy < 6) {
+							ctx.setShowSelectionActions?.(prev => !prev);
+						}
+					}
+				}
+			}
 			// When all pointers are up, end multi-touch session
 			if (pointers.current.size === 0) multiTouchActiveRef.current = false;
 			if (pointers.current.size < 2) {

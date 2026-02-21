@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { WaveformCanvas } from './WaveformCanvas';
 import { NoteContextMenu } from './NoteContextMenu';
 import { InlineNoteEditor } from './InlineNoteEditor';
@@ -7,15 +7,22 @@ import { useCanvasRenderer } from '../hooks/useCanvasRenderer';
 import { useGlobalMouseHandlers } from '../hooks/useGlobalMouseHandlers';
 import { useAudio } from '@contexts/objects/AudioContextObject';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
+import { deleteSelectedStrokes } from '../hooks/mouse/selectionMouseHandlers';
+import { isUserTyping } from '@utils/shortcutsUtils';
 
 export const WaveformPlayerContent: React.FC = () => {
   const { renderCanvas } = useCanvasRenderer();
   const { isPlaying } = useAudio();
-  const { isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, toolMode, movingStrokePreview } = useWaveformContext();
+  const ctx = useWaveformContext();
+  const { isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, toolMode, movingStrokePreview, canvasRef } = ctx;
   const frameRef = useRef<number | null>(null);
   const activeRef = useRef(false);
   const suppressContextUntilRef = useRef<number>(0);
   const rcOriginInsideEditorRef = useRef<boolean>(false);
+
+  // Keep a fresh ref of context for stable keyboard handler
+  const ctxRef = useRef(ctx);
+  useEffect(() => { ctxRef.current = ctx; }, [ctx]);
 
   // Set up global mouse handlers
   useGlobalMouseHandlers();
@@ -84,6 +91,28 @@ export const WaveformPlayerContent: React.FC = () => {
     return () => document.removeEventListener('keydown', onKey);
   }, [contextMenu.isOpen, editingNote, deleteConfirmNoteId, setEditingNote, setEditContent, setDeleteConfirmNoteId, setContextMenu]);
 
+  // Delete/Backspace: delete selected strokes when selection tool is active
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (isUserTyping()) return;
+      // Ignore if modifiers are held (Ctrl+Backspace = browser back, etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const currentCtx = ctxRef.current;
+      if (currentCtx.toolMode !== 'select') return;
+      if (!currentCtx.selectedStrokeGroups || currentCtx.selectedStrokeGroups.length === 0) return;
+      e.preventDefault();
+      deleteSelectedStrokes(currentCtx);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Stable callback for the mobile delete button
+  const handleDeleteSelection = useCallback(() => {
+    deleteSelectedStrokes(ctxRef.current);
+  }, []);
+
   // Temporary suppression of native context menu for ~100ms after any right mouseup
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
@@ -116,12 +145,59 @@ export const WaveformPlayerContent: React.FC = () => {
     };
   }, []);
 
+  // Show delete popup only when user tapped inside selection on touch device (showSelectionActions toggled by pointer handler)
+  const { showSelectionActions } = ctx;
+  const showDeleteButton = showSelectionActions
+    && toolMode === 'select'
+    && selectionBox
+    && !selectionBox.dragging
+    && selectedStrokeGroups
+    && selectedStrokeGroups.length > 0;
+
+  const deleteButtonPos = useMemo(() => {
+    if (!showDeleteButton || !canvasRef.current) return null;
+    const rect = canvasRef.current.getBoundingClientRect();
+    // Canvas→element pixel coords (no rect.left/top needed since button is position:absolute inside the canvas parent)
+    const centerCanvasX = selectionBox!.x + selectionBox!.w / 2;
+    const topCanvasY = selectionBox!.y;
+    const pixelX = centerCanvasX * transform.scale + transform.offsetX + rect.width / 2 - 40;
+    const pixelY = topCanvasY * transform.scale + transform.offsetY;
+    return { x: pixelX, y: pixelY };
+  }, [showDeleteButton, selectionBox, transform, canvasRef]);
+
   return (
     <>
       <WaveformCanvas />
       <NoteContextMenu />
       <InlineNoteEditor />
       <DeleteConfirmModal />
+      {showDeleteButton && deleteButtonPos && (
+        <button
+          type="button"
+          onClick={handleDeleteSelection}
+          aria-label="Delete selected strokes"
+          style={{
+            position: 'absolute',
+            left: deleteButtonPos.x,
+            top: deleteButtonPos.y - 48,
+            transform: 'translateX(-50%)',
+            zIndex: 50,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            boxShadow: '0 2px 12px rgba(0, 0, 0, 0.4)',
+          }}
+          className="px-5 py-2 rounded-xl
+            text-white text-sm font-normal tracking-wide
+            select-none touch-none
+            animate-fade-in-up
+            active:opacity-60
+            cursor-pointer"
+        >
+          Delete
+        </button>
+      )}
     </>
   );
 };
+

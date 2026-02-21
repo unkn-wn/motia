@@ -119,6 +119,9 @@ export interface WaveformContextValue {
 	setErasingStrokeIds?: React.Dispatch<React.SetStateAction<{ noteId: string; strokeIndexes: number[] }[]>>;
 	eraserCursor?: { x: number; y: number } | null;
 	setEraserCursor?: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
+	// Selection actions popup (shown on tap-inside-selection on mobile)
+	showSelectionActions?: boolean;
+	setShowSelectionActions?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const WaveformContext = createContext<WaveformContextValue | null>(null);

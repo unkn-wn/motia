@@ -10,7 +10,7 @@ export const WaveformCanvas: React.FC = () => {
 	const { canvasRef, transform, isDrawingMode, toolMode, isPanning, dragOccurred, notes, NOTE_LABEL_HIDE_THRESHOLD, noteLayoutCache } =
 		useWaveformContext();
 	// Selection / drawings state pulled once (avoid calling hook inside handlers)
-	const { selectionBox, setSelectionBox, selectedDrawingIds } = useWaveformContext();
+	const { selectionBox, setSelectionBox, selectedDrawingIds, setSelectedStrokeGroups, setSelectedDrawingIds } = useWaveformContext();
 
 	const { duration, seekToTime } = useAudio();
 	const { handleMouseDown, handleMouseMove } = useMouseInteractions();
@@ -56,6 +56,9 @@ export const WaveformCanvas: React.FC = () => {
 						}),
 					});
 				} else {
+					// Clicked outside existing selection — clear old selection and start fresh
+					setSelectedStrokeGroups?.([]);
+					setSelectedDrawingIds?.(new Set());
 					// Start new selection box
 					setSelectionBox?.({ x: canvasX, y: canvasY, w: 0, h: 0, dragging: true, mode: 'create', anchorX: canvasX, anchorY: canvasY });
 				}
@@ -80,6 +83,8 @@ export const WaveformCanvas: React.FC = () => {
 			selectionBox,
 			setSelectionBox,
 			selectedDrawingIds,
+			setSelectedStrokeGroups,
+			setSelectedDrawingIds,
 			notes,
 		]
 	);

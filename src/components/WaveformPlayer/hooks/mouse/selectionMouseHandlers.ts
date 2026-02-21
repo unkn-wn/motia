@@ -89,3 +89,77 @@ export function finalizeSelectionMove(ctx: Ctx) {
     setMovingStrokePreview?.(null);
   }
 }
+
+/**
+ * Delete all strokes that are currently selected via the selection tool.
+ * Follows the same decompress→filter→recompress→onUpdateDrawing pattern
+ * used by the eraser (commitEraser). History entries are recorded
+ * automatically by onUpdateDrawing (via useNotesState).
+ */
+export function deleteSelectedStrokes(ctx: Ctx): boolean {
+  const {
+    selectedStrokeGroups,
+    notes,
+    onUpdateDrawing,
+    setSelectionBox,
+    setSelectedStrokeGroups,
+    setSelectedDrawingIds,
+    setMovingStrokePreview,
+  } = ctx;
+
+  if (!selectedStrokeGroups || selectedStrokeGroups.length === 0) return false;
+
+  for (const group of selectedStrokeGroups) {
+    const note = notes.find((n) => n.id === group.noteId);
+    if (!note?.drawing?.compressed) continue;
+
+    let compressed = note.drawing.compressed as unknown as import('@types').CompressedStroke[];
+    if (typeof compressed === 'string') {
+      try { compressed = JSON.parse(compressed); } catch { continue; }
+    }
+
+    const fullStrokes = decompressSession(compressed) as Array<{
+      points: Array<{ x: number; y: number }>;
+      strokeWidth: number;
+      color: string;
+    }>;
+
+    const remaining = fullStrokes.filter((_, idx) => !group.strokeIndexes.includes(idx));
+
+    if (remaining.length === fullStrokes.length) continue; // nothing to delete
+
+    if (remaining.length === 0) {
+      onUpdateDrawing?.(note.id, {
+        ...note.drawing,
+        compressed: [],
+        bounds: { width: 0, height: 0 },
+      });
+      continue;
+    }
+
+    const compressionResult = compressDrawingAdaptive(
+      remaining as unknown as import('@types').DrawingStroke[]
+    );
+    const newBounds = recomputeBoundsFromStrokes(
+      remaining as unknown as import('@types').DrawingStroke[]
+    );
+
+    onUpdateDrawing?.(note.id, {
+      ...note.drawing,
+      compressed: compressionResult.strokes,
+      bounds: newBounds,
+      originalSize: compressionResult.originalSize,
+      compressedSize: compressionResult.compressedSize,
+      compressionRatio: compressionResult.reduction,
+    });
+  }
+
+  // Clear selection state
+  setSelectionBox?.(null);
+  setSelectedStrokeGroups?.([]);
+  setSelectedDrawingIds?.(new Set());
+  setMovingStrokePreview?.(null);
+  ctx.setShowSelectionActions?.(false);
+
+  return true;
+}

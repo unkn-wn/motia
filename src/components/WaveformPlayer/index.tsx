@@ -149,6 +149,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				setSelectedDrawingIds(new Set());
 				setSelectedStrokeGroups([]);
 				setMovingStrokePreview(null);
+				setShowSelectionActions(false);
 			}
 			if (toolMode !== 'erase') {
 				setErasingStrokeIds([]);
@@ -179,6 +180,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		const [selectedDrawingIds, setSelectedDrawingIds] = useState<Set<string>>(new Set());
 		const [erasingStrokeIds, setErasingStrokeIds] = useState<{ noteId: string; strokeIndexes: number[] }[]>([]);
 		const [eraserCursor, setEraserCursor] = useState<{ x: number; y: number } | null>(null);
+		const [showSelectionActions, setShowSelectionActions] = useState(false);
 		const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
 		const [drawingStartPos, setDrawingStartPos] = useState<{ x: number; y: number } | null>(null);
 		const [drawingSession, setDrawingSession] = useState<DrawingSession | null>(null);
@@ -482,6 +484,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			setEraserCursor,
 			movingStrokePreview,
 			setMovingStrokePreview,
+			showSelectionActions,
+			setShowSelectionActions,
 
 			// Event handlers
 			onAddNote,
