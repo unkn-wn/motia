@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { useAudio } from '@contexts/objects/AudioContextObject';
 import { decompressSession } from '@utils/advancedCompression';
@@ -28,10 +28,26 @@ export const useCanvasRenderer = () => {
 
 	// Small caches to avoid repeated layout/decompression work between frames
 	const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
-	const decompressedCacheRef = useRef<Map<string, { key: string; strokes: import('@types').DrawingStroke[] }>>(new Map());
+	const decompressedCacheRef = useRef<Map<string, { key: string; compressedRef: unknown; strokes: import('@types').DrawingStroke[] }>>(new Map());
 	// Use shared cache if available, otherwise local fallback (though practically context should always have it)
 	const localNoteLayoutCacheRef = useRef<Map<string, { key: string; lines: string[]; noteHeight: number }>>(new Map());
 	const noteLayoutCache = useWaveformContext().noteLayoutCache || localNoteLayoutCacheRef.current;
+	// Track notes identity to skip cache cleanup when unchanged
+	const lastNotesRef = useRef<Note[]>(notes);
+
+	// ResizeObserver: update sizeRef without per-frame getBoundingClientRect() (eliminates forced reflow)
+	useEffect(() => {
+		const canvas = canvasRef.current;
+		if (!canvas) return;
+		const update = () => {
+			const rect = canvas.getBoundingClientRect();
+			sizeRef.current = { w: rect.width, h: rect.height };
+		};
+		update(); // Initial measurement
+		const ro = new ResizeObserver(update);
+		ro.observe(canvas);
+		return () => ro.disconnect();
+	}, [canvasRef]);
 
 	// Waveform dimensions in world space
 	const getWaveformDims = useCallback(
@@ -49,28 +65,16 @@ export const useCanvasRenderer = () => {
 	const renderDrawingOnCanvas = useCallback((ctx: CanvasRenderingContext2D, note: Note, excludeIndexes?: Set<number>) => {
 		if (!note.drawing || !note.drawing.compressed) return;
 		try {
-			// Cache key must change when compressed payload changes (content hash > size-only)
-			let cacheKey: string;
-			try {
-				const json = JSON.stringify(note.drawing.compressed);
-				// Simple fast hash (FNV-1a like) for short strings
-				let hash = 2166136261;
-				for (let i = 0; i < json.length; i++) {
-					hash ^= json.charCodeAt(i);
-					hash = (hash * 16777619) >>> 0;
-				}
-				cacheKey = `${note.id}:${json.length}:${hash.toString(36)}`;
-			} catch {
-				// Fallback to timestamp to force refresh
-				cacheKey = `${note.id}:err:${Date.now()}`;
-			}
+			// Use reference identity for cache invalidation (React/Firebase always produce new refs on change)
+			const compressed = note.drawing.compressed;
 			const cached = decompressedCacheRef.current.get(note.id);
 			let decompressed: import('@types').DrawingStroke[];
-			if (cached && cached.key === cacheKey) {
+			if (cached && cached.compressedRef === compressed) {
 				decompressed = cached.strokes;
 			} else {
+				const cacheKey = `${note.id}:${Array.isArray(compressed) ? compressed.length : 0}`;
 				decompressed = decompressSession(note.drawing.compressed as unknown as import('@types').CompressedStroke[]);
-				decompressedCacheRef.current.set(note.id, { key: cacheKey, strokes: decompressed });
+				decompressedCacheRef.current.set(note.id, { key: cacheKey, compressedRef: compressed, strokes: decompressed });
 			}
 
 			ctx.lineCap = 'round';
@@ -310,19 +314,27 @@ export const useCanvasRenderer = () => {
 		const canvas = canvasRef.current;
 		if (!canvas) return;
 
-		// Drop cache entries for removed notes
-		const idSet = new Set(notes.map((n: Note) => n.id));
-		for (const key of decompressedCacheRef.current.keys()) {
-			if (!idSet.has(key)) decompressedCacheRef.current.delete(key);
-		}
-		for (const key of noteLayoutCache.keys()) {
-			if (!idSet.has(key)) noteLayoutCache.delete(key);
+		// Drop cache entries for removed notes (only when notes array identity changes)
+		if (notes !== lastNotesRef.current) {
+			lastNotesRef.current = notes;
+			const idSet = new Set(notes.map((n: Note) => n.id));
+			for (const key of decompressedCacheRef.current.keys()) {
+				if (!idSet.has(key)) decompressedCacheRef.current.delete(key);
+			}
+			for (const key of noteLayoutCache.keys()) {
+				if (!idSet.has(key)) noteLayoutCache.delete(key);
+			}
 		}
 
-		const rect = canvas.getBoundingClientRect();
-		const width = rect.width;
-		const height = rect.height;
-		sizeRef.current = { w: width, h: height };
+		// Use cached dimensions from ResizeObserver (no forced reflow)
+		let { w: width, h: height } = sizeRef.current;
+		if (width === 0 || height === 0) {
+			// First frame fallback before ResizeObserver fires
+			const rect = canvas.getBoundingClientRect();
+			width = rect.width;
+			height = rect.height;
+			sizeRef.current = { w: width, h: height };
+		}
 		const dpr = window.devicePixelRatio || 1;
 
 		const ctx = canvas.getContext('2d');

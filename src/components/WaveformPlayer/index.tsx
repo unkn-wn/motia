@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { useAudio } from '@contexts/objects/AudioContextObject';
 import type { Note, CanvasTransform, ToolMode } from '@types';
@@ -433,8 +433,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			},
 		}));
 
-		// Create context value
-		const contextValue = {
+		// Create memoized context value to avoid re-rendering all consumers on every parent render
+		const contextValue = useMemo(() => ({
 			// Canvas state
 			transform,
 			setTransform,
@@ -511,7 +511,16 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 			// Shared Layout Cache
 			noteLayoutCache: noteLayoutCacheRef.current,
-		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		}), [
+			transform, isPanning, lastPanPoint, isFollowingPlayhead,
+			notes, editingNote, editContent, dragging, dragOccurred,
+			toolMode, isDrawing, currentStroke, drawingStartPos, drawingSession, drawingNoteId,
+			selectionBox, selectedDrawingIds, selectedStrokeGroups,
+			erasingStrokeIds, eraserCursor, movingStrokePreview, showSelectionActions,
+			contextMenu, deleteConfirmNoteId,
+			onAddNote, onUpdateNote, onDeleteNote, onMoveNote, onAddDrawing, onUpdateDrawing,
+		]);
 
 		return (
 			<WaveformProvider value={contextValue}>
