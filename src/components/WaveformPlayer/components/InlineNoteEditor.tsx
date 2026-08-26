@@ -3,25 +3,47 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { isNoteEditSubmitCombo, isNoteEditCancelKey, getPreferences } from '@utils/shortcutsUtils';
 
 export const InlineNoteEditor: React.FC = () => {
-  const { editingNote, setEditingNote, editContent, setEditContent, notes, transform, onUpdateNote, canvasRef } = useWaveformContext();
+  const { editingNote, setEditingNote, editContent, setEditContent, notes, transform, setTransform, onUpdateNote, canvasRef } = useWaveformContext();
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
   const pos = useMemo(() => {
     if (!editingNote) return null;
     const note = notes.find(n => n.id === editingNote);
     if (!note) return null;
-    const rectW = canvasRef.current?.getBoundingClientRect().width ?? 0;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const rectW = rect?.width ?? window.innerWidth;
+
     // Match canvas render mapping: screenX = rect.width/2 + offsetX + scale * worldX
     const left = rectW / 2 + transform.offsetX + note.canvasX * transform.scale;
     const top = note.canvasY * transform.scale + transform.offsetY;
     return { left, top };
   }, [editingNote, notes, transform, canvasRef]);
 
+  // Auto-focus camera on the editing note on mobile viewports so the note box is centered above the keyboard
   useEffect(() => {
-    if (editingNote) {
-      setTimeout(() => boxRef.current?.focus(), 0);
+    if (!editingNote) return;
+
+    const note = notes.find(n => n.id === editingNote);
+    if (!note) return;
+
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      const targetScreenY = Math.max(60, vh * 0.22); // Upper 22% of visible screen
+
+      // Exact mathematical centering:
+      // Screen X of editor center = width / 2 + offsetX + (note.canvasX * scale) + (boxWidth / 2)
+      // Setting editor center to screen center (width / 2) yields:
+      // offsetX = -(note.canvasX * scale) - (boxWidth / 2)
+      const boxWidth = boxRef.current?.offsetWidth || 288;
+      const newOffsetX = -note.canvasX * transform.scale - boxWidth / 2;
+      const newOffsetY = targetScreenY - note.canvasY * transform.scale;
+
+      setTransform(prev => ({ ...prev, offsetX: newOffsetX, offsetY: newOffsetY }));
     }
-  }, [editingNote]);
+
+    setTimeout(() => boxRef.current?.focus(), 50);
+  }, [editingNote]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!editingNote || !pos) return null;
 

@@ -122,6 +122,9 @@ export interface WaveformContextValue {
 	// Selection actions popup (shown on tap-inside-selection on mobile)
 	showSelectionActions?: boolean;
 	setShowSelectionActions?: React.Dispatch<React.SetStateAction<boolean>>;
+	// Orientation ('vertical' or 'horizontal')
+	orientation?: import('@types').CanvasOrientation;
+	setOrientation?: React.Dispatch<React.SetStateAction<import('@types').CanvasOrientation>>;
 }
 
 export const WaveformContext = createContext<WaveformContextValue | null>(null);

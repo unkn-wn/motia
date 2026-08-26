@@ -621,10 +621,12 @@ export const usePointerInteractions = () => {
 							return;
 						}
 						// Otherwise, seek to waveform time if inside bounds
-						const { waveformX, waveformWidth, waveformHeight } = getWaveformDimensions(rect.width, rect.height, duration);
-						if (isClickInWaveform(canvasX, waveformX, waveformWidth)) {
-							const time = getTimeFromCanvasY(canvasY, waveformHeight, duration);
-							seekToTime(time);
+						const { waveformX, waveformY, waveformWidth, waveformHeight } = getWaveformDimensions(rect.width, rect.height, duration, ctx.orientation);
+						if (isClickInWaveform(canvasX, waveformX, waveformWidth, canvasY, waveformY, waveformHeight, ctx.orientation)) {
+							const time = ctx.orientation === 'horizontal'
+								? (canvasX / waveformWidth) * duration
+								: getTimeFromCanvasY(canvasY, waveformHeight, duration);
+							seekToTime(Math.max(0, Math.min(duration, time)));
 						}
 					}
 				}

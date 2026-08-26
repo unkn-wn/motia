@@ -187,11 +187,16 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 		}
 	}, [initialTrimStart]);
 
+	// Sync initial trimEnd when metadata or audio duration is loaded
+	const hasExplicitTrimEndRef = useRef(false);
 	useEffect(() => {
 		if (initialTrimEnd !== undefined && initialTrimEnd > 0) {
 			setTrimEnd(initialTrimEnd);
+			hasExplicitTrimEndRef.current = true;
+		} else if (duration > 0 && !hasExplicitTrimEndRef.current) {
+			setTrimEnd(duration);
 		}
-	}, [initialTrimEnd]);
+	}, [initialTrimEnd, duration]);
 
 	// Sync initial volume if provided later
 	useEffect(() => {
@@ -206,35 +211,19 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 	// Seek audio to trimStart when trim data loads from Firebase
 	useEffect(() => {
 		const ws = wavesurferRef.current;
-
-		// Wait for waveform to load and have duration
 		if (!ws || duration === 0) return;
 
-		// Case 1: We have trim data from Firebase
 		if (trimStart > 0 && initialTrimStart !== undefined && initialTrimStart > 0) {
-			// Only seek if we're still at the beginning (haven't started playback yet)
 			const currentPos = ws.getCurrentTime();
 			if (currentPos === 0 || currentPos < 0.1) {
 				ws.seekTo(trimStart / duration);
 				setCurrentTimeInternal(trimStart);
-				setIsReady(true); // Ready after positioning
+				setIsReady(true);
 			}
-		}
-		// Case 2: No trim data, or initial props loaded with trimStart=0
-		else if (initialTrimStart !== undefined) {
-			// initialTrimStart has been set (even if 0), meaning metadata loaded
+		} else if (initialTrimStart !== undefined) {
 			setIsReady(true);
 		}
-		// Case 3: initialTrimStart is still undefined - metadata hasn't loaded yet
-		// Don't set isReady, keep waiting
 	}, [trimStart, duration, initialTrimStart, setCurrentTimeInternal]);
-
-	// Auto-set trimEnd to duration ONLY if no initial trim was provided and trimEnd is still 0
-	useEffect(() => {
-		if (duration > 0 && trimEnd === 0 && initialTrimEnd === undefined) {
-			setTrimEnd(duration);
-		}
-	}, [duration, trimEnd, initialTrimEnd]);
 
 	// Monitor playback and pause at trimEnd
 	useEffect(() => {

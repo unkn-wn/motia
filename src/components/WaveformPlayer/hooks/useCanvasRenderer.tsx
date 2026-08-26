@@ -22,6 +22,7 @@ export const useCanvasRenderer = () => {
 		erasingStrokeIds,
 		eraserCursor,
 		canvasRef,
+		orientation = 'vertical',
 	} = useWaveformContext();
 
 	const { currentTime, duration, waveformData, trimStart, trimEnd } = useAudio();
@@ -51,14 +52,22 @@ export const useCanvasRenderer = () => {
 
 	// Waveform dimensions in world space
 	const getWaveformDims = useCallback(
-		(_width: number, height: number) => {
-			const waveformHeight = Math.max(height * 3, duration * 100);
+		(width: number, height: number) => {
+			if (orientation === 'horizontal') {
+				const waveformWidth = Math.max((width || window.innerWidth) * 3, duration * 100);
+				const waveformHeight = 120;
+				const waveformX = 0;
+				const waveformY = -waveformHeight / 2;
+				return { waveformHeight, waveformWidth, waveformX, waveformY };
+			}
+			const waveformHeight = Math.max((height || window.innerHeight) * 3, duration * 100);
 			const waveformWidth = 120;
 			// World-space center at X=0; left edge is -width/2
 			const waveformX = -waveformWidth / 2;
-			return { waveformHeight, waveformWidth, waveformX };
+			const waveformY = 0;
+			return { waveformHeight, waveformWidth, waveformX, waveformY };
 		},
-		[duration]
+		[duration, orientation]
 	);
 
 	// Draw a single drawing note (uses compression cache), optionally skipping some strokes
@@ -134,28 +143,52 @@ export const useCanvasRenderer = () => {
 
 	// Draw text notes and their connectors from the waveform
 	const renderNotesOnCanvas = useCallback(
-		(ctx: CanvasRenderingContext2D, notesList: Note[], waveformX: number, waveformWidth: number, waveformHeight: number, dur: number) => {
+		(
+			ctx: CanvasRenderingContext2D,
+			notesList: Note[],
+			waveformX: number,
+			waveformY: number,
+			waveformWidth: number,
+			waveformHeight: number,
+			dur: number
+		) => {
 			const showNoteLabels = transform.scale > NOTE_LABEL_HIDE_THRESHOLD;
+			const isHoriz = orientation === 'horizontal';
+			const { w, h } = sizeRef.current;
+
+			// World-space visible viewport bounds with generous padding
+			const viewMargin = 600 / transform.scale;
+			const minVisibleX = (-w / 2 - transform.offsetX) / transform.scale - viewMargin;
+			const maxVisibleX = (w / 2 - transform.offsetX) / transform.scale + viewMargin;
+			const minVisibleY = (-transform.offsetY) / transform.scale - viewMargin;
+			const maxVisibleY = (h - transform.offsetY) / transform.scale + viewMargin;
 
 			for (const note of notesList) {
 				if (note.type === 'drawing') continue;
 
-				// Quick vertical culling using approximate height
-				const screenTop = transform.offsetY + transform.scale * note.canvasY;
-				const approxHeight = showNoteLabels ? 200 : 16;
-				const screenBottom = screenTop + approxHeight;
-				const { h } = sizeRef.current;
-				if (screenBottom < -200 || screenTop > h + 200) continue;
-
 				// Connector from waveform to note body/anchor
 				const timeProgress = dur > 0 ? note.time / dur : 0;
-				const waveformCanvasY = timeProgress * waveformHeight;
+				const waveformAnchorX = isHoriz ? timeProgress * waveformWidth : waveformX + waveformWidth / 2;
+				const waveformAnchorY = isHoriz ? waveformY + waveformHeight / 2 : timeProgress * waveformHeight;
+
+				// Check if either the note card or its waveform anchor is anywhere near visible viewport
+				const noteRight = note.canvasX + (showNoteLabels ? 280 : 20);
+				const noteBottom = note.canvasY + (showNoteLabels ? 220 : 20);
+				const boundsMinX = Math.min(note.canvasX, waveformAnchorX);
+				const boundsMaxX = Math.max(noteRight, waveformAnchorX);
+				const boundsMinY = Math.min(note.canvasY, waveformAnchorY);
+				const boundsMaxY = Math.max(noteBottom, waveformAnchorY);
+
+				if (boundsMaxX < minVisibleX || boundsMinX > maxVisibleX || boundsMaxY < minVisibleY || boundsMinY > maxVisibleY) {
+					continue;
+				}
+
 				ctx.strokeStyle = '#6b7280';
 				ctx.lineWidth = 1;
 				ctx.setLineDash([3, 3]);
 				ctx.globalAlpha = 0.5;
 				ctx.beginPath();
-				ctx.moveTo(waveformX + waveformWidth / 2, waveformCanvasY);
+				ctx.moveTo(waveformAnchorX, waveformAnchorY);
 
 				if (showNoteLabels) {
 					// Use cached layout for a stable center target
@@ -213,7 +246,7 @@ export const useCanvasRenderer = () => {
 				ctx.strokeStyle = '#2d2d2d';
 				ctx.lineWidth = 2;
 				ctx.beginPath();
-				ctx.arc(waveformX + waveformWidth / 2, waveformCanvasY, 4, 0, 2 * Math.PI);
+				ctx.arc(waveformAnchorX, waveformAnchorY, 4, 0, 2 * Math.PI);
 				ctx.fill();
 				ctx.stroke();
 
@@ -306,7 +339,7 @@ export const useCanvasRenderer = () => {
 				}
 			}
 		},
-		[transform.scale, transform.offsetY, NOTE_LABEL_HIDE_THRESHOLD]
+		[transform.scale, transform.offsetX, transform.offsetY, NOTE_LABEL_HIDE_THRESHOLD, orientation, noteLayoutCache]
 	);
 
 	// Main frame render
@@ -351,16 +384,21 @@ export const useCanvasRenderer = () => {
 		ctx.clearRect(0, 0, width, height);
 
 		// Screen-centering, then world transform (pan/zoom)
+		const isHoriz = orientation === 'horizontal';
 		ctx.save();
 		ctx.translate(width / 2, 0);
 		ctx.translate(transform.offsetX, transform.offsetY);
 		ctx.scale(transform.scale, transform.scale);
 
-		const { waveformHeight, waveformWidth, waveformX } = getWaveformDims(width, height);
+		const { waveformHeight, waveformWidth, waveformX, waveformY } = getWaveformDims(width, height);
 
 		// Waveform background
 		ctx.fillStyle = 'rgb(29, 29, 29)';
-		ctx.fillRect(waveformX - 10, 0, waveformWidth + 20, waveformHeight);
+		if (isHoriz) {
+			ctx.fillRect(0, waveformY - 10, waveformWidth, waveformHeight + 20);
+		} else {
+			ctx.fillRect(waveformX - 10, 0, waveformWidth + 20, waveformHeight);
+		}
 
 		// Waveform bars and playhead
 		if (duration > 0 && waveformData && waveformData.length > 0) {
@@ -368,21 +406,25 @@ export const useCanvasRenderer = () => {
 			const effectiveTrimEnd = trimEnd || duration;
 			const trimmedDuration = effectiveTrimEnd - effectiveTrimStart;
 
-			const barHeight = waveformHeight / waveformData.length;
+			// Normalized bar rendering: fixed 3px bar thickness + 1px gap (total pitch: 4px)
+			// This prevents chunky/massive bars on long audio files
+			const barPitch = 4;
+			const totalLength = isHoriz ? waveformWidth : waveformHeight;
+			const numBars = Math.max(1, Math.floor(totalLength / barPitch));
 			const progress = (currentTime - effectiveTrimStart) / trimmedDuration;
 
-			for (let i = 0; i < waveformData.length; i++) {
-				const amplitude = waveformData[i];
-				const y = i * barHeight;
+			for (let b = 0; b < numBars; b++) {
+				const pos = b * barPitch;
+				const sampleProgress = pos / totalLength;
+				const sampleIndex = Math.min(waveformData.length - 1, Math.floor(sampleProgress * waveformData.length));
+				const amplitude = waveformData[sampleIndex] || 0;
 
 				// Determine if this sample is within trim range
-				const sampleTime = (i / waveformData.length) * duration;
+				const sampleTime = sampleProgress * duration;
 				const isInTrimRange = sampleTime >= effectiveTrimStart && sampleTime <= effectiveTrimEnd;
 
 				// Make peaks larger with a mild gain and clamp
 				const amplitudeScaled = Math.min(1, amplitude * 1.8);
-				const barWidth = amplitudeScaled * waveformWidth;
-				const x = waveformX + (waveformWidth - barWidth) / 2;
 
 				// Determine color: dimmed if outside trim, played/unplayed if inside
 				let fillColor: string;
@@ -395,69 +437,134 @@ export const useCanvasRenderer = () => {
 				}
 
 				ctx.fillStyle = fillColor;
-				ctx.fillRect(x, y, barWidth, barHeight - 1);
+
+				if (isHoriz) {
+					const barHeight = amplitudeScaled * waveformHeight;
+					const y = waveformY + (waveformHeight - barHeight) / 2;
+					ctx.fillRect(pos, y, 3, barHeight);
+				} else {
+					const barWidth = amplitudeScaled * waveformWidth;
+					const x = waveformX + (waveformWidth - barWidth) / 2;
+					ctx.fillRect(x, pos, barWidth, 3);
+				}
 			}
 
 			// Trim boundary indicators (subtle gray)
 			if (effectiveTrimStart > 0 || effectiveTrimEnd < duration) {
-				const trimStartY = (effectiveTrimStart / duration) * waveformHeight;
-				const trimEndY = (effectiveTrimEnd / duration) * waveformHeight;
+				if (isHoriz) {
+					const trimStartX = (effectiveTrimStart / duration) * waveformWidth;
+					const trimEndX = (effectiveTrimEnd / duration) * waveformWidth;
 
-				// Trim start indicator (if not at beginning)
-				if (effectiveTrimStart > 0) {
-					ctx.strokeStyle = '#6b7280';
-					ctx.lineWidth = 1;
-					ctx.setLineDash([3, 3]);
-					ctx.beginPath();
-					ctx.moveTo(waveformX - 8, trimStartY);
-					ctx.lineTo(waveformX + waveformWidth + 8, trimStartY);
-					ctx.stroke();
-					ctx.setLineDash([]);
+					if (effectiveTrimStart > 0) {
+						ctx.strokeStyle = '#6b7280';
+						ctx.lineWidth = 1;
+						ctx.setLineDash([3, 3]);
+						ctx.beginPath();
+						ctx.moveTo(trimStartX, waveformY - 8);
+						ctx.lineTo(trimStartX, waveformY + waveformHeight + 8);
+						ctx.stroke();
+						ctx.setLineDash([]);
 
-					// Small bracket markers
-					ctx.beginPath();
-					ctx.moveTo(waveformX - 8, trimStartY - 4);
-					ctx.lineTo(waveformX - 8, trimStartY + 4);
-					ctx.moveTo(waveformX + waveformWidth + 8, trimStartY - 4);
-					ctx.lineTo(waveformX + waveformWidth + 8, trimStartY + 4);
-					ctx.stroke();
-				}
+						// Bracket markers
+						ctx.beginPath();
+						ctx.moveTo(trimStartX - 4, waveformY - 8);
+						ctx.lineTo(trimStartX + 4, waveformY - 8);
+						ctx.moveTo(trimStartX - 4, waveformY + waveformHeight + 8);
+						ctx.lineTo(trimStartX + 4, waveformY + waveformHeight + 8);
+						ctx.stroke();
+					}
 
-				// Trim end indicator (if not at end)
-				if (effectiveTrimEnd < duration) {
-					ctx.strokeStyle = '#6b7280';
-					ctx.lineWidth = 1;
-					ctx.setLineDash([3, 3]);
-					ctx.beginPath();
-					ctx.moveTo(waveformX - 8, trimEndY);
-					ctx.lineTo(waveformX + waveformWidth + 8, trimEndY);
-					ctx.stroke();
-					ctx.setLineDash([]);
+					if (effectiveTrimEnd < duration) {
+						ctx.strokeStyle = '#6b7280';
+						ctx.lineWidth = 1;
+						ctx.setLineDash([3, 3]);
+						ctx.beginPath();
+						ctx.moveTo(trimEndX, waveformY - 8);
+						ctx.lineTo(trimEndX, waveformY + waveformHeight + 8);
+						ctx.stroke();
+						ctx.setLineDash([]);
 
-					// Small bracket markers
-					ctx.beginPath();
-					ctx.moveTo(waveformX - 8, trimEndY - 4);
-					ctx.lineTo(waveformX - 8, trimEndY + 4);
-					ctx.moveTo(waveformX + waveformWidth + 8, trimEndY - 4);
-					ctx.lineTo(waveformX + waveformWidth + 8, trimEndY + 4);
-					ctx.stroke();
+						// Bracket markers
+						ctx.beginPath();
+						ctx.moveTo(trimEndX - 4, waveformY - 8);
+						ctx.lineTo(trimEndX + 4, waveformY - 8);
+						ctx.moveTo(trimEndX - 4, waveformY + waveformHeight + 8);
+						ctx.lineTo(trimEndX + 4, waveformY + waveformHeight + 8);
+						ctx.stroke();
+					}
+				} else {
+					const trimStartY = (effectiveTrimStart / duration) * waveformHeight;
+					const trimEndY = (effectiveTrimEnd / duration) * waveformHeight;
+
+					if (effectiveTrimStart > 0) {
+						ctx.strokeStyle = '#6b7280';
+						ctx.lineWidth = 1;
+						ctx.setLineDash([3, 3]);
+						ctx.beginPath();
+						ctx.moveTo(waveformX - 8, trimStartY);
+						ctx.lineTo(waveformX + waveformWidth + 8, trimStartY);
+						ctx.stroke();
+						ctx.setLineDash([]);
+
+						// Small bracket markers
+						ctx.beginPath();
+						ctx.moveTo(waveformX - 8, trimStartY - 4);
+						ctx.lineTo(waveformX - 8, trimStartY + 4);
+						ctx.moveTo(waveformX + waveformWidth + 8, trimStartY - 4);
+						ctx.lineTo(waveformX + waveformWidth + 8, trimStartY + 4);
+						ctx.stroke();
+					}
+
+					if (effectiveTrimEnd < duration) {
+						ctx.strokeStyle = '#6b7280';
+						ctx.lineWidth = 1;
+						ctx.setLineDash([3, 3]);
+						ctx.beginPath();
+						ctx.moveTo(waveformX - 8, trimEndY);
+						ctx.lineTo(waveformX + waveformWidth + 8, trimEndY);
+						ctx.stroke();
+						ctx.setLineDash([]);
+
+						// Small bracket markers
+						ctx.beginPath();
+						ctx.moveTo(waveformX - 8, trimEndY - 4);
+						ctx.lineTo(waveformX - 8, trimEndY + 4);
+						ctx.moveTo(waveformX + waveformWidth + 8, trimEndY - 4);
+						ctx.lineTo(waveformX + waveformWidth + 8, trimEndY + 4);
+						ctx.stroke();
+					}
 				}
 			}
 
 			// Playhead indicator (only show if within trim range)
 			if (currentTime >= effectiveTrimStart && currentTime <= effectiveTrimEnd) {
 				const relativeProgress = (currentTime - effectiveTrimStart) / trimmedDuration;
-				const indicatorY = (effectiveTrimStart / duration + relativeProgress * (trimmedDuration / duration)) * waveformHeight;
-				ctx.strokeStyle = '#f3f4f6';
-				ctx.lineWidth = 3;
-				ctx.beginPath();
-				ctx.moveTo(waveformX - 20, indicatorY);
-				ctx.lineTo(waveformX + waveformWidth + 20, indicatorY);
-				ctx.stroke();
-				ctx.fillStyle = '#f3f4f6';
-				ctx.beginPath();
-				ctx.arc(waveformX + waveformWidth / 2, indicatorY, 6, 0, 2 * Math.PI);
-				ctx.fill();
+
+				if (isHoriz) {
+					const indicatorX = (effectiveTrimStart / duration + relativeProgress * (trimmedDuration / duration)) * waveformWidth;
+					ctx.strokeStyle = '#f3f4f6';
+					ctx.lineWidth = 3;
+					ctx.beginPath();
+					ctx.moveTo(indicatorX, waveformY - 20);
+					ctx.lineTo(indicatorX, waveformY + waveformHeight + 20);
+					ctx.stroke();
+					ctx.fillStyle = '#f3f4f6';
+					ctx.beginPath();
+					ctx.arc(indicatorX, waveformY + waveformHeight / 2, 6, 0, 2 * Math.PI);
+					ctx.fill();
+				} else {
+					const indicatorY = (effectiveTrimStart / duration + relativeProgress * (trimmedDuration / duration)) * waveformHeight;
+					ctx.strokeStyle = '#f3f4f6';
+					ctx.lineWidth = 3;
+					ctx.beginPath();
+					ctx.moveTo(waveformX - 20, indicatorY);
+					ctx.lineTo(waveformX + waveformWidth + 20, indicatorY);
+					ctx.stroke();
+					ctx.fillStyle = '#f3f4f6';
+					ctx.beginPath();
+					ctx.arc(waveformX + waveformWidth / 2, indicatorY, 6, 0, 2 * Math.PI);
+					ctx.fill();
+				}
 			}
 		}
 
@@ -467,17 +574,27 @@ export const useCanvasRenderer = () => {
 			ctx.font = '24px monospace';
 			ctx.textAlign = 'center';
 			for (let t = 0; t <= duration; t += 5) {
-				const y = (t / duration) * waveformHeight;
 				const minutes = Math.floor(t / 60);
 				const seconds = Math.floor(t % 60);
 				const timeLabel = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 				ctx.strokeStyle = '#737373';
 				ctx.lineWidth = 2;
-				ctx.beginPath();
-				ctx.moveTo(waveformX - 10, y);
-				ctx.lineTo(waveformX + 10, y);
-				ctx.stroke();
-				ctx.fillText(timeLabel, waveformX - 50, y + 4);
+
+				if (isHoriz) {
+					const x = (t / duration) * waveformWidth;
+					ctx.beginPath();
+					ctx.moveTo(x, waveformY - 10);
+					ctx.lineTo(x, waveformY + 10);
+					ctx.stroke();
+					ctx.fillText(timeLabel, x, waveformY - 25);
+				} else {
+					const y = (t / duration) * waveformHeight;
+					ctx.beginPath();
+					ctx.moveTo(waveformX - 10, y);
+					ctx.lineTo(waveformX + 10, y);
+					ctx.stroke();
+					ctx.fillText(timeLabel, waveformX - 50, y + 4);
+				}
 			}
 		}
 
@@ -638,7 +755,7 @@ export const useCanvasRenderer = () => {
 		}
 
 		// Notes on top
-		renderNotesOnCanvas(ctx, notes, waveformX, waveformWidth, waveformHeight, duration);
+		renderNotesOnCanvas(ctx, notes, waveformX, waveformY, waveformWidth, waveformHeight, duration);
 
 		// Selection box overlay (drawn in world space)
 		if (selectionBox) {
@@ -675,6 +792,8 @@ export const useCanvasRenderer = () => {
 		selectedStrokeGroups,
 		movingStrokePreview,
 		selectionBox,
+		orientation,
+		noteLayoutCache,
 	]);
 
 	return {

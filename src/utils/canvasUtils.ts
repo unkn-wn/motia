@@ -68,12 +68,17 @@ export const calculateZoomTransform = (
 /**
  * Converts screen coordinates to canvas coordinates using a bounding rect
  */
-export const screenToCanvasCoords = (screenX: number, screenY: number, rect: DOMRect, transform: CanvasTransform) => {
+export const screenToCanvasCoords = (
+	screenX: number,
+	screenY: number,
+	rect: DOMRect,
+	transform: CanvasTransform
+) => {
 	const x = screenX - rect.left;
 	const y = screenY - rect.top;
 
 	return {
-		// Account for base centering translate (rect.width / 2)
+		// Base centering translate is always (rect.width / 2, 0)
 		canvasX: (x - rect.width / 2 - transform.offsetX) / transform.scale,
 		canvasY: (y - transform.offsetY) / transform.scale,
 	};
@@ -152,32 +157,92 @@ export const findNoteAtPosition = (
 };
 
 /**
- * Calculates waveform dimensions and position
+ * Calculates waveform dimensions and position for vertical or horizontal orientation
  */
-export const getWaveformDimensions = (_canvasWidth: number, canvasHeight: number, duration: number) => {
-	const waveformHeight = Math.max(canvasHeight * 3, duration * 100);
+export const getWaveformDimensions = (
+	canvasWidth: number,
+	canvasHeight: number,
+	duration: number,
+	orientation: import('@types').CanvasOrientation = 'vertical'
+) => {
+	if (orientation === 'horizontal') {
+		const waveformWidth = Math.max((canvasWidth || window.innerWidth) * 3, duration * 100);
+		const waveformHeight = 120;
+		const waveformX = 0;
+		const waveformY = -waveformHeight / 2;
+		return {
+			waveformHeight,
+			waveformWidth,
+			waveformX,
+			waveformY,
+		};
+	}
+
+	const waveformHeight = Math.max((canvasHeight || window.innerHeight) * 3, duration * 100);
 	const waveformWidth = 120;
 	// World-space center at X=0; left edge is -width/2
 	const waveformX = -waveformWidth / 2;
+	const waveformY = 0;
 
 	return {
 		waveformHeight,
 		waveformWidth,
 		waveformX,
+		waveformY,
 	};
 };
 
 /**
  * Checks if click is within waveform bounds
  */
-export const isClickInWaveform = (canvasX: number, waveformX: number, waveformWidth: number) => {
+export const isClickInWaveform = (
+	canvasX: number,
+	waveformX: number,
+	waveformWidth: number,
+	canvasY?: number,
+	waveformY?: number,
+	waveformHeight?: number,
+	orientation: import('@types').CanvasOrientation = 'vertical'
+) => {
+	if (orientation === 'horizontal') {
+		const wy = waveformY ?? -60;
+		const wh = waveformHeight ?? 120;
+		const inY = canvasY !== undefined ? canvasY >= wy && canvasY <= wy + wh : true;
+		const inX = canvasX >= (waveformX ?? 0) && canvasX <= (waveformX ?? 0) + waveformWidth;
+		return inX && inY;
+	}
 	return canvasX >= waveformX && canvasX <= waveformX + waveformWidth;
 };
 
 /**
- * Calculates time from canvas Y position
+ * Calculates time from canvas Y position (vertical)
  */
 export const getTimeFromCanvasY = (canvasY: number, waveformHeight: number, duration: number) => {
 	const relativeY = canvasY / waveformHeight;
 	return Math.max(0, Math.min(duration, relativeY * duration));
 };
+
+/**
+ * Calculates time from canvas X position (horizontal)
+ */
+export const getTimeFromCanvasX = (canvasX: number, waveformWidth: number, duration: number) => {
+	const relativeX = canvasX / waveformWidth;
+	return Math.max(0, Math.min(duration, relativeX * duration));
+};
+
+/**
+ * Calculates time from canvas coordinates based on orientation
+ */
+export const getTimeFromCanvasCoords = (
+	canvasX: number,
+	canvasY: number,
+	dims: { waveformHeight: number; waveformWidth: number },
+	duration: number,
+	orientation: import('@types').CanvasOrientation = 'vertical'
+) => {
+	if (orientation === 'horizontal') {
+		return getTimeFromCanvasX(canvasX, dims.waveformWidth, duration);
+	}
+	return getTimeFromCanvasY(canvasY, dims.waveformHeight, duration);
+};
+

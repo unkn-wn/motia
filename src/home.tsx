@@ -21,16 +21,19 @@ import {
 	setShortcuts as setGlobalShortcuts,
 } from '@utils/shortcutsUtils';
 import './style.css';
-import { Navigate, useNavigate } from '@tanstack/react-router';
+import { Navigate, useNavigate, useParams } from '@tanstack/react-router';
 import { useFirestoreAutosave } from '@/hooks/useFirestoreAutosave';
 import { useNotesState } from '@/hooks/useNotesState';
 import { useProjectLifecycle } from '@/hooks/useProjectLifecycle';
-import { fetchProjectMeta, updateProjectThumbnail, renameProject, fetchUserSettings } from '@/lib/db';
+import { fetchProjectMeta, updateProjectThumbnail, renameProject, fetchUserSettings, updateProjectOrientation } from '@/lib/db';
 import { TitleBar } from '@/components/TitleBar';
 import SidebarToggle from '@/components/SidebarToggle';
+import { OrientationBanner } from '@/components/WaveformPlayer/components/OrientationBanner';
+import type { CanvasOrientation } from '@/types';
 
 function Home() {
 	const navigate = useNavigate();
+	const routeParams = useParams({ strict: false }) as { projectId?: string };
 	const [showSettings, setShowSettings] = useState(false);
 	const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(() => getShortcuts());
 	const [isDrawingMode, setIsDrawingMode] = useState(false); // legacy
@@ -39,6 +42,17 @@ function Home() {
 	const [projectTitle, setProjectTitle] = useState<string>('Untitled Project');
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 	const [notesVersion, setNotesVersion] = useState<number | undefined>(undefined);
+	const [orientation, setOrientation] = useState<CanvasOrientation>(() => {
+		const targetId = routeParams.projectId;
+		if (targetId) {
+			try {
+				const cached = localStorage.getItem(`motia_orientation_${targetId}`);
+				if (cached === 'horizontal' || cached === 'vertical') return cached;
+			} catch { /* ignore */ }
+		}
+		return 'vertical';
+	});
+	const [showOrientationBanner, setShowOrientationBanner] = useState(false);
 
 	const [profileOpen, setProfileOpen] = useState(false);
 	const handleOpenProfile = useCallback(() => setProfileOpen(true), []);
@@ -102,7 +116,7 @@ function Home() {
 				setProjectTitle('Untitled Project');
 				projectMetaRef.current = null;
 				setTrimStart(0);
-				setTrimEnd(0);
+				setTrimEnd(undefined);
 				setInitialVolume(0.5);
 				setMetadataLoaded(true);
 				return;
@@ -124,7 +138,7 @@ function Home() {
 				setProjectTitle('Untitled Project');
 				projectMetaRef.current = null;
 				setTrimStart(0);
-				setTrimEnd(0);
+				setTrimEnd(undefined);
 				setMetadataLoaded(true);
 				return;
 			}
@@ -138,13 +152,36 @@ function Home() {
 				// Load trim data from Firebase
 				const audioDuration = meta?.audio?.durationSec ?? 0;
 				setTrimStart(meta?.audio?.trimStart ?? 0);
-				setTrimEnd(meta?.audio?.trimEnd ?? audioDuration);
+				setTrimEnd(meta?.audio?.trimEnd !== undefined ? meta.audio.trimEnd : (audioDuration > 0 ? audioDuration : undefined));
+
+				// Load orientation or prompt if unset
+				if (meta?.orientation) {
+					setOrientation(meta.orientation);
+					try { localStorage.setItem(`motia_orientation_${projectId}`, meta.orientation); } catch { /* ignore */ }
+					setShowOrientationBanner(false);
+				} else {
+					// Check local cache first before defaulting to vertical
+					let cachedOrientation: CanvasOrientation | null = null;
+					try {
+						const c = localStorage.getItem(`motia_orientation_${projectId}`);
+						if (c === 'horizontal' || c === 'vertical') cachedOrientation = c;
+					} catch { /* ignore */ }
+
+					if (cachedOrientation) {
+						setOrientation(cachedOrientation);
+						setShowOrientationBanner(false);
+					} else {
+						setOrientation('vertical');
+						setShowOrientationBanner(true);
+					}
+				}
+
 				setMetadataLoaded(true); // Metadata fully loaded
 			} catch {
 				setProjectTitle('Untitled Project');
 				projectMetaRef.current = null;
 				setTrimStart(0);
-				setTrimEnd(0);
+				setTrimEnd(undefined);
 				setMetadataLoaded(true); // Error, but mark as loaded to not block forever
 			}
 		})();
@@ -159,6 +196,21 @@ function Home() {
 			if (!user || !projectId) return;
 			await renameProject(user.uid, projectId, newTitle);
 			setProjectTitle(newTitle);
+		},
+		[user, projectId]
+	);
+
+	// Handle orientation change
+	const handleSelectOrientation = useCallback(
+		async (newOrientation: CanvasOrientation) => {
+			setOrientation(newOrientation);
+			setShowOrientationBanner(false);
+			if (projectId) {
+				try { localStorage.setItem(`motia_orientation_${projectId}`, newOrientation); } catch { /* ignore */ }
+			}
+			if (user && projectId) {
+				await updateProjectOrientation(user.uid, projectId, newOrientation);
+			}
 		},
 		[user, projectId]
 	);
@@ -441,7 +493,11 @@ function Home() {
 								onUpdateDrawing={handleUpdateDrawing}
 								toolMode={toolMode}
 							/>
-							<AudioControls />
+							<AudioControls
+								onToggleNotes={() => setSidebarOpen(!sidebarOpen)}
+								notesOpen={sidebarOpen}
+								textNotesCount={textNotesCount}
+							/>
 							<FloatingDock
 								onAddNote={handleAddNoteAtCurrentTime}
 								onShowShortcuts={handleShowSettings}
@@ -463,18 +519,21 @@ function Home() {
 							<SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
 							<div
 								data-prevent-erase
-								className={`fixed right-0 top-8 h-full z-40 transform transition-transform duration-300 ease-in-out ${
-									sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-								}`}
+								className={`fixed z-40 transition-transform duration-300 ease-out pointer-events-none
+									max-md:inset-x-0 max-md:bottom-0 max-md:top-auto
+									md:right-0 md:top-8 md:h-full md:z-20
+									${sidebarOpen ? 'max-md:translate-y-0 md:translate-x-0' : 'max-md:translate-y-full md:translate-x-full'}`}
 							>
-								<NotesSidebarConnected
-									notes={notes}
-									onDeleteNote={handleDeleteNote}
-									onJumpToTime={handleJumpToTime}
-									onChangeNoteColor={handleChangeNoteColor}
-									onUpdateNote={handleUpdateNote}
-									onClose={() => setSidebarOpen(false)}
-								/>
+								<div className="pointer-events-auto">
+									<NotesSidebarConnected
+										notes={notes}
+										onDeleteNote={handleDeleteNote}
+										onJumpToTime={handleJumpToTime}
+										onChangeNoteColor={handleChangeNoteColor}
+										onUpdateNote={handleUpdateNote}
+										onClose={() => setSidebarOpen(false)}
+									/>
+								</div>
 							</div>
 						</div>
 					</AudioProvider>
@@ -493,6 +552,9 @@ function Home() {
 					/>
 					<ProjectLoadingWrapper loadingProject={loadingProject} metadataLoaded={metadataLoaded}>
 						<div className="relative h-screen overflow-hidden">
+							{showOrientationBanner && notes.length === 0 && (
+								<OrientationBanner onSelect={handleSelectOrientation} />
+							)}
 							{saveError && (
 								<div className="absolute top-1/2 left-0 right-0 z-50 flex justify-center pointer-events-none">
 									<div className="bg-red-900 text-white px-4 py-2 rounded shadow-lg font-bold pointer-events-auto">
@@ -524,10 +586,15 @@ function Home() {
 								onAddDrawing={handleAddDrawing}
 								onUpdateDrawing={handleUpdateDrawing}
 								toolMode={toolMode}
+								orientation={orientation}
 							/>
 
 							{/* Audio Controls - now outside WaveformPlayer */}
-							<AudioControls />
+							<AudioControls
+								onToggleNotes={() => setSidebarOpen(!sidebarOpen)}
+								notesOpen={sidebarOpen}
+								textNotesCount={textNotesCount}
+							/>
 
 							{/* Floating Dock with Add Note and Settings */}
 							<FloatingDock
@@ -547,24 +614,27 @@ function Home() {
 								onGoHome={handleGoProjects}
 								disableGoHome={!!user?.isAnonymous}
 							/>
-							{/* Sidebar Toggle Button - positioned on the side and moves with panel */}
+							{/* Sidebar Toggle Button */}
 							<SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
 
-							{/* Collapsible Sidebar */}
+							{/* Collapsible Sidebar (Desktop right panel / Mobile non-blocking bottom sheet) */}
 							<div
 								data-prevent-erase
-								className={`fixed right-0 top-8 h-full z-20 transform transition-transform duration-300 ease-in-out ${
-									sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-								}`}
+								className={`fixed z-40 transition-transform duration-300 ease-out pointer-events-none
+									max-md:inset-x-0 max-md:bottom-0 max-md:top-auto
+									md:right-0 md:top-8 md:h-full md:z-20
+									${sidebarOpen ? 'max-md:translate-y-0 md:translate-x-0' : 'max-md:translate-y-full md:translate-x-full'}`}
 							>
-								<NotesSidebarConnected
-									notes={notes}
-									onDeleteNote={handleDeleteNote}
-									onJumpToTime={handleJumpToTime}
-									onChangeNoteColor={handleChangeNoteColor}
-									onUpdateNote={handleUpdateNote}
-									onClose={() => setSidebarOpen(false)}
-								/>
+								<div className="pointer-events-auto">
+									<NotesSidebarConnected
+										notes={notes}
+										onDeleteNote={handleDeleteNote}
+										onJumpToTime={handleJumpToTime}
+										onChangeNoteColor={handleChangeNoteColor}
+										onUpdateNote={handleUpdateNote}
+										onClose={() => setSidebarOpen(false)}
+									/>
+								</div>
 							</div>
 						</div>
 					</ProjectLoadingWrapper>

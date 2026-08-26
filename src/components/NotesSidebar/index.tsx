@@ -66,31 +66,69 @@ const NotesSidebar: React.FC<NotesSidebarProps> = memo(({ displayNotes, onClose 
 
   return (
     <div
-      ref={sidebarRef}
-      className="w-80 rounded-xl bg-neutral-900 backdrop-blur-sm border-neutral-700 h-5/6 overflow-y-auto shadow-2xl touch-pan-y"
-      onPointerDown={(e) => {
-        if (e.pointerType !== 'touch') return; // only handle touch swipes
-        startXRef.current = e.clientX;
-        startYRef.current = e.clientY;
-        trackingRef.current = true;
-      }}
-      onPointerMove={(e) => {
-        if (!trackingRef.current || onClose == null) return;
-        if (startXRef.current == null || startYRef.current == null) return;
-        const dx = e.clientX - startXRef.current;
-        const dy = e.clientY - startYRef.current;
-        // Consider as swipe-right when mostly horizontal and to the right beyond threshold
-        if (dx > 80 && Math.abs(dy) < 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-          trackingRef.current = false;
-          startXRef.current = null;
-          startYRef.current = null;
-          try { onClose(); } catch { /* ignore */ }
-        }
-      }}
-      onPointerUp={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}
-      onPointerCancel={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}
+      className="w-full md:w-80 rounded-t-2xl md:rounded-xl bg-neutral-900/95 backdrop-blur-md border-t md:border border-neutral-700/60 max-h-[50vh] md:max-h-none md:h-5/6 flex flex-col shadow-2xl overflow-hidden"
     >
-      <div className="p-4 space-y-3">
+      {/* Sticky Mobile drag handle bar */}
+      <div
+        className="md:hidden flex-none py-3 px-4 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing border-b border-neutral-800/80 touch-none select-none bg-neutral-900/95"
+        onPointerDown={(e) => {
+          try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+          startYRef.current = e.clientY;
+          trackingRef.current = true;
+        }}
+        onPointerMove={(e) => {
+          if (!trackingRef.current || startYRef.current == null) return;
+          const dy = e.clientY - startYRef.current;
+          if (dy > 30) {
+            trackingRef.current = false;
+            startYRef.current = null;
+            onClose?.();
+          }
+        }}
+        onPointerUp={() => { trackingRef.current = false; startYRef.current = null; }}
+        onPointerCancel={() => { trackingRef.current = false; startYRef.current = null; }}
+        onClick={onClose}
+      >
+        <div className="w-12 h-1.5 bg-neutral-500 rounded-full hover:bg-neutral-400 transition-colors" />
+      </div>
+
+      <div
+        ref={sidebarRef}
+        className="flex-1 overflow-y-auto p-4 space-y-3 touch-pan-y"
+        onPointerDown={(e) => {
+          if (e.pointerType !== 'touch') return;
+          startXRef.current = e.clientX;
+          startYRef.current = e.clientY;
+          trackingRef.current = true;
+        }}
+        onPointerMove={(e) => {
+          if (!trackingRef.current || onClose == null) return;
+          if (startXRef.current == null || startYRef.current == null) return;
+          const dx = e.clientX - startXRef.current;
+          const dy = e.clientY - startYRef.current;
+          const isMobile = window.innerWidth < 768;
+
+          if (isMobile) {
+            // If scrolled to top and swiping down, close
+            if (sidebarRef.current?.scrollTop === 0 && dy > 40 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+              trackingRef.current = false;
+              startXRef.current = null;
+              startYRef.current = null;
+              try { onClose(); } catch { /* ignore */ }
+            }
+          } else {
+            // Swipe right to dismiss on desktop sidebar
+            if (dx > 80 && Math.abs(dy) < 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+              trackingRef.current = false;
+              startXRef.current = null;
+              startYRef.current = null;
+              try { onClose(); } catch { /* ignore */ }
+            }
+          }
+        }}
+        onPointerUp={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}
+        onPointerCancel={() => { trackingRef.current = false; startXRef.current = null; startYRef.current = null; }}
+      >
         {displayNotes.length === 0 ? (
           <div className="text-center py-8 text-neutral-400">
             <Edit3Icon className="w-8 h-8 mx-auto mb-3 opacity-50" />

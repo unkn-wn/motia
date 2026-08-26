@@ -8,6 +8,8 @@ import {
   Volume2,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Plus,
   Pen,
   Settings,
@@ -76,6 +78,16 @@ export const ChevronRightIcon = memo(({ className = "w-5 h-5" }: { className?: s
   <ChevronRight className={className} />
 ));
 ChevronRightIcon.displayName = 'ChevronRightIcon';
+
+export const ChevronUpIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <ChevronUp className={className} />
+));
+ChevronUpIcon.displayName = 'ChevronUpIcon';
+
+export const ChevronDownIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
+  <ChevronDown className={className} />
+));
+ChevronDownIcon.displayName = 'ChevronDownIcon';
 
 // Action Icons
 export const PlusIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (

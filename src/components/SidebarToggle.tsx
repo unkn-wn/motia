@@ -9,9 +9,10 @@ interface Props {
 
 const SidebarToggleComponent: React.FC<Props> = ({ open, setOpen, textNotesCount }) => {
   return (
+    /* Desktop side panel toggle button */
     <button
       onClick={() => setOpen(!open)}
-      className={`fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${open ? 'right-80' : 'right-0'}`}
+      className={`hidden md:block fixed top-20 -translate-y-1/2 z-30 bg-neutral-900 hover:bg-neutral-950 text-white p-2 cursor-pointer rounded-l-lg shadow-lg transition-all duration-300 ease-in-out ${open ? 'right-80' : 'right-0'}`}
       title={open ? 'Hide notes' : 'Show notes'}
     >
       <div className="flex items-center space-x-2">

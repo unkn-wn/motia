@@ -38,6 +38,7 @@ export type ProjectMetaDoc = {
 		sampleRate?: number; // optional context of samples array density
 	};
 	thumbnail?: string; // small data URL preview (webp/png)
+	orientation?: 'vertical' | 'horizontal';
 };
 
 export type ProjectNotesDoc = {

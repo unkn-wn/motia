@@ -8,6 +8,7 @@ import {
 	getDocs,
 	serverTimestamp,
 	setDoc,
+	updateDoc,
 	Timestamp,
 	writeBatch,
 	query,
@@ -153,12 +154,18 @@ export async function updateProjectThumbnail(uid: string, projectId: string, dat
 
 // Update audio trim points (in and out times in seconds)
 export async function updateAudioTrim(uid: string, projectId: string, trimStart: number, trimEnd: number): Promise<void> {
+	await updateDoc(userProjectDoc(uid, projectId), {
+		'audio.trimStart': trimStart,
+		'audio.trimEnd': trimEnd,
+		updatedAt: serverTimestamp(),
+	});
+}
+
+// Update project canvas orientation ('vertical' or 'horizontal')
+export async function updateProjectOrientation(uid: string, projectId: string, orientation: 'vertical' | 'horizontal'): Promise<void> {
 	await setDoc(
 		userProjectDoc(uid, projectId),
-		{
-			audio: { trimStart, trimEnd },
-			updatedAt: serverTimestamp(),
-		} as unknown as ProjectMetaDoc,
+		{ orientation, updatedAt: serverTimestamp() } as unknown as ProjectMetaDoc,
 		{ merge: true }
 	);
 }

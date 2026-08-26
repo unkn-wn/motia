@@ -11,7 +11,6 @@ interface SettingsModalProps {
 	projectId: string | null;
 	shortcuts: KeyboardShortcut[];
 	onUpdateShortcut: (id: string, newKey: string) => void;
-	// onResetShortcuts removed - reset button deprecated (commented out in UI)
 }
 
 type SettingsTab = 'project' | 'global';
@@ -21,7 +20,13 @@ type SettingsTab = 'project' | 'global';
  * - Project Settings: Audio trimming
  * - Global Settings: Keyboard shortcuts and preferences
  */
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, projectId, shortcuts, onUpdateShortcut }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+	isOpen,
+	onClose,
+	projectId,
+	shortcuts,
+	onUpdateShortcut,
+}) => {
 	const [activeTab, setActiveTab] = useState<SettingsTab>('project');
 
 	if (!isOpen) return null;
@@ -53,16 +58,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, p
 
 					{/* Controls */}
 					<div className="flex items-center space-x-1 ">
-						{/* Reset button temporarily disabled - users rarely need it */}
-						{/* {activeTab === 'global' && (
-							<button
-								onClick={onResetShortcuts}
-								className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"
-								title="Reset to defaults"
-							>
-								<RotateCcwIcon className="w-3.5 h-3.5" />
-							</button>
-						)} */}
 						<button
 							onClick={onClose}
 							className="p-1.5 hover:bg-neutral-800 rounded cursor-pointer text-neutral-400 hover:text-white transition-colors"

@@ -21,6 +21,7 @@ export interface WaveformPlayerProps {
 	onAddDrawing?: (time: number, canvasX: number, canvasY: number, drawing: Note['drawing']) => string;
 	onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
 	toolMode?: ToolMode; // new controlled tool mode
+	orientation?: import('@types').CanvasOrientation;
 }
 
 export interface WaveformPlayerRef {
@@ -50,6 +51,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			onAddDrawing,
 			onUpdateDrawing,
 			toolMode: externalToolMode,
+			orientation = 'vertical',
 		},
 		ref
 	) => {
@@ -77,11 +79,46 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		} = useAudio();
 
 		// Canvas panning and transform state
-		const [transform, setTransform] = useState<CanvasTransform>({ offsetX: 0, offsetY: 150, scale: 1 });
+		const [transform, setTransform] = useState<CanvasTransform>(() => {
+			if (orientation === 'horizontal') {
+				const w = typeof window !== 'undefined' ? window.innerWidth : 1200;
+				const h = typeof window !== 'undefined' ? window.innerHeight : 800;
+				return {
+					offsetX: w * 0.33 - w / 2, // Lead on X axis (start of waveform at 33% from left)
+					offsetY: h / 2,            // Waveform centered on Y axis
+					scale: 1,
+				};
+			}
+			return { offsetX: 0, offsetY: 150, scale: 1 };
+		});
 		const [isPanning, setIsPanning] = useState(false);
 		const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
 		const [isFollowingPlayhead, setIsFollowingPlayhead] = useState(true); // Start with auto-tracking enabled
 		const transformRef = useRef(transform);
+
+		// Synchronize transform when orientation switches
+		const prevOrientationRef = useRef(orientation);
+		useEffect(() => {
+			if (prevOrientationRef.current !== orientation) {
+				prevOrientationRef.current = orientation;
+				const rect = canvasRef.current?.getBoundingClientRect();
+				const w = rect?.width || (typeof window !== 'undefined' ? window.innerWidth : 1200);
+				const h = rect?.height || (typeof window !== 'undefined' ? window.innerHeight : 800);
+				if (orientation === 'horizontal') {
+					setTransform((prev) => ({
+						offsetX: w * 0.33 - w / 2,
+						offsetY: h / 2,
+						scale: prev.scale,
+					}));
+				} else {
+					setTransform((prev) => ({
+						offsetX: 0,
+						offsetY: 150,
+						scale: prev.scale,
+					}));
+				}
+			}
+		}, [orientation, canvasRef]);
 
 		// Shared layout cache for notes (renderer populates, hit-test reads)
 		const noteLayoutCacheRef = useRef<Map<string, { key: string; lines: string[]; noteHeight: number }>>(new Map());
@@ -195,7 +232,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 			// NO AUDIO FILE - random placeholder waveform
 			if (!audioFile) {
-				setDuration(10);
+				setDuration(0);
 				const samples = 350;
 				const dummyData = Array.from({ length: samples }, () => 0.15);
 				setWaveformData(dummyData);
@@ -289,21 +326,35 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			if (!isFollowingPlayhead || !canvasRef.current || duration === 0) return;
 
 			const canvas = canvasRef.current;
-			const canvasHeight = canvas.getBoundingClientRect().height;
-
-			// Calculate where the playhead should be in canvas coordinates
+			const rect = canvas.getBoundingClientRect();
 			const timeProgress = currentTime / duration;
-			const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
-			const scaledWaveformHeight = baseWaveformHeight * transform.scale;
-			const targetPlayheadY = timeProgress * scaledWaveformHeight;
-			const playheadPositionY = canvasHeight * 0.33; // Position at 33% from top
 
-			setTransformSafe((prev) => ({
-				offsetX: prev.offsetX, // Don't change X position
-				offsetY: playheadPositionY - targetPlayheadY, // Keep playhead centered
-				scale: prev.scale, // Maintain current zoom level
-			}));
-		}, [currentTime, duration, transform.scale, isFollowingPlayhead, canvasRef, setTransformSafe]);
+			if (orientation === 'horizontal') {
+				const baseWaveformWidth = Math.max(rect.width * 3, duration * 100);
+				const scaledWaveformWidth = baseWaveformWidth * transform.scale;
+				const targetPlayheadX = timeProgress * scaledWaveformWidth;
+				// Screen X is: rect.width / 2 + offsetX + targetPlayheadX
+				// Target playhead position is 33% from screen left
+				const targetScreenX = rect.width * 0.33;
+
+				setTransformSafe((prev) => ({
+					offsetX: targetScreenX - rect.width / 2 - targetPlayheadX, // Keep playhead at 33% from left
+					offsetY: prev.offsetY, // Don't change Y position
+					scale: prev.scale,
+				}));
+			} else {
+				const baseWaveformHeight = Math.max(rect.height * 3, duration * 100);
+				const scaledWaveformHeight = baseWaveformHeight * transform.scale;
+				const targetPlayheadY = timeProgress * scaledWaveformHeight;
+				const playheadPositionY = rect.height * 0.33; // Position at 33% from top
+
+				setTransformSafe((prev) => ({
+					offsetX: prev.offsetX, // Don't change X position
+					offsetY: playheadPositionY - targetPlayheadY, // Keep playhead centered
+					scale: prev.scale, // Maintain current zoom level
+				}));
+			}
+		}, [currentTime, duration, transform.scale, isFollowingPlayhead, orientation, canvasRef, setTransformSafe]);
 
 		const handleAddNoteAtCurrentTime = useCallback(
 			(e: React.MouseEvent) => {
@@ -311,59 +362,92 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				if (!canvasRef.current || duration === 0) return;
 
 				const rect = canvasRef.current.getBoundingClientRect();
-
-				// With world-centered waveform (center at X=0), place note to the right of waveform
-				const waveformWidth = 120;
-				const waveformRightX = waveformWidth / 2;
-				const noteCanvasX = waveformRightX + 150;
-
-				// Calculate Y position based on current playback time
-				const waveformHeight = Math.max(rect.height * 3, duration * 100);
 				const timeProgress = currentTime / duration;
-				const noteCanvasY = timeProgress * waveformHeight;
 
-				onAddNote(currentTime, noteCanvasX, noteCanvasY);
+				if (orientation === 'horizontal') {
+					const waveformWidth = Math.max(rect.width * 3, duration * 100);
+					const noteCanvasX = timeProgress * waveformWidth;
+					const noteCanvasY = 160; // Place below the horizontal waveform
+					onAddNote(currentTime, noteCanvasX, noteCanvasY);
+				} else {
+					// With world-centered waveform (center at X=0), place note to the right of waveform
+					const waveformWidth = 120;
+					const waveformRightX = waveformWidth / 2;
+					const noteCanvasX = waveformRightX + 150;
+
+					// Calculate Y position based on current playback time
+					const waveformHeight = Math.max(rect.height * 3, duration * 100);
+					const noteCanvasY = timeProgress * waveformHeight;
+
+					onAddNote(currentTime, noteCanvasX, noteCanvasY);
+				}
 
 				// Small delay to allow React to update the notes array before enabling interactions
 				setTimeout(() => {
 					setDragOccurred(false);
 				}, 50);
 			},
-			[canvasRef, duration, currentTime, onAddNote, setDragOccurred]
+			[canvasRef, duration, currentTime, orientation, onAddNote, setDragOccurred]
 		);
 
 		const handleRecenterToPlayhead = useCallback(() => {
 			if (!canvasRef.current) return;
 
 			const canvas = canvasRef.current;
-			const canvasHeight = canvas.height;
+			const timeProgress = duration > 0 ? currentTime / duration : 0;
 
-			// If already following playhead, reset x value as well
-			if (isFollowingPlayhead) {
+			if (orientation === 'horizontal') {
+				const rect = canvas.getBoundingClientRect();
+				const canvasWidth = rect.width || window.innerWidth;
+				const canvasHeight = rect.height || window.innerHeight;
+
+				if (isFollowingPlayhead) {
+					setTransformSafe((prev) => ({
+						offsetX: prev.offsetX,
+						offsetY: canvasHeight / 2, // Realign Y to vertical center
+						scale: prev.scale,
+					}));
+					return;
+				}
+				const baseWaveformWidth = Math.max(canvasWidth * 3, duration * 100);
+				const scaledWaveformWidth = baseWaveformWidth * transform.scale;
+				const targetPlayheadX = timeProgress * scaledWaveformWidth;
+				const targetScreenX = canvasWidth * 0.33;
+
 				setTransformSafe((prev) => ({
-					offsetX: 0, // Center X
-					offsetY: prev.offsetY,
+					offsetX: targetScreenX - canvasWidth / 2 - targetPlayheadX,
+					offsetY: prev.offsetY || canvasHeight / 2,
 					scale: prev.scale,
 				}));
-				return; // Keep following enabled
+				setIsFollowingPlayhead(true);
+			} else {
+				const canvasHeight = canvas.height || window.innerHeight;
+				// If already following playhead, reset x value as well
+				if (isFollowingPlayhead) {
+					setTransformSafe((prev) => ({
+						offsetX: 0, // Center X
+						offsetY: prev.offsetY,
+						scale: prev.scale,
+					}));
+					return; // Keep following enabled
+				}
+
+				// First click: just follow Y axis with current scale
+				const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
+				const scaledWaveformHeight = baseWaveformHeight * transform.scale;
+				const targetPlayheadY = timeProgress * scaledWaveformHeight;
+				const playheadPositionY = canvasHeight * 0.33;
+
+				setTransformSafe((prev) => ({
+					offsetX: prev.offsetX, // Preserve user's horizontal view
+					offsetY: playheadPositionY - targetPlayheadY,
+					scale: prev.scale, // Maintain current zoom level
+				}));
+
+				// Enable playhead following mode
+				setIsFollowingPlayhead(true);
 			}
-
-			// First click: just follow Y axis with current scale
-			const timeProgress = duration > 0 ? currentTime / duration : 0;
-			const baseWaveformHeight = Math.max(canvasHeight * 3, duration * 100);
-			const scaledWaveformHeight = baseWaveformHeight * transform.scale;
-			const targetPlayheadY = timeProgress * scaledWaveformHeight;
-			const playheadPositionY = canvasHeight * 0.33;
-
-			setTransformSafe((prev) => ({
-				offsetX: prev.offsetX, // Preserve user's horizontal view
-				offsetY: playheadPositionY - targetPlayheadY,
-				scale: prev.scale, // Maintain current zoom level
-			}));
-
-			// Enable playhead following mode
-			setIsFollowingPlayhead(true);
-		}, [currentTime, duration, transform.scale, isFollowingPlayhead, setTransformSafe, setIsFollowingPlayhead]);
+		}, [currentTime, duration, transform.scale, isFollowingPlayhead, orientation, setTransformSafe, setIsFollowingPlayhead]);
 
 		// Register the recenter function with the context
 		useEffect(() => {
@@ -511,6 +595,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 			// Shared Layout Cache
 			noteLayoutCache: noteLayoutCacheRef.current,
+
+			// Orientation
+			orientation,
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		}), [
 			transform, isPanning, lastPanPoint, isFollowingPlayhead,
@@ -518,7 +605,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			toolMode, isDrawing, currentStroke, drawingStartPos, drawingSession, drawingNoteId,
 			selectionBox, selectedDrawingIds, selectedStrokeGroups,
 			erasingStrokeIds, eraserCursor, movingStrokePreview, showSelectionActions,
-			contextMenu, deleteConfirmNoteId,
+			contextMenu, deleteConfirmNoteId, orientation,
 			onAddNote, onUpdateNote, onDeleteNote, onMoveNote, onAddDrawing, onUpdateDrawing,
 		]);
 

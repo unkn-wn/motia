@@ -7,7 +7,7 @@ import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFro
 import { useAudio } from '@contexts/objects/AudioContextObject';
 
 export const WaveformCanvas: React.FC = () => {
-	const { canvasRef, transform, isDrawingMode, toolMode, isPanning, dragOccurred, notes, NOTE_LABEL_HIDE_THRESHOLD, noteLayoutCache } =
+	const { canvasRef, transform, isDrawingMode, toolMode, isPanning, dragOccurred, notes, NOTE_LABEL_HIDE_THRESHOLD, noteLayoutCache, orientation = 'vertical' } =
 		useWaveformContext();
 	// Selection / drawings state pulled once (avoid calling hook inside handlers)
 	const { selectionBox, setSelectionBox, selectedDrawingIds, setSelectedStrokeGroups, setSelectedDrawingIds } = useWaveformContext();
@@ -114,14 +114,16 @@ export const WaveformCanvas: React.FC = () => {
 			}
 
 			// Check if click is within waveform bounds for seeking
-			const { waveformX, waveformWidth, waveformHeight } = getWaveformDimensions(rect.width, rect.height, duration);
+			const { waveformX, waveformY, waveformWidth, waveformHeight } = getWaveformDimensions(rect.width, rect.height, duration, orientation);
 
-			if (isClickInWaveform(canvasX, waveformX, waveformWidth)) {
-				const time = getTimeFromCanvasY(canvasY, waveformHeight, duration);
-				seekToTime(time);
+			if (isClickInWaveform(canvasX, waveformX, waveformWidth, canvasY, waveformY, waveformHeight, orientation)) {
+				const time = orientation === 'horizontal'
+					? (canvasX / waveformWidth) * duration
+					: getTimeFromCanvasY(canvasY, waveformHeight, duration);
+				seekToTime(Math.max(0, Math.min(duration, time)));
 			}
 		},
-		[canvasRef, duration, isPanning, dragOccurred, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, isDrawingMode, seekToTime]
+		[canvasRef, duration, isPanning, dragOccurred, transform, orientation, notes, NOTE_LABEL_HIDE_THRESHOLD, isDrawingMode, seekToTime, noteLayoutCache]
 	);
 
 	const handleContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -165,7 +167,7 @@ export const WaveformCanvas: React.FC = () => {
 				}
 			}, 100); // 100ms hold right click to open menu
 		},
-		[canvasRef, transform, notes, NOTE_LABEL_HIDE_THRESHOLD, setContextMenu, isPanning, setIsPanning]
+		[canvasRef, transform, orientation, notes, NOTE_LABEL_HIDE_THRESHOLD, setContextMenu, isPanning, setIsPanning, noteLayoutCache]
 	);
 
 	// Cancel hold if right button released anywhere

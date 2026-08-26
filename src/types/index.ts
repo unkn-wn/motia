@@ -19,7 +19,8 @@ export type {
   CanvasTransform,
   WaveformDimensions,
   CanvasPoint,
-  CanvasBounds
+  CanvasBounds,
+  CanvasOrientation
 } from './canvas';
 
 // Note types

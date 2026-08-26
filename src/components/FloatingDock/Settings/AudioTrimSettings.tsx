@@ -50,19 +50,19 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 	const HANDLE_GRIP_WIDTH = 12;
 	const HANDLE_GRIP_HEIGHT = 24;
 
-	// Sync with initial values when they change
+	// Initialize local trim state once on modal open
+	const initializedLocalRef = useRef(false);
 	useEffect(() => {
-		const effectiveStart = initialTrimStart || 0;
-		const effectiveEnd = initialTrimEnd || duration;
+		if (!initializedLocalRef.current && duration > 0) {
+			const effectiveStart = initialTrimStart || 0;
+			const effectiveEnd = initialTrimEnd && initialTrimEnd > 0 ? initialTrimEnd : duration;
 
-		setTrimStart(effectiveStart);
-		setTrimEnd(effectiveEnd);
-		setCurrentTime(effectiveStart);
-
-		// Update global AudioContext trim
-		setGlobalTrimStart(effectiveStart);
-		setGlobalTrimEnd(effectiveEnd);
-	}, [initialTrimStart, initialTrimEnd, duration, setGlobalTrimStart, setGlobalTrimEnd]);
+			setTrimStart(effectiveStart);
+			setTrimEnd(effectiveEnd);
+			setCurrentTime(effectiveStart);
+			initializedLocalRef.current = true;
+		}
+	}, [initialTrimStart, initialTrimEnd, duration]);
 
 	// Cleanup on unmount
 	useEffect(() => {
@@ -375,17 +375,22 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 			window.clearTimeout(saveTimeoutRef.current);
 		}
 
-		// Debounce the save by 1 second
+		// Debounce the save by 300ms
 		saveTimeoutRef.current = window.setTimeout(() => {
+			saveTimeoutRef.current = undefined;
 			updateAudioTrim(user.uid, projectId, trimStart, trimEnd).catch((error) => {
 				console.error('Failed to auto-save trim values:', error);
 			});
-		}, 1000);
+		}, 300);
 
-		// Cleanup
+		// Cleanup: flush save on unmount if a change was pending
 		return () => {
 			if (saveTimeoutRef.current) {
 				window.clearTimeout(saveTimeoutRef.current);
+				saveTimeoutRef.current = undefined;
+				updateAudioTrim(user.uid, projectId, trimStart, trimEnd).catch((error) => {
+					console.error('Failed to auto-save trim values on close:', error);
+				});
 			}
 		};
 	}, [user, projectId, trimStart, trimEnd]);
