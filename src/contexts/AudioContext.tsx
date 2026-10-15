@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import { isPlayingStore, volumeStore, currentTimeStore, durationStore } from '@components/AudioControls/state';
+import { isPlayingStore, volumeStore, currentTimeStore, durationStore, waveformDataStore, trimStore } from '@components/AudioControls/state';
 import { AudioContext, type AudioContextType, AudioActionsContext, type AudioActionsOnly } from './objects/AudioContextObject';
 import { useAuth } from './objects/FirebaseAuthContextObject';
 import { saveUserSettings } from '@/lib/db';
@@ -330,7 +330,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 			<AudioActionsContext.Provider value={actionsValue}>{children}</AudioActionsContext.Provider>
 			{/* Synchronize external stores for fine-grained subscribers */}
 			<AudioProviderEffects isPlaying={isPlaying} volume={volume} />
-			<AudioTimeEffects currentTime={currentTime} duration={duration} />
+			<AudioTimeEffects currentTime={currentTime} duration={duration} waveformData={waveformData} trimStart={trimStart} trimEnd={trimEnd} />
 		</AudioContext.Provider>
 	);
 };
@@ -351,12 +351,21 @@ export const AudioProviderEffects: React.FC<{
 export const AudioTimeEffects: React.FC<{
 	currentTime: number;
 	duration: number;
-}> = ({ currentTime, duration }) => {
+	waveformData: number[];
+	trimStart: number;
+	trimEnd: number;
+}> = ({ currentTime, duration, waveformData, trimStart, trimEnd }) => {
 	useEffect(() => {
 		currentTimeStore.set(currentTime);
 	}, [currentTime]);
 	useEffect(() => {
 		durationStore.set(duration);
 	}, [duration]);
+	useEffect(() => {
+		waveformDataStore.set(waveformData);
+	}, [waveformData]);
+	useEffect(() => {
+		trimStore.set([trimStart, trimEnd]);
+	}, [trimStart, trimEnd]);
 	return null;
 };

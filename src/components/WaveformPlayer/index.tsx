@@ -6,7 +6,13 @@ import type { DrawingPoint, DrawingSession } from '@types';
 
 // Import refactored components and hooks
 import { WaveformProvider } from '@contexts/WaveformContext';
+import type { CanvasDrag, ContextMenuState } from '@contexts/objects/WaveformContextObject';
 import { WaveformPlayerContent } from './components/WaveformPlayerContent';
+import type { BoardFormat, Frame, StoryboardSymbol } from '@/features/storyboard/types';
+import { useStoryboard } from '@/features/storyboard/StoryboardContext';
+import { cardPositionAt, timeAxisOf } from './hooks/frameCanvas';
+import { timeToAxis } from '@/features/storyboard/canvas/layout';
+import { Navigation } from '@/features/navigation/Navigation';
 
 export interface WaveformPlayerProps {
 	audioFile: File | null;
@@ -22,6 +28,13 @@ export interface WaveformPlayerProps {
 	onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
 	toolMode?: ToolMode; // new controlled tool mode
 	orientation?: import('@types').CanvasOrientation;
+	// Storyboard frames drawn on the canvas
+	frames: Frame[];
+	board: BoardFormat;
+	symbols: StoryboardSymbol[];
+	/** The index rail along the canvas edge (key B) */
+	showRail?: boolean;
+	onChangeNoteColor?: (id: string, color: string) => void;
 }
 
 export interface WaveformPlayerRef {
@@ -31,6 +44,10 @@ export interface WaveformPlayerRef {
 	skipBack: () => void;
 	skipForward: () => void;
 	addNoteAtCurrentTime: () => void;
+	/** Adds an empty frame at the playhead, beside the waveform, and opens it in the frame editor. */
+	addFrameAtCurrentTime: () => void;
+	/** Where a new frame card for `time` goes on the canvas. */
+	cardPositionAt: (time: number) => { canvasX: number; canvasY: number };
 	volumeUp: () => void;
 	volumeDown: () => void;
 	exportThumbnail: (width?: number, height?: number) => string | null;
@@ -52,6 +69,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			onUpdateDrawing,
 			toolMode: externalToolMode,
 			orientation = 'vertical',
+			frames,
+			board,
+			symbols,
+			showRail = true,
+			onChangeNoteColor,
 		},
 		ref
 	) => {
@@ -126,17 +148,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		// Note interaction state
 		const [editingNote, setEditingNote] = useState<string | null>(null);
 		const [editContent, setEditContent] = useState('');
-		const [dragging, setDragging] = useState<{
-			id: string;
-			startX: number;
-			startY: number;
-			initialCanvasX: number;
-			initialCanvasY: number;
-		} | null>(null);
+		const [dragging, setDragging] = useState<CanvasDrag | null>(null);
 		const [dragOccurred, setDragOccurred] = useState(false);
 
 		// Context menu and delete-confirm state
-		const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number; noteId: string | null }>({
+		const [contextMenu, setContextMenu] = useState<ContextMenuState>({
 			isOpen: false,
 			x: 0,
 			y: 0,
@@ -172,8 +188,13 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			originX?: number;
 			originY?: number;
 			originalPositions?: Array<{ id: string; x: number; y: number }>;
+			framePositions?: Array<{ id: string; x: number; y: number }>;
 		} | null>(null);
 		const [selectedStrokeGroups, setSelectedStrokeGroups] = useState<{ noteId: string; strokeIndexes: number[] }[]>([]);
+		const [selectedFrameIds, setSelectedFrameIds] = useState<Set<string>>(() => new Set());
+		const storyboard = useStoryboard();
+		const storyboardRef = useRef(storyboard);
+		storyboardRef.current = storyboard;
 		const [movingStrokePreview, setMovingStrokePreview] = useState<{
 			noteId: string;
 			strokeIndexes: number[];
@@ -183,6 +204,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		useEffect(() => {
 			if (toolMode !== 'select') {
 				setSelectionBox(null);
+				setSelectedFrameIds(new Set());
 				setSelectedDrawingIds(new Set());
 				setSelectedStrokeGroups([]);
 				setMovingStrokePreview(null);
@@ -198,6 +220,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				setCurrentStroke([]);
 			}
 			// Cancel any active dragging/panning when switching tools to avoid stuck states
+			// (a frame drag in progress is kept as one undo step; a selection move goes back)
+			storyboardRef.current.abortLiveEdit();
 			setDragging(null);
 			setIsPanning(false);
 		}, [toolMode]);
@@ -321,6 +345,20 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			});
 		}, []);
 
+		// Navigation jump: seek, then centre the item (or the waveform at that time) and stop following
+		const jumpTo = useCallback(
+			(time: number, at?: { x: number; y: number }) => {
+				seekToTime(time);
+				setIsFollowingPlayhead(false);
+				const rect = canvasRef.current?.getBoundingClientRect();
+				if (!rect || (!at && duration <= 0)) return;
+				const along = () => timeToAxis(time, timeAxisOf(rect, duration, orientation));
+				const p = at ?? (orientation === 'horizontal' ? { x: along(), y: 0 } : { x: 0, y: along() });
+				setTransformSafe((prev) => ({ ...prev, offsetX: -p.x * prev.scale, offsetY: rect.height / 2 - p.y * prev.scale }));
+			},
+			[seekToTime, duration, orientation, setTransformSafe]
+		);
+
 		// Follow playhead effect - continuously update transform when following is enabled
 		useEffect(() => {
 			if (!isFollowingPlayhead || !canvasRef.current || duration === 0) return;
@@ -389,6 +427,14 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			},
 			[canvasRef, duration, currentTime, orientation, onAddNote, setDragOccurred]
 		);
+
+		const { handleAddFrame, openFrameEditor } = storyboard;
+		const renderPaused = storyboard.editingFrameId !== null;
+		const handleAddFrameAtCurrentTime = useCallback(() => {
+			if (!canvasRef.current || duration === 0) return;
+			const { canvasX, canvasY } = cardPositionAt(canvasRef.current, currentTime, duration, orientation, frames, board);
+			openFrameEditor(handleAddFrame(currentTime, canvasX, canvasY));
+		}, [duration, orientation, currentTime, frames, board, handleAddFrame, openFrameEditor]);
 
 		const handleRecenterToPlayhead = useCallback(() => {
 			if (!canvasRef.current) return;
@@ -466,6 +512,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 					stopPropagation: () => {},
 				} as React.MouseEvent;
 				handleAddNoteAtCurrentTime(syntheticEvent);
+			},
+			addFrameAtCurrentTime: handleAddFrameAtCurrentTime,
+			cardPositionAt: (time: number) => {
+				const doc = storyboard.storyboardRef.current;
+				return cardPositionAt(canvasRef.current, time, duration, orientation, doc.frames, doc.board);
 			},
 			volumeUp: volumeUp,
 			volumeDown: volumeDown,
@@ -598,6 +649,16 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 			// Orientation
 			orientation,
+
+			// Storyboard frames
+			frames,
+			board,
+			symbols,
+			selectedFrameIds,
+			setSelectedFrameIds,
+			renderPaused,
+			jumpTo,
+			onChangeNoteColor,
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		}), [
 			transform, isPanning, lastPanPoint, isFollowingPlayhead,
@@ -606,7 +667,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			selectionBox, selectedDrawingIds, selectedStrokeGroups,
 			erasingStrokeIds, eraserCursor, movingStrokePreview, showSelectionActions,
 			contextMenu, deleteConfirmNoteId, orientation,
-			onAddNote, onUpdateNote, onDeleteNote, onMoveNote, onAddDrawing, onUpdateDrawing,
+			frames, board, symbols, selectedFrameIds, renderPaused, jumpTo,
+			onAddNote, onUpdateNote, onDeleteNote, onMoveNote, onAddDrawing, onUpdateDrawing, onChangeNoteColor,
 		]);
 
 		return (
@@ -617,6 +679,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 					<div className="flex-1 overflow-hidden bg-neutral-900 relative rounded-2xl">
 						<div className="absolute inset-0">
 							<WaveformPlayerContent />
+							<Navigation showRail={showRail} />
 							<div ref={waveformRef} className="hidden" />
 							{/* Fullscreen loading overlay handled at the page level */}
 						</div>

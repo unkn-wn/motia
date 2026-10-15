@@ -3,6 +3,8 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { screenToCanvasCoords, findNoteAtPosition } from '@utils/canvasUtils';
 import { history } from '@utils/history';
 import { getPreferences } from '@utils/shortcutsUtils';
+import { useStoryboard } from '@/features/storyboard/StoryboardContext';
+import { frameDragFrom, useFrameTargetAt } from './frameCanvas';
 
 export const useMouseInteractions = () => {
 	const {
@@ -22,6 +24,8 @@ export const useMouseInteractions = () => {
 		NOTE_LABEL_HIDE_THRESHOLD,
 		noteLayoutCache,
 	} = useWaveformContext();
+	const frameTargetAt = useFrameTargetAt();
+	const { beginLiveEdit } = useStoryboard();
 
 	const handleMouseDown = useCallback(
 		(e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -50,6 +54,7 @@ export const useMouseInteractions = () => {
 				e.preventDefault();
 				setDragOccurred(false);
 				setDragging({
+					kind: 'note',
 					id: clickedNote.id,
 					startX: e.clientX,
 					startY: e.clientY,
@@ -59,6 +64,18 @@ export const useMouseInteractions = () => {
 				// Start a coalesced move entry for history
 				history.beginMove(clickedNote.id, { x: clickedNote.canvasX, y: clickedNote.canvasY });
 				return;
+			}
+
+			// Next priority: a frame card, anchor dot or span end tick (no tool active)
+			if (buttonLabel === 'Left' && !isDrawingMode && !toolMode) {
+				const target = frameTargetAt(canvasX, canvasY);
+				if (target) {
+					e.preventDefault();
+					setDragOccurred(false);
+					setDragging(frameDragFrom(target, e.clientX, e.clientY));
+					beginLiveEdit();
+					return;
+				}
 			}
 
 			// Start panning when the pressed mouse button matches preference
@@ -105,6 +122,8 @@ export const useMouseInteractions = () => {
 			setIsFollowingPlayhead,
 			notes,
 			NOTE_LABEL_HIDE_THRESHOLD,
+			frameTargetAt,
+			beginLiveEdit,
 		]
 	);
 

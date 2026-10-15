@@ -4,6 +4,7 @@ import FileUploader from '@components/FileUploader';
 import { LogInIcon, UserPlusIcon } from '@/assets/icons';
 import HeroBackdrop, { type HeroBackdropHandle } from './HeroBackdrop';
 import { useAuth } from '@/contexts/objects/FirebaseAuthContextObject';
+import { ImportStoryboardButton } from '@/features/storyboard/io/ImportControls';
 
 interface HomeHeroProps {
   onUpload: (file: File) => void;
@@ -11,9 +12,12 @@ interface HomeHeroProps {
   onOpenSignin: () => void;
   onOpenSignup: () => void;
   onSignOut?: () => Promise<void> | void;
+  /** A storyboard file picked from the link under the uploader */
+  onImport: (file: File) => void;
+  importing: boolean;
 }
 
-const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, onOpenSignup, onSignOut }) => {
+const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, onOpenSignup, onSignOut, onImport, importing }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const uploaderRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HeroBackdropHandle | null>(null);
@@ -45,6 +49,9 @@ const HomeHero: React.FC<HomeHeroProps> = ({ onUpload, uploading, onOpenSignin, 
         {/* Local hover/focus glow (replaces backdrop interaction) */}
         <div className="pointer-events-none absolute -inset-6 -z-10 opacity-0 scale-95 group-hover:opacity-100 group-focus-within:opacity-100 group-hover:scale-100 group-focus-within:scale-100 transition-all duration-500 ease-out blur-2xl bg-[radial-gradient(circle_at_center,rgba(167,139,250,0.22),transparent_60%)]" />
         <FileUploader onFileSelect={handleUpload} isLoading={uploading} />
+      </div>
+      <div className="relative mt-3 animate-fade-in-up">
+        <ImportStoryboardButton onFile={onImport} busy={importing} variant="link" />
       </div>
 
       {/* Secondary actions */}

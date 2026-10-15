@@ -3,8 +3,15 @@
 
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAnalytics, isSupported as analyticsIsSupported, type Analytics } from 'firebase/analytics';
-import { getAuth, type Auth } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, type Firestore } from 'firebase/firestore';
+import { connectAuthEmulator, getAuth, type Auth } from 'firebase/auth';
+import {
+  connectFirestoreEmulator,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentSingleTabManager,
+  type Firestore,
+} from 'firebase/firestore';
+import { shouldUseEmulator } from './emulatorGuard';
 // Storage not used: free plan alternative uses local IndexedDB
 
 // Your web app's Firebase configuration (loaded from Vite env)
@@ -17,7 +24,11 @@ const {
   VITE_FIREBASE_MESSAGING_SENDER_ID,
   VITE_FIREBASE_APP_ID,
   VITE_FIREBASE_MEASUREMENT_ID,
+  VITE_FIREBASE_EMULATOR,
 } = import.meta.env;
+
+// Throws before any Firebase call if emulator mode is paired with a non-demo project
+const useEmulator = shouldUseEmulator(VITE_FIREBASE_EMULATOR, VITE_FIREBASE_PROJECT_ID);
 
 const firebaseConfig = {
   apiKey: VITE_FIREBASE_API_KEY,
@@ -34,6 +45,7 @@ const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseCon
 
 // Core services
 const auth: Auth = getAuth(app);
+if (useEmulator) connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
 // Initialize Firestore with persistent local cache (modern API)
 let firestore: Firestore;
 try {
@@ -49,6 +61,7 @@ try {
   // Fallback to default init if custom cache fails (should be rare)
   firestore = initializeFirestore(app, {});
 }
+if (useEmulator) connectFirestoreEmulator(firestore, '127.0.0.1', 8080);
 
 // Analytics: only in the browser and when supported. Expose via a helper to avoid SSR build issues.
 export async function getAnalyticsIfSupported(): Promise<Analytics | undefined> {

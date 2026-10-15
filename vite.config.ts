@@ -19,6 +19,10 @@ export default defineConfig({
 			algorithms: ['brotliCompress'],
 		}),
 	],
+	// Dev server only: pre-bundle modules that are imported lazily, so their first use doesn't reload the page
+	optimizeDeps: {
+		include: ['react-dom/server', 'fflate', 'file-saver'],
+	},
 	resolve: {
 		alias: [
 			{ find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },

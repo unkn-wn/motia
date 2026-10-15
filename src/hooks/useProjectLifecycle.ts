@@ -9,10 +9,14 @@ import type { Note } from '@types';
 
 export function useProjectLifecycle(opts: {
 	setNotes: (notes: Note[]) => void;
+	/** Sets the storyboard from its stored string (undefined = none stored → empty board). */
+	loadStoryboard: (raw: string | undefined) => void;
+	/** Empty board that is not saved until a project loads. */
+	resetStoryboard: () => void;
 	onCurrentTimeChange: (t: number) => void;
 	setNotesVersion?: (v: number) => void;
 }) {
-	const { setNotes, onCurrentTimeChange, setNotesVersion } = opts;
+	const { setNotes, loadStoryboard, resetStoryboard, onCurrentTimeChange, setNotesVersion } = opts;
 	const navigate = useNavigate();
 	const params = useParams({ strict: false }) as { projectId?: string };
 	const { user, loading: authLoading, signOut, signInGuest, lastMigratedProjectId, clearMigrationRedirect, migrationBusy } = useAuth();
@@ -68,6 +72,7 @@ export function useProjectLifecycle(opts: {
 			if (fromRoute && authLoading) return;
 			if (!fromRoute) {
 				setProjectId(null);
+				resetStoryboard();
 				return;
 			}
 			if (!user) {
@@ -84,10 +89,11 @@ export function useProjectLifecycle(opts: {
 				const loadedData = await fetchProjectNotes(user.uid, fromRoute);
 				if (aborted) return;
 				setProjectId(fromRoute);
-				if (loadedData) {
-					setNotes(loadedData.notes);
-					setNotesVersion?.(loadedData.version);
-				}
+				// No notes doc yet: start empty at version 0, so a doc created meanwhile elsewhere is a
+				// conflict rather than something to overwrite
+				setNotes(loadedData?.notes ?? []);
+				setNotesVersion?.(loadedData?.version ?? 0);
+				loadStoryboard(loadedData?.storyboard);
 				const cached = await getLocalAudio(fromRoute);
 				if (!aborted && cached) setAudioFile(cached);
 			} finally {
@@ -97,7 +103,7 @@ export function useProjectLifecycle(opts: {
 		return () => {
 			aborted = true;
 		};
-	}, [user, authLoading, params.projectId, navigate, setNotes]);
+	}, [user, authLoading, params.projectId, navigate, setNotes, loadStoryboard, resetStoryboard]);
 
 	const handleFileSelect = useCallback(
 		async (file: File) => {
@@ -116,6 +122,7 @@ export function useProjectLifecycle(opts: {
 				}
 				const pid = await createProject(uid, { audio: { name: file.name, size: file.size, type: file.type } });
 				await saveLocalAudio(pid, file);
+				resetStoryboard();
 				setAudioFile(file);
 				setProjectId(pid);
 				navigate({ to: '/project/$projectId', params: { projectId: pid } });
@@ -123,7 +130,7 @@ export function useProjectLifecycle(opts: {
 				setIsLoading(false);
 			}
 		},
-		[user, navigate, signInGuest]
+		[user, navigate, signInGuest, resetStoryboard]
 	);
 
 	const handleRelinkSelected = useCallback(
@@ -145,8 +152,9 @@ export function useProjectLifecycle(opts: {
 		setProjectId(null);
 		setAudioFile(null);
 		setNotes([]);
+		resetStoryboard();
 		navigate({ to: '/' });
-	}, [signOut, navigate, setNotes]);
+	}, [signOut, navigate, setNotes, resetStoryboard]);
 
 	const handleCurrentTimeChange = useCallback(
 		(t: number) => {

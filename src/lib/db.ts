@@ -20,37 +20,7 @@ import { auth } from './firebase';
 import type { Preferences, KeyboardShortcut } from '@utils/shortcutsUtils';
 import type { UserProfileDoc, UserSettingsDoc, ProjectMetaDoc, ProjectNotesDoc } from '@types';
 import { decompressSession } from '@utils/advancedCompression';
-import { compressDrawingAdaptive } from '@utils/drawingUtils';
-
-// --- Sanitization helpers ---
-// Firestore does not support arrays-of-arrays and disallows undefined values.
-// We sanitize payloads by: (1) removing undefined fields, (2) wrapping any array element
-// that is itself an array into an object { __array: [...] }, recursively.
-function sanitizeForFirestore(value: unknown): unknown {
-	if (value === undefined) return null; // avoid undefined
-	if (value === null) return null;
-	// Preserve Date and Firestore Timestamp as-is so Firestore can serialize them properly
-	if (value instanceof Date) return value;
-	if (value instanceof Timestamp) return value;
-	if (Array.isArray(value)) {
-		return value.map((el) => {
-			if (Array.isArray(el)) {
-				return { __array: sanitizeForFirestore(el) };
-			}
-			return sanitizeForFirestore(el);
-		});
-	}
-	if (typeof value === 'object') {
-		const obj = value as Record<string, unknown>;
-		const out: Record<string, unknown> = {};
-		for (const [k, v] of Object.entries(obj)) {
-			if (v === undefined) continue; // drop undefined keys
-			out[k] = sanitizeForFirestore(v);
-		}
-		return out;
-	}
-	return value;
-}
+import { buildNotesPayload, DOC_LIMIT_BYTES, planStoryboardWrite, PROJECT_TOO_BIG_ERROR, SKETCH_NOTE_ID, stringBytes } from './notesPayload';
 
 // --- Paths helpers ---
 const userDoc = (uid: string) => doc(firestore, 'users', uid);
@@ -105,22 +75,30 @@ export function shortcutsArrayToMap(shortcuts: KeyboardShortcut[]): Record<strin
 }
 
 // --- Projects ---
+/** An id for a project whose other data is written before its meta doc (import). */
+export const newProjectId = (uid: string): string => doc(userProjectsCol(uid)).id;
+
 export async function createProject(
 	uid: string,
 	opts: {
+		/** Use this id (from `newProjectId`) instead of a new one */
+		id?: string;
 		title?: string;
-		audio: { name: string; size: number; type: string; durationSec?: number };
+		audio: NonNullable<ProjectMetaDoc['audio']> & { name: string };
+		orientation?: ProjectMetaDoc['orientation'];
 	}
 ): Promise<string> {
 	const meta: Omit<ProjectMetaDoc, 'createdAt' | 'updatedAt'> = {
 		title: opts.title ?? opts.audio.name,
 		audio: opts.audio,
+		...(opts.orientation ? { orientation: opts.orientation } : {}),
 	};
-	const ref = await addDoc(userProjectsCol(uid), {
-		...meta,
-		createdAt: serverTimestamp(),
-		updatedAt: serverTimestamp(),
-	} as ProjectMetaDoc);
+	const data = { ...meta, createdAt: serverTimestamp(), updatedAt: serverTimestamp() } as ProjectMetaDoc;
+	if (opts.id) {
+		await setDoc(userProjectDoc(uid, opts.id), data);
+		return opts.id;
+	}
+	const ref = await addDoc(userProjectsCol(uid), data);
 	return ref.id;
 }
 
@@ -174,57 +152,40 @@ export async function updateProjectOrientation(uid: string, projectId: string, o
 // Removed: uploadProjectAudio (Firebase Storage)
 
 // --- Notes ---
-export async function saveProjectNotes(uid: string, projectId: string, notes: Note[], expectedVersion?: number): Promise<number> {
-	// Split notes into non-drawings and drawings
-	const nonDrawingNotes = notes.filter((n) => n.type !== 'drawing' || !n.drawing);
-	const drawingNotes = notes.filter((n) => n.type === 'drawing' && n.drawing);
-
-	// Gather all strokes from drawing notes (support both compressed array and string)
-	const allStrokes: import('@types').DrawingStroke[] = [] as unknown as import('@types').DrawingStroke[];
-	for (const dn of drawingNotes) {
-		const d = dn.drawing!;
-		if (Array.isArray(d.compressed) || typeof d.compressed === 'string') {
-			try {
-				let comp = d.compressed as unknown;
-				if (typeof comp === 'string') comp = JSON.parse(comp);
-				const strokes = decompressSession(comp as unknown as import('@types').CompressedStroke[]);
-				if (strokes) {
-					for (const s of strokes as unknown as import('@types').DrawingStroke[]) allStrokes.push(s);
-				}
-			} catch {
-				/* ignore parse errors for this note */
-			}
-		} else if (Array.isArray(d.strokes)) {
-			for (const s of d.strokes as unknown as import('@types').DrawingStroke[]) allStrokes.push(s);
-		}
-	}
-
-	// Compress aggregated strokes into a single session array, else empty
-	let aggregatedCompressed: unknown[] | string | undefined = undefined;
-	if (allStrokes.length > 0) {
-		const compression = compressDrawingAdaptive(allStrokes);
-		aggregatedCompressed = compression.strokes;
-	} else {
-		aggregatedCompressed = [] as unknown[];
-	}
-
-	// Sanitize non-drawing notes
-	const safeNotes = sanitizeForFirestore(nonDrawingNotes) as Note[] | unknown;
+/**
+ * Saves notes, the canvas sketch and, when given, the storyboard string. With `storyboard` undefined, or above the
+ * size budget (`storyboardHeld`), the stored storyboard field is left as it is (merge write). `holdOversized: false`
+ * always writes the storyboard (used by migration, which must not drop it).
+ */
+export async function saveProjectNotes(
+	uid: string,
+	projectId: string,
+	notes: Note[],
+	expectedVersion?: number,
+	storyboard?: string,
+	opts: { holdOversized?: boolean } = {}
+): Promise<{ version: number; bytes: number; storyboardHeld: boolean }> {
+	const base = buildNotesPayload(notes);
+	const plan = planStoryboardWrite(base, storyboard);
+	const { bytes, baseBytes } = plan;
+	const storyboardHeld = plan.storyboardHeld && opts.holdOversized !== false;
 	const payload: ProjectNotesDoc = {
-		notes: safeNotes as Note[],
-		// Store compressed as JSON string to be safe with arrays-of-arrays
-		compressed: Array.isArray(aggregatedCompressed) ? JSON.stringify(aggregatedCompressed) : ((aggregatedCompressed ?? '[]') as string),
+		...base,
+		...(storyboard !== undefined && !storyboardHeld ? { storyboard } : {}),
 		updatedAt: serverTimestamp() as Timestamp,
-	} as unknown as ProjectNotesDoc;
+	};
 
 	const ref = userProjectNotesDoc(uid, projectId);
 
-	return await runTransaction(firestore, async (transaction) => {
+	const version = await runTransaction(firestore, async (transaction) => {
 		const sfDoc = await transaction.get(ref);
 		let currentVersion = 0;
 		if (sfDoc.exists()) {
 			const data = sfDoc.data() as ProjectNotesDoc;
 			currentVersion = data.version || 0;
+			// A held storyboard stays as stored; refuse a write that would push the whole doc over the limit
+			const kept = storyboardHeld && typeof data.storyboard === 'string' ? stringBytes(data.storyboard) : 0;
+			if (kept && baseBytes + kept > DOC_LIMIT_BYTES) throw new Error(PROJECT_TOO_BIG_ERROR);
 		}
 
 		// If we expect a version and the server is ahead, reject
@@ -238,6 +199,7 @@ export async function saveProjectNotes(uid: string, projectId: string, notes: No
 		transaction.set(ref, finalPayload, { merge: true });
 		return newVersion;
 	});
+	return { version, bytes, storyboardHeld };
 }
 
 // --- Reads ---
@@ -273,12 +235,13 @@ function hydrateNotes(raw: unknown): Note[] {
 	});
 }
 
-export async function fetchProjectNotes(uid: string, projectId: string): Promise<{ notes: Note[]; version: number } | null> {
+export async function fetchProjectNotes(uid: string, projectId: string): Promise<{ notes: Note[]; version: number; storyboard?: string } | null> {
 	const snap = await getDoc(userProjectNotesDoc(uid, projectId));
 	if (!snap.exists()) return null;
 	const data = snap.data() as ProjectNotesDoc;
 	const notes = hydrateNotes(data.notes as unknown);
 	const version = data.version || 0;
+	const storyboard = typeof data.storyboard === 'string' ? data.storyboard : undefined;
 
 	// If compressed field exists, create a single drawing note for runtime use
 	const compressedRaw = (data as unknown as { compressed?: unknown }).compressed;
@@ -296,7 +259,7 @@ export async function fetchProjectNotes(uid: string, projectId: string): Promise
 			decompressSession(comp as unknown as import('@types').CompressedStroke[]);
 			// Create a synthetic global drawing note
 			const globalDrawing: Note = {
-				id: 'drawing-global',
+				id: SKETCH_NOTE_ID,
 				time: 0,
 				canvasX: 0,
 				canvasY: 0,
@@ -306,12 +269,12 @@ export async function fetchProjectNotes(uid: string, projectId: string): Promise
 				type: 'drawing',
 				drawing: { compressed: comp as unknown as unknown[], bounds: { width: 0, height: 0 } },
 			};
-			return { notes: [...notes, globalDrawing], version };
+			return { notes: [...notes, globalDrawing], version, storyboard };
 		} catch {
-			return { notes, version };
+			return { notes, version, storyboard };
 		}
 	}
-	return { notes, version };
+	return { notes, version, storyboard };
 }
 
 export async function getProjectNotesVersion(uid: string, projectId: string): Promise<number | null> {
@@ -392,6 +355,9 @@ export async function deleteUserDoc(uid: string): Promise<void> {
 }
 
 /**
+ * Note: local images (motia-assets) are deliberately kept; the only caller, account migration, re-keys them to the
+ * migrated project. Clear them yourself if you add another caller.
+ *
  * Delete all Firestore data for a user: projects (meta + notes) and the user doc.
  * Use with caution. Client must be authenticated as this uid per security rules.
  */

@@ -21,20 +21,6 @@ export const getColorCode = (color: string): string => {
 };
 
 /**
- * Maps color names to Tailwind CSS border classes
- */
-export const getColorClasses = (color: string): string => {
-  const colorMap: Record<string, string> = {
-    yellow: 'border-yellow-500',
-    blue: 'border-blue-500',
-    green: 'border-green-500',
-    pink: 'border-pink-500',
-    purple: 'border-purple-500',
-  };
-  return colorMap[color] || colorMap.blue;
-};
-
-/**
  * Gets the background color style for color picker buttons
  */
 export const getColorPickerStyle = (color: string): string => {

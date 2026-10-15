@@ -45,6 +45,8 @@ export type ProjectNotesDoc = {
 	notes: Note[];
 	// All drawing strokes compressed together (JSON string of CompressedStroke[])
 	compressed?: string | unknown[];
+	// Storyboard frames, symbols and board format (JSON string of StoryboardDoc)
+	storyboard?: string;
 	updatedAt: Timestamp;
 	version?: number; // Version counter for conflict detection (increments on each write)
 };

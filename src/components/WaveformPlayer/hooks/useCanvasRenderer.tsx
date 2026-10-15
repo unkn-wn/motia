@@ -4,6 +4,8 @@ import { useAudio } from '@contexts/objects/AudioContextObject';
 import { decompressSession } from '@utils/advancedCompression';
 import { getColorCode } from '@utils/colorUtils';
 import type { Note } from '@types';
+import { renderFrames } from '@/features/storyboard/canvas/renderFrames';
+import { getFrameThumbnail } from '@/features/storyboard/canvas/thumbnails';
 
 // Centralized canvas renderer: draws waveform, notes, drawings, selection, previews.
 // Pure rendering; all interaction state comes from context.
@@ -23,6 +25,11 @@ export const useCanvasRenderer = () => {
 		eraserCursor,
 		canvasRef,
 		orientation = 'vertical',
+		frames,
+		board,
+		symbols,
+		selectedFrameIds,
+		renderPaused,
 	} = useWaveformContext();
 
 	const { currentTime, duration, waveformData, trimStart, trimEnd } = useAudio();
@@ -345,7 +352,8 @@ export const useCanvasRenderer = () => {
 	// Main frame render
 	const renderCanvas = useCallback(() => {
 		const canvas = canvasRef.current;
-		if (!canvas) return;
+		// Covered by the frame editor: skip drawing (and thumbnail work) until it closes
+		if (!canvas || renderPaused) return;
 
 		// Drop cache entries for removed notes (only when notes array identity changes)
 		if (notes !== lastNotesRef.current) {
@@ -598,6 +606,25 @@ export const useCanvasRenderer = () => {
 			}
 		}
 
+		// Frame cards under canvas sketches and notes
+		if (frames.length > 0) {
+			const viewMargin = 600 / transform.scale;
+			renderFrames(ctx, {
+				frames,
+				board,
+				axis: { orientation, duration, length: isHoriz ? waveformWidth : waveformHeight },
+				scale: transform.scale,
+				view: {
+					minX: (-width / 2 - transform.offsetX) / transform.scale - viewMargin,
+					maxX: (width / 2 - transform.offsetX) / transform.scale + viewMargin,
+					minY: -transform.offsetY / transform.scale - viewMargin,
+					maxY: (height - transform.offsetY) / transform.scale + viewMargin,
+				},
+				selectedIds: selectedFrameIds,
+				thumbnail: (f) => getFrameThumbnail(f, board, { frames, symbols }),
+			});
+		}
+
 		// Drawings under notes
 		renderDrawingsOnCanvas(ctx, notes);
 
@@ -794,6 +821,11 @@ export const useCanvasRenderer = () => {
 		selectionBox,
 		orientation,
 		noteLayoutCache,
+		frames,
+		board,
+		symbols,
+		selectedFrameIds,
+		renderPaused,
 	]);
 
 	return {

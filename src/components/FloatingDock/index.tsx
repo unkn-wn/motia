@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import AddNoteButton from './AddNoteButton';
+import AddFrameButton from './AddFrameButton';
 import DrawingModeButton from './DrawingModeButton';
 // (selection / eraser buttons will reuse simple unicode placeholders for now)
 import ShortcutsButton from './ShortcutsButton';
@@ -12,6 +13,7 @@ import EraseToolButton from './EraseToolButton';
 
 interface FloatingDockProps {
   onAddNote: () => void;
+  onAddFrame: () => void;
   onShowShortcuts: () => void;
   canAddNote: boolean;
   isDrawingMode: boolean; // legacy
@@ -32,6 +34,7 @@ interface FloatingDockProps {
 // Only rerenders when canAddNote or isDrawingMode change
 const FloatingDock = memo<FloatingDockProps>(({
   onAddNote,
+  onAddFrame,
   onShowShortcuts,
   canAddNote,
   // isDrawingMode retained for backward compatibility but unused when toolMode provided
@@ -54,6 +57,7 @@ const FloatingDock = memo<FloatingDockProps>(({
     >
       {/* Add Note Button - only show when audio is loaded */}
       {canAddNote && <AddNoteButton onAddNote={onAddNote} />}
+      {canAddNote && <AddFrameButton onAddFrame={onAddFrame} />}
 
       {/* Drawing Mode Button - only show when audio is loaded */}
       {canAddNote && onToggleDrawingMode && (

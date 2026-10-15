@@ -1,4 +1,5 @@
 import type { Note } from '@types';
+import type { StoryboardDoc } from '@/features/storyboard/types';
 
 type Point = { x: number; y: number };
 
@@ -7,6 +8,8 @@ type HistoryEntry = {
   undo: () => void;
   label?: string;
   ts: number;
+  // Project the entry belongs to (storyboard entries); entries of another project do nothing
+  projectId?: string | null;
 };
 
 class HistoryManager {
@@ -24,9 +27,71 @@ class HistoryManager {
     this.setNotes = setter;
   }
 
+  // Storyboard state executor registered by Home; entries are whole-doc snapshots (the doc is immutable)
+  private setStoryboard: ((doc: StoryboardDoc) => void) | null = null;
+  private projectId: string | null = null;
+  private batchEntries: HistoryEntry[] | null = null;
+
+  // Called before undo/redo so an unfinished storyboard drag is settled first
+  private beforeStep: (() => void) | null = null;
+
+  registerStoryboardAccess(setter: (doc: StoryboardDoc) => void, beforeStep?: () => void) {
+    this.setStoryboard = setter;
+    this.beforeStep = beforeStep ?? null;
+  }
+
+  /** Undo never crosses projects: switching project clears the history. */
+  setProject(projectId: string | null) {
+    if (projectId === this.projectId) return;
+    this.projectId = projectId;
+    this.clear();
+  }
+
+  pushStoryboard(prev: StoryboardDoc, next: StoryboardDoc, label: string) {
+    if (!this.setStoryboard || prev === next) return;
+    const projectId = this.projectId;
+    const apply = (doc: StoryboardDoc) => {
+      if (this.projectId !== projectId) return;
+      this.setStoryboard!(doc);
+    };
+    this.push({ do: () => apply(next), undo: () => apply(prev), label, ts: Date.now(), projectId });
+  }
+
+  /** Records every entry pushed inside `fn` as one undo step. */
+  batch(label: string, fn: () => void) {
+    if (this.batchEntries) {
+      fn();
+      return;
+    }
+    const entries: HistoryEntry[] = [];
+    this.batchEntries = entries;
+    try {
+      fn();
+    } finally {
+      // Changes already applied stay undoable even if `fn` throws
+      this.batchEntries = null;
+      this.pushBatch(label, entries);
+    }
+  }
+
+  private pushBatch(label: string, entries: HistoryEntry[]) {
+    if (entries.length === 0) return;
+    if (entries.length === 1) {
+      this.push(entries[0]);
+      return;
+    }
+    this.push({
+      do: () => entries.forEach((e) => e.do()),
+      undo: () => [...entries].reverse().forEach((e) => e.undo()),
+      label,
+      ts: Date.now(),
+    });
+  }
+
   clear() {
     this.stack = [];
     this.pointer = -1;
+    this.pendingMoves.clear();
   this.emit();
   }
 
@@ -34,6 +99,7 @@ class HistoryManager {
   canRedo() { return this.pointer < this.stack.length - 1; }
 
   undo(): boolean {
+    this.beforeStep?.();
     if (!this.canUndo()) return false;
     const entry = this.stack[this.pointer];
     entry.undo();
@@ -43,6 +109,7 @@ class HistoryManager {
   }
 
   redo(): boolean {
+    this.beforeStep?.();
     if (!this.canRedo()) return false;
     const entry = this.stack[this.pointer + 1];
     entry.do();
@@ -52,6 +119,10 @@ class HistoryManager {
   }
 
   push(entry: HistoryEntry) {
+    if (this.batchEntries) {
+      this.batchEntries.push(entry);
+      return;
+    }
     // Truncate future if we had undone
     if (this.pointer < this.stack.length - 1) {
       this.stack = this.stack.slice(0, this.pointer + 1);
@@ -138,4 +209,4 @@ class HistoryManager {
 }
 
 export const history = new HistoryManager();
-export type { HistoryManager };
+export { HistoryManager };

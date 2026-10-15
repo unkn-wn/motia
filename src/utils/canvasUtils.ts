@@ -87,6 +87,9 @@ export const screenToCanvasCoords = (
 /**
  * Finds note at canvas position with optional drawing exclusion
  */
+/** Note cards on the canvas are this wide (world units). */
+export const NOTE_CARD_WIDTH = 240;
+
 export const findNoteAtPosition = (
 	canvasX: number,
 	canvasY: number,
@@ -121,7 +124,7 @@ export const findNoteAtPosition = (
 			const showNoteLabels = scale > NOTE_LABEL_HIDE_THRESHOLD;
 
 			if (showNoteLabels) {
-				const noteWidth = 240;
+				const noteWidth = NOTE_CARD_WIDTH;
 				let noteHeight;
 
 				// Use cached layout if available (accurate), otherwise fall back to approximation

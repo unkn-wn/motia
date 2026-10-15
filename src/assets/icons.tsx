@@ -6,17 +6,11 @@ import {
   SkipForward,
   Target,
   Volume2,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
   Plus,
   Pen,
   Settings,
   Clock,
   Trash2,
-  Edit3,
-  Palette,
   X,
   Check,
   Keyboard,
@@ -30,7 +24,7 @@ import {
   AudioLines,
   Scissors,
 } from 'lucide-react';
-import { Eye, EyeOff, User, Home, Eraser, Square } from 'lucide-react';
+import { Eye, EyeOff, User, Home, Eraser, Square, Frame } from 'lucide-react';
 
 /**
  * Memoized Lucide icon components to prevent unnecessary rerenders
@@ -69,25 +63,9 @@ export const Volume2Icon = memo(({ className = "w-4 h-4" }: { className?: string
 Volume2Icon.displayName = 'Volume2Icon';
 
 // Navigation Icons
-export const ChevronLeftIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
-  <ChevronLeft className={className} />
-));
-ChevronLeftIcon.displayName = 'ChevronLeftIcon';
 
-export const ChevronRightIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
-  <ChevronRight className={className} />
-));
-ChevronRightIcon.displayName = 'ChevronRightIcon';
 
-export const ChevronUpIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
-  <ChevronUp className={className} />
-));
-ChevronUpIcon.displayName = 'ChevronUpIcon';
 
-export const ChevronDownIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
-  <ChevronDown className={className} />
-));
-ChevronDownIcon.displayName = 'ChevronDownIcon';
 
 // Action Icons
 export const PlusIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
@@ -121,15 +99,7 @@ export const Trash2Icon = memo(({ className = "w-4 h-4" }: { className?: string 
 ));
 Trash2Icon.displayName = 'Trash2Icon';
 
-export const Edit3Icon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
-  <Edit3 className={className} />
-));
-Edit3Icon.displayName = 'Edit3Icon';
 
-export const PaletteIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
-  <Palette className={className} />
-));
-PaletteIcon.displayName = 'PaletteIcon';
 
 export const XIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
   <X className={className} />
@@ -212,6 +182,12 @@ export const EraserIcon = memo(({ className = "w-5 h-5" }: { className?: string 
   <Eraser className={className} />
 ));
 EraserIcon.displayName = 'EraserIcon';
+
+// Storyboard frame (add frame)
+export const FrameIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
+  <Frame className={className} />
+));
+FrameIcon.displayName = 'FrameIcon';
 
 // Using a plain Square to represent selection box
 export const SelectionIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (

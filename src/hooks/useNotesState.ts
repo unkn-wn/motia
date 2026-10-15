@@ -85,6 +85,7 @@ export function useNotesState() {
 
   return useMemo(() => ({
     notes,
+    notesRef,
     setNotes,
     handleAddNote,
     handleUpdateNote,

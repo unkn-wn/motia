@@ -32,6 +32,15 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 		category: 'notes',
 	},
 	{
+		id: 'add-frame',
+		label: 'Add Frame',
+		description: 'Add a storyboard frame at current time',
+		defaultKey: 'w',
+		currentKey: 'w',
+		action: 'ADD_FRAME',
+		category: 'notes',
+	},
+	{
 		id: 'rewind',
 		label: 'Rewind',
 		description: 'Jump back 5 seconds',
@@ -96,8 +105,8 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 	},
 	{
 		id: 'toggle-sidebar',
-		label: 'Toggle Sidebar',
-		description: 'Show or hide notes sidebar',
+		label: 'Toggle Index Rail',
+		description: 'Show or hide the index rail',
 		defaultKey: 'b',
 		currentKey: 'b',
 		action: 'TOGGLE_SIDEBAR',
@@ -154,8 +163,11 @@ export const setShortcuts = (next: KeyboardShortcut[]): void => {
 
 export const setShortcutsFromMap = (map: Record<string, string>): void => {
 	const used = new Set<string>();
+	const savedKeys = new Set(Object.values(map));
 	const merged = DEFAULT_SHORTCUTS.map((s) => {
 		const key = map[s.id];
+		// Saved as unbound (''), or added after the map was saved while its default key is taken there: unbound
+		if (key === '' || (key === undefined && savedKeys.has(s.defaultKey))) return { ...s, currentKey: '' } as KeyboardShortcut;
 		const newKey = key && !used.has(key) ? key : s.currentKey;
 		used.add(newKey);
 		return { ...s, currentKey: newKey } as KeyboardShortcut;
@@ -180,11 +192,6 @@ export const resetAllShortcutsAndPreferences = (): KeyboardShortcut[] => {
 	return defaults;
 };
 
-// Lightweight accessor for UI hints: get default display key by shortcut id
-export const getDefaultShortcutKey = (id: string): string | undefined => {
-	const sc = DEFAULT_SHORTCUTS.find((s) => s.id === id);
-	return sc?.defaultKey;
-};
 
 /**
  * Check if a key combination is valid and not conflicting
@@ -219,6 +226,9 @@ export const formatKeyDisplay = (key: string): string => {
 	return keyMap[key] || key.toUpperCase();
 };
 
+// Inputs that take no typing; focus on them must not swallow shortcuts
+const NON_TEXT_INPUTS = new Set(['range', 'color', 'checkbox', 'radio', 'button']);
+
 /**
  * Check if the user is currently typing in an input field or editing shortcuts
  */
@@ -228,7 +238,7 @@ export const isUserTyping = (): boolean => {
 	// Check for input fields and textareas, but exclude range inputs (sliders)
 	if (
 		activeElement &&
-		((activeElement.tagName === 'INPUT' && (activeElement as HTMLInputElement).type !== 'range') ||
+		((activeElement.tagName === 'INPUT' && !NON_TEXT_INPUTS.has((activeElement as HTMLInputElement).type)) ||
 			activeElement.tagName === 'TEXTAREA' ||
 			activeElement.getAttribute('contenteditable') === 'true')
 	) {
@@ -244,13 +254,16 @@ export const isUserTyping = (): boolean => {
 	return false;
 };
 
+/** True while the full-screen frame editor is open; canvas shortcuts and keys are suspended then. */
+export const isFrameEditorOpen = (): boolean => document.querySelector('[data-frame-editor]') !== null;
+
 /**
  * Centralized keyboard event handler
  */
 export const createKeyboardHandler = (_shortcuts: KeyboardShortcut[], handlers: Record<string, () => void>) => {
 	return (e: KeyboardEvent) => {
-		// Don't handle shortcuts when user is typing or in edit mode
-		if (isUserTyping()) return;
+		// Don't handle shortcuts when user is typing or in edit mode, or when another handler took the key (Find's `/`)
+		if (isUserTyping() || e.defaultPrevented) return;
 
 		// Ignore single-key shortcuts if modifiers are pressed (prevents Ctrl+S triggering 's')
 		if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -263,6 +276,9 @@ export const createKeyboardHandler = (_shortcuts: KeyboardShortcut[], handlers: 
 		// Check if we have a handler for this action
 		const handler = handlers[shortcut.action];
 		if (!handler) return;
+
+		// The frame editor owns the keyboard; only play/pause still reaches the canvas page
+		if (shortcut.action !== 'TOGGLE_PLAYBACK' && isFrameEditorOpen()) return;
 
 		e.preventDefault();
 		e.stopPropagation();

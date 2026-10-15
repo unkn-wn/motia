@@ -8,13 +8,17 @@
     "host": "vite --host",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "emulators": "firebase emulators:start --config firebase.emulator.json --project demo-motia"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.12",
     "@tanstack/react-router": "^1.131.35",
     "@types/file-saver": "^2.0.7",
     "@types/lodash": "^4.17.20",
+    "fflate": "^0.8.3",
     "file-saver": "^2.0.5",
     "firebase": "^12.2.1",
     "lodash": "^4.17.21",
@@ -26,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@playwright/test": "^1.64.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
@@ -33,10 +38,12 @@
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
+    "firebase-tools": "^15.33.0",
     "globals": "^16.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.2",
-    "vite-plugin-compression2": "^2.2.1"
+    "vite-plugin-compression2": "^2.2.1",
+    "vitest": "^5.0.4"
   }
 }
