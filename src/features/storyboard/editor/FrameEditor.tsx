@@ -24,7 +24,7 @@ import {
 	X,
 } from 'lucide-react';
 import { history } from '@utils/history';
-import { isUserTyping } from '@utils/shortcutsUtils';
+import { editorToolForKey, editorToolKey, formatKeyDisplay, getShortcuts, isUserTyping, subscribeShortcuts } from '@utils/shortcutsUtils';
 import { currentTimeStore, durationStore, isPlayingStore } from '@components/AudioControls/state';
 import { useAudioActions } from '@contexts/objects/AudioContextObject';
 import { useStoryboard, useStoryboardDoc } from '../StoryboardContext';
@@ -47,7 +47,7 @@ import { ImagePickButton } from './ImagePick';
 import { SymbolsPopover } from './SymbolsPopover';
 import { useImageIntake } from './useImages';
 import { useDismiss, useDockFit } from '@/hooks/useDockFit';
-import { TOOL_KEYS, type Tool } from './elements';
+import type { Tool } from './elements';
 
 // Copied elements, shared between the frames of a project for as long as the page is open (another project has
 // none of their symbols, images or frames)
@@ -57,16 +57,17 @@ const PASTE_OFFSET = 20;
 const subscribeHistory = (listener: () => void) => history.subscribe(listener);
 const historyFlags = () => (history.canUndo() ? 1 : 0) | (history.canRedo() ? 2 : 0);
 
-const TOOLS: Array<{ tool: Tool; label: string; key: string; icon: React.ReactNode }> = [
-	{ tool: 'select', label: 'Select', key: 'V', icon: <MousePointer2 className="w-5 h-5" /> },
-	{ tool: 'rect', label: 'Rectangle', key: 'R', icon: <Square className="w-5 h-5" /> },
-	{ tool: 'ellipse', label: 'Ellipse', key: 'O', icon: <Circle className="w-5 h-5" /> },
-	{ tool: 'line', label: 'Line', key: 'L', icon: <Minus className="w-5 h-5 -rotate-45" /> },
-	{ tool: 'arrow', label: 'Arrow', key: 'A', icon: <MoveUpRight className="w-5 h-5" /> },
-	{ tool: 'text', label: 'Text', key: 'T', icon: <Type className="w-5 h-5" /> },
-	{ tool: 'pen', label: 'Pen', key: 'P', icon: <Pen className="w-5 h-5" /> },
-	{ tool: 'box', label: 'Box', key: 'B', icon: <SquareDashed className="w-5 h-5" /> },
-	{ tool: 'frameRef', label: 'Frame reference', key: '', icon: <PictureInPicture2 className="w-5 h-5" /> },
+// Their keys are shortcuts (rebindable in Settings): see the `editor-…` entries in shortcutsUtils
+const TOOLS: Array<{ tool: Tool; label: string; icon: React.ReactNode }> = [
+	{ tool: 'select', label: 'Select', icon: <MousePointer2 className="w-5 h-5" /> },
+	{ tool: 'rect', label: 'Rectangle', icon: <Square className="w-5 h-5" /> },
+	{ tool: 'ellipse', label: 'Ellipse', icon: <Circle className="w-5 h-5" /> },
+	{ tool: 'line', label: 'Line', icon: <Minus className="w-5 h-5 -rotate-45" /> },
+	{ tool: 'arrow', label: 'Arrow', icon: <MoveUpRight className="w-5 h-5" /> },
+	{ tool: 'text', label: 'Text', icon: <Type className="w-5 h-5" /> },
+	{ tool: 'pen', label: 'Pen', icon: <Pen className="w-5 h-5" /> },
+	{ tool: 'box', label: 'Box', icon: <SquareDashed className="w-5 h-5" /> },
+	{ tool: 'frameRef', label: 'Frame reference', icon: <PictureInPicture2 className="w-5 h-5" /> },
 ];
 
 const NOTICE_MS = 4000;
@@ -279,9 +280,9 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 				const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
 				const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
 				commit(replaceElements(doc, frame.id, new Map(selected.map((el) => [el.id, moveElement(el, dx, dy)]))), 'Nudge');
-			} else if (!mod && !e.altKey && TOOL_KEYS[key]) {
+			} else if (!mod && !e.altKey && editorToolForKey(e.key)) {
 				e.preventDefault();
-				setTool(TOOL_KEYS[key]);
+				setTool(editorToolForKey(e.key) as Tool);
 			}
 		};
 		window.addEventListener('keydown', onKey);
@@ -389,6 +390,9 @@ const ToolDock = memo(function ToolDock({
 	onImage: (file: File) => void;
 }) {
 	const undoFlags = useSyncExternalStore(subscribeHistory, historyFlags);
+	// The tool keys, as bound in Settings (shown in the buttons' tooltips)
+	const shortcuts = useSyncExternalStore(subscribeShortcuts, getShortcuts);
+	const keyOf = (t: Tool) => editorToolKey(shortcuts, t);
 	const navRef = useRef<HTMLElement>(null);
 	const level = useDockFit(navRef, DOCK_SIZES, () => navRef.current?.parentElement?.getBoundingClientRect().bottom ?? window.innerHeight);
 	const collapsed = level === DOCK_SIZES.length;
@@ -408,7 +412,7 @@ const ToolDock = memo(function ToolDock({
 						if (inMenu) closeMenu();
 					}}
 					className={dockButton(tool === t.tool, false, level)}
-					title={t.key ? `${t.label} (${t.key})` : t.label}
+					title={keyOf(t.tool) ? `${t.label} (${formatKeyDisplay(keyOf(t.tool))})` : t.label}
 					aria-label={t.label}
 					aria-pressed={tool === t.tool}
 				>

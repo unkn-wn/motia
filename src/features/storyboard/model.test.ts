@@ -10,6 +10,7 @@ import {
 	removeElements,
 	removeFrames,
 	reorderElements,
+	replaceElements,
 	setBoard,
 	setCardPositions,
 	updateFrame,
@@ -119,6 +120,18 @@ describe('elements', () => {
 	const docWith = (...els: FrameElement[]) =>
 		deepFreeze(addFrame(emptyStoryboard(), { ...createFrame({ time: 1, canvasX: 0, canvasY: 0 }), id: 'f1', elements: els }));
 	const ids = (doc: StoryboardDoc) => doc.frames[0].elements.map((e) => e.id);
+
+	it('stores geometry to a tenth of a pixel, and keeps already tidy elements as they are', () => {
+		const doc = docWith(el('a'));
+		const raw = { ...el('b'), x: 113.0000037273378, w: 558.0000223640268, rotation: -6.04 };
+		const added = addElements(doc, 'f1', [raw]).frames[0].elements[1];
+		expect(added).toMatchObject({ x: 113, w: 558, rotation: -6 });
+		const line: FrameElement = { id: 'l', type: 'line', points: [[1.04, 2.26], [3, 4]], stroke: '#fff', strokeWidth: 2 };
+		expect((addElements(doc, 'f1', [line]).frames[0].elements[1] as { points: unknown }).points).toEqual([[1, 2.3], [3, 4]]);
+		const tidy = el('c');
+		expect(addElements(doc, 'f1', [tidy]).frames[0].elements[1]).toBe(tidy);
+		expect(replaceElements(doc, 'f1', new Map([['a', { ...el('a'), y: 9.99999 }]])).frames[0].elements[0]).toMatchObject({ y: 10 });
+	});
 
 	it('adds, patches and removes immutably', () => {
 		const doc = docWith(el('a'));

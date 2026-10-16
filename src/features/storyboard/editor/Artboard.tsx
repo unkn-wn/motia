@@ -52,6 +52,16 @@ const HIT_TOLERANCE_PX = 6;
 const DRAG_THRESHOLD_PX = 3;
 const DOUBLE_TAP_MS = 300;
 
+// Cursors over the select tool's targets. Resize arrows follow the element's rotation (a rotated box's corner
+// points along another diagonal); CSS has no rotate cursor, so it is drawn (outlined, readable on any colour).
+const RESIZE_CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
+const HANDLE_ANGLE: Record<Exclude<Handle, 'rotate'>, number> = { e: 0, se: 45, s: 90, sw: 135, w: 180, nw: 225, n: 270, ne: 315 };
+const resizeCursor = (h: Exclude<Handle, 'rotate'>, rotation: number) => RESIZE_CURSORS[Math.round(((((HANDLE_ANGLE[h] + rotation) % 180) + 180) % 180) / 45) % 4];
+const ROTATE_ICON = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'>${['black', 'white']
+	.map((c, i) => `<g stroke='${c}' stroke-width='${i ? 2 : 4.5}'><path d='M19 12a7 7 0 1 1-2.05-4.95'/><path d='M19 4.5v3.5h-3.5'/></g>`)
+	.join('')}</svg>`;
+const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(ROTATE_ICON)}") 12 12, crosshair`;
+
 type Props = {
 	frame: Frame;
 	board: BoardFormat;
@@ -205,6 +215,24 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 		return null;
 	};
 
+	const baseCursor = tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair';
+	/** Set on the element directly: hovering would otherwise re-render the board on every mouse move. */
+	const setCursor = (c: string) => {
+		const el = containerRef.current;
+		if (el && el.style.cursor !== c) el.style.cursor = c;
+	};
+	/** What a press at `client` would grab (the same order as a press): a line's end, a handle, an element. */
+	const hoverCursor = (client: Pt): string => {
+		if (tool !== 'select') return baseCursor;
+		if (endpointAt(client) !== null) return 'move';
+		const p = toFrame(client);
+		const hit = hitTestElements(frame.elements, p, HIT_TOLERANCE_PX / view.scale);
+		const handle = handleAt(client);
+		const small = single ? Math.min(elementBox(single).w, elementBox(single).h) * view.scale < HANDLE_HIT_PX * 3 : false;
+		if (handle && single && !(small && hit?.id === single.id)) return handle === 'rotate' ? ROTATE_CURSOR : resizeCursor(handle, elementBox(single).rotation);
+		return hit ? 'grab' : 'default';
+	};
+
 	/** Ends the current gesture; `cancelled` drops drafts and reverts live transforms. */
 	const finishGesture = (client: Pt | null, cancelled: boolean, shift = false) => {
 		const g = gestureRef.current;
@@ -272,6 +300,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 		if (e.button === 1) {
 			e.preventDefault();
 			gestureRef.current = { kind: 'pan', client, view: viewRef.current };
+			setCursor('grabbing');
 			return;
 		}
 		if (e.button !== 0) return;
@@ -308,6 +337,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 				if (ids !== selectedIds) setSelectedIds(ids);
 				beginLiveEdit('commit', 'MoveElements');
 				gestureRef.current = { kind: 'move', start: p, client, moved: false, originals: frame.elements.filter((el) => ids.includes(el.id)) };
+				setCursor('grabbing');
 				return;
 			}
 			// Touch: one finger on the surround (off the board) pans; two fingers pan and pinch anywhere
@@ -337,7 +367,11 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 	};
 
 	const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (!pointersRef.current.has(e.pointerId)) return;
+		if (!pointersRef.current.has(e.pointerId)) {
+			// Hovering (a mouse, nothing pressed): the cursor says what a press would do
+			if (e.pointerType === 'mouse' && !gestureRef.current) setCursor(hoverCursor({ x: e.clientX, y: e.clientY }));
+			return;
+		}
 		const client = { x: e.clientX, y: e.clientY };
 		pointersRef.current.set(e.pointerId, client);
 		const g = gestureRef.current;
@@ -429,6 +463,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 		if (!pointersRef.current.has(e.pointerId)) return;
 		pointersRef.current.delete(e.pointerId);
 		const client = { x: e.clientX, y: e.clientY };
+		if (e.pointerType === 'mouse') setCursor(baseCursor);
 		const g = gestureRef.current;
 		if (g?.kind === 'pinch') {
 			if (pointersRef.current.size < 2) gestureRef.current = null;
@@ -473,13 +508,12 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 			.join(' ');
 	};
 
-	const cursor = tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair';
 
 	return (
 		<div
 			ref={containerRef}
 			className="absolute inset-0 overflow-hidden touch-none select-none bg-neutral-950"
-			style={{ cursor }}
+			style={{ cursor: baseCursor }}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
 			onPointerUp={(e) => onPointerUp(e)}

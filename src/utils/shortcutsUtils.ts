@@ -9,8 +9,20 @@ export interface KeyboardShortcut {
 	defaultKey: string;
 	currentKey: string;
 	action: string;
-	category: 'playback' | 'notes' | 'navigation';
+	category: 'playback' | 'notes' | 'navigation' | 'frameEditor';
 }
+
+/** The frame editor's tool keys: action `EDITOR_TOOL`, the tool named by the id after `editor-`. */
+export const EDITOR_TOOL_ACTION = 'EDITOR_TOOL';
+const editorTool = (tool: string, label: string, key: string): KeyboardShortcut => ({
+	id: `editor-${tool}`,
+	label,
+	description: `${label} tool in the frame editor`,
+	defaultKey: key,
+	currentKey: key,
+	action: EDITOR_TOOL_ACTION,
+	category: 'frameEditor',
+});
 
 export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 	{
@@ -112,7 +124,28 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 		action: 'TOGGLE_SIDEBAR',
 		category: 'navigation',
 	},
+	// The frame editor has its own keys: canvas shortcuts are off while it is open (play/pause still works)
+	editorTool('select', 'Select', 'a'),
+	editorTool('pen', 'Pen', 'd'),
+	editorTool('rect', 'Rectangle', 'q'),
+	editorTool('ellipse', 'Ellipse', 'w'),
+	editorTool('line', 'Line', 'e'),
+	editorTool('arrow', 'Arrow', 'r'),
+	editorTool('text', 'Text', 't'),
+	editorTool('box', 'Box', 'b'),
+	editorTool('frameRef', 'Frame reference', ''),
 ];
+
+// Where a key works: the canvas page or the frame editor. Two shortcuts clash only within one; play/pause works in
+// both, so it clashes with either.
+type Scope = 'canvas' | 'editor';
+const scopesOf = (s: KeyboardShortcut): Scope[] =>
+	s.action === 'TOGGLE_PLAYBACK' ? ['canvas', 'editor'] : [s.category === 'frameEditor' ? 'editor' : 'canvas'];
+const clash = (a: KeyboardShortcut, b: KeyboardShortcut) => scopesOf(a).some((sc) => scopesOf(b).includes(sc));
+/** Keys the frame editor already uses (nudge, delete, close); its tools can't take them. */
+const EDITOR_RESERVED = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete', 'Backspace', 'Escape']);
+/** Keys compare as typed, letters in either case. */
+const sameKey = (a: string, b: string) => a === b || (a.length === 1 && b.length === 1 && a.toLowerCase() === b.toLowerCase());
 
 // Editor and navigation preferences (non-destructive; global config)
 export type EditorEnterBehavior = 'newline' | 'save';
@@ -162,14 +195,20 @@ export const setShortcuts = (next: KeyboardShortcut[]): void => {
 };
 
 export const setShortcutsFromMap = (map: Record<string, string>): void => {
-	const used = new Set<string>();
-	const savedKeys = new Set(Object.values(map));
+	// Keys in use and keys saved, per scope (a canvas key doesn't take an editor key's place)
+	const used: Record<Scope, Set<string>> = { canvas: new Set(), editor: new Set() };
+	const saved: Record<Scope, Set<string>> = { canvas: new Set(), editor: new Set() };
+	for (const s of DEFAULT_SHORTCUTS) {
+		const key = map[s.id];
+		if (key) for (const sc of scopesOf(s)) saved[sc].add(key);
+	}
 	const merged = DEFAULT_SHORTCUTS.map((s) => {
 		const key = map[s.id];
+		const scopes = scopesOf(s);
 		// Saved as unbound (''), or added after the map was saved while its default key is taken there: unbound
-		if (key === '' || (key === undefined && savedKeys.has(s.defaultKey))) return { ...s, currentKey: '' } as KeyboardShortcut;
-		const newKey = key && !used.has(key) ? key : s.currentKey;
-		used.add(newKey);
+		if (key === '' || (key === undefined && scopes.some((sc) => saved[sc].has(s.defaultKey)))) return { ...s, currentKey: '' } as KeyboardShortcut;
+		const newKey = key && scopes.every((sc) => !used[sc].has(key)) ? key : s.currentKey;
+		for (const sc of scopes) used[sc].add(newKey);
 		return { ...s, currentKey: newKey } as KeyboardShortcut;
 	});
 	setShortcuts(merged);
@@ -200,11 +239,22 @@ export const isValidShortcut = (key: string, shortcuts: KeyboardShortcut[], excl
 	// Don't allow empty keys but ignore space
 	if (!key.trim() && key !== ' ') return false;
 
-	// Check for conflicts with other shortcuts (exact match)
-	const hasConflict = shortcuts.some((shortcut) => shortcut.id !== excludeId && shortcut.currentKey === key);
+	const target = shortcuts.find((s) => s.id === excludeId);
+	if (target?.category === 'frameEditor' && EDITOR_RESERVED.has(key)) return false;
+	// Conflicts with other shortcuts that work in the same place
+	const hasConflict = shortcuts.some((s) => s.id !== excludeId && s.currentKey !== '' && sameKey(s.currentKey, key) && (!target || clash(s, target)));
 
 	return !hasConflict;
 };
+
+/** The frame editor tool bound to a key (letters in either case), if any. */
+export const editorToolForKey = (key: string): string | null => {
+	const hit = getShortcuts().find((s) => s.action === EDITOR_TOOL_ACTION && s.currentKey !== '' && sameKey(s.currentKey, key));
+	return hit ? hit.id.slice('editor-'.length) : null;
+};
+
+/** The key bound to a frame editor tool ('' when none). */
+export const editorToolKey = (shortcuts: KeyboardShortcut[], tool: string): string => shortcuts.find((s) => s.id === `editor-${tool}`)?.currentKey ?? '';
 
 /**
  * Format key display name for UI
@@ -270,7 +320,8 @@ export const createKeyboardHandler = (_shortcuts: KeyboardShortcut[], handlers: 
 
 		// Find matching shortcut by exact key match
 		const list = getShortcuts();
-		const shortcut = list.find((s) => s.currentKey === e.key);
+		// Canvas keys only (the frame editor reads its own)
+		const shortcut = list.find((s) => s.currentKey === e.key && s.category !== 'frameEditor');
 		if (!shortcut) return;
 
 		// Check if we have a handler for this action

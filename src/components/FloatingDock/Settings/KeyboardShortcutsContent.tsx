@@ -147,6 +147,7 @@ export const KeyboardShortcutsContent: React.FC<KeyboardShortcutsContentProps> =
 		{ id: 'notes', label: 'Notes', shortcuts: shortcuts.filter((s) => s.category === 'notes') },
 		{ id: 'playback', label: 'Playback', shortcuts: shortcuts.filter((s) => s.category === 'playback') },
 		{ id: 'navigation', label: 'Navigation', shortcuts: shortcuts.filter((s) => s.category === 'navigation') },
+		{ id: 'frameEditor', label: 'Frame editor tools', shortcuts: shortcuts.filter((s) => s.category === 'frameEditor') },
 	].filter((cat) => cat.shortcuts.length > 0);
 
 	return (
@@ -246,6 +247,8 @@ export const KeyboardShortcutsContent: React.FC<KeyboardShortcutsContentProps> =
 			{/* Keyboard Shortcuts */}
 			{categories.map((category) => (
 				<div key={category.id}>
+					{/* The frame editor's own keys, set apart from the canvas page's */}
+					{category.id === 'frameEditor' ? <div className="h-px my-4 bg-neutral-800" /> : null}
 					<div className="space-y-1.5">
 						{category.shortcuts.map((shortcut) => (
 							<div key={shortcut.id} className="flex items-center justify-between py-2 px-3 bg-neutral-800/50 rounded-lg group">

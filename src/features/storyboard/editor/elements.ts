@@ -8,7 +8,6 @@ export type Tool = 'select' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'text' | '
 /** Tools drawn by dragging a box or a line */
 export type ShapeTool = 'rect' | 'ellipse' | 'line' | 'arrow' | 'box' | 'frameRef';
 
-export const TOOL_KEYS: Record<string, Tool> = { v: 'select', r: 'rect', o: 'ellipse', l: 'line', a: 'arrow', t: 'text', p: 'pen', b: 'box' };
 
 const SHAPE_FILL = '#d4d4d4';
 const LINE_STROKE = '#e5e5e5';

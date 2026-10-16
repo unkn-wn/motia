@@ -1,4 +1,4 @@
-import type { AssetMeta, BoardFormat, Frame, FrameElement, StoryboardDoc, StoryboardSymbol } from './types';
+import type { AssetMeta, BoardFormat, Frame, FrameElement, Point, StoryboardDoc, StoryboardSymbol } from './types';
 
 // Pure, immutable operations on the storyboard. Inputs are never modified; unchanged parts keep their identity.
 
@@ -108,8 +108,34 @@ function mapFrameElements(doc: StoryboardDoc, frameId: string, fn: (els: FrameEl
 	return changed ? { ...doc, frames } : doc;
 }
 
+const GEOMETRY_KEYS = ['x', 'y', 'w', 'h', 'rotation', 'fontSize'] as const;
+const tenth = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Geometry to 0.1 board px (rotation and font size to 0.1): pointer maths gives values like 113.0000037273378,
+ * which cost a third of a shape's stored size and mean nothing at any zoom. Unchanged elements keep their identity.
+ */
+export function tidyGeometry(el: FrameElement): FrameElement {
+	const src = el as unknown as Record<string, unknown>;
+	let out: Record<string, unknown> | null = null;
+	for (const key of GEOMETRY_KEYS) {
+		const v = src[key];
+		if (typeof v !== 'number' || tenth(v) === v) continue;
+		out ??= { ...src };
+		out[key] = tenth(v);
+	}
+	if (Array.isArray(src.points)) {
+		const pts = src.points as Point[];
+		if (pts.some(([x, y]) => tenth(x) !== x || tenth(y) !== y)) {
+			out ??= { ...src };
+			out.points = pts.map(([x, y]) => [tenth(x), tenth(y)] as Point);
+		}
+	}
+	return (out ?? src) as unknown as FrameElement;
+}
+
 export function addElements(doc: StoryboardDoc, frameId: string, els: FrameElement[]): StoryboardDoc {
-	return els.length ? mapFrameElements(doc, frameId, (cur) => [...cur, ...els]) : doc;
+	return els.length ? mapFrameElements(doc, frameId, (cur) => [...cur, ...els.map(tidyGeometry)]) : doc;
 }
 
 /** Applies patches by element id; unchanged elements (and frames) keep their identity. */
@@ -124,7 +150,7 @@ export function patchElements(doc: StoryboardDoc, frameId: string, patches: Read
 			changed = true;
 			const out = { ...el, ...patch } as Record<string, unknown>;
 			for (const k of keys) if (patch[k] === undefined) delete out[k];
-			return out as FrameElement;
+			return tidyGeometry(out as FrameElement);
 		});
 		return changed ? next : els;
 	});
@@ -138,7 +164,7 @@ export function replaceElements(doc: StoryboardDoc, frameId: string, replacement
 			const r = replacements.get(el.id);
 			if (!r || r === el) return el;
 			changed = true;
-			return r;
+			return tidyGeometry(r);
 		});
 		return changed ? next : els;
 	});

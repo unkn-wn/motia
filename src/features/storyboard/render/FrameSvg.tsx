@@ -31,15 +31,32 @@ const xmlLabel = (s: string | undefined) => (s ? xmlText(s) || undefined : undef
 
 const pointsAttr = (pts: Point[]) => pts.map(([x, y]) => `${x},${y}`).join(' ');
 
+const ARROW_SPREAD = Math.PI / 7;
+
 function arrowHead(pts: Point[], size: number): string | null {
 	if (pts.length < 2) return null;
 	const [x2, y2] = pts[pts.length - 1];
 	const [x1, y1] = pts[pts.length - 2];
 	const a = Math.atan2(y2 - y1, x2 - x1);
-	const spread = Math.PI / 7;
+	const spread = ARROW_SPREAD;
 	const p1: Point = [x2 - size * Math.cos(a - spread), y2 - size * Math.sin(a - spread)];
 	const p2: Point = [x2 - size * Math.cos(a + spread), y2 - size * Math.sin(a + spread)];
 	return pointsAttr([[x2, y2], p1, p2]);
+}
+
+/**
+ * An arrow's line ends at the middle of its head's base, not at the tip: a line reaching the tip shows past it
+ * (its round cap and width stick out of the point). The head's base is ~3.5 line widths across, so the cap stays
+ * inside it.
+ */
+function arrowShaft(pts: Point[], size: number): Point[] {
+	if (pts.length < 2) return pts;
+	const [x2, y2] = pts[pts.length - 1];
+	const [x1, y1] = pts[pts.length - 2];
+	const len = Math.hypot(x2 - x1, y2 - y1);
+	if (len === 0) return pts;
+	const back = Math.min(len, size * Math.cos(ARROW_SPREAD));
+	return [...pts.slice(0, -1), [x2 - ((x2 - x1) / len) * back, y2 - ((y2 - y1) / len) * back]];
 }
 
 function Placeholder({ x, y, w, h, label, caption, dashed = true }: { x: number; y: number; w: number; h: number; label?: string; caption?: string; dashed?: boolean }) {
@@ -102,12 +119,13 @@ function ElementSvgImpl({ el, props, clipId }: ElementProps) {
 		case 'line':
 		case 'arrow':
 		case 'pen': {
-			const head = el.type === 'arrow' ? arrowHead(el.points, Math.max(12, el.strokeWidth * 4)) : null;
+			const headSize = Math.max(12, el.strokeWidth * 4);
+			const head = el.type === 'arrow' ? arrowHead(el.points, headSize) : null;
 			const stroke = el.stroke ?? 'none';
 			return (
 				<g {...common}>
 					<polyline
-						points={pointsAttr(el.points)}
+						points={pointsAttr(head ? arrowShaft(el.points, headSize) : el.points)}
 						fill="none"
 						stroke={stroke}
 						strokeWidth={el.strokeWidth}

@@ -463,3 +463,40 @@ test('picking a stroke colour for a shape without one gives it a stroke that sho
 	expect(widths).toEqual([8, 8, 8, 8]);
 	await expectElement(app, rect.id, (el) => el.stroke === '#ee0000' && el.strokeWidth === 8);
 });
+
+test('tool keys: A select, D pen, Q rectangle, W ellipse, E line, R arrow (W adds no frame while editing)', async ({ app }) => {
+	await openNewFrame(app);
+	const dock = app.page.getByRole('navigation', { name: 'Tools' });
+	for (const [key, name] of [['q', 'Rectangle'], ['w', 'Ellipse'], ['e', 'Line'], ['r', 'Arrow'], ['d', 'Pen'], ['a', 'Select']] as const) {
+		await app.page.keyboard.press(key);
+		await expect(dock.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+	}
+	await expect(dock.getByRole('button', { name: 'Rectangle', exact: true })).toHaveAttribute('title', 'Rectangle (Q)');
+	expect(await frames(app)).toHaveLength(1);
+});
+
+test('cursors: resize arrows by handle (turned with the element), rotate, grab over an element', async ({ app }, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop', 'cursors are for a mouse');
+	await openNewFrame(app);
+	const rect = (await draw(app, 'Rectangle', { x: 400, y: 300 }, { x: 1000, y: 700 })) as { id: string };
+	const board = app.page.getByTestId('artboard');
+	const cursorAt = async (p: { x: number; y: number }) => {
+		const s = await boardToScreen(app, p);
+		await app.page.mouse.move(s.x, s.y);
+		return board.evaluate((el) => (el as HTMLElement).style.cursor);
+	};
+	expect(await cursorAt({ x: 1000, y: 700 })).toBe('nwse-resize');
+	expect(await cursorAt({ x: 1000, y: 300 })).toBe('nesw-resize');
+	expect(await cursorAt({ x: 700, y: 700 })).toBe('ns-resize');
+	expect(await cursorAt({ x: 1000, y: 500 })).toBe('ew-resize');
+	expect(await cursorAt({ x: 700, y: 500 })).toBe('grab');
+	expect(await cursorAt({ x: 1500, y: 900 })).toBe('default');
+	// The rotate handle sits above the top edge (28 px on screen)
+	const top = await boardToScreen(app, { x: 700, y: 300 });
+	await app.page.mouse.move(top.x, top.y - 28);
+	expect(await board.evaluate((el) => (el as HTMLElement).style.cursor)).toContain('url(');
+	// Turned 90°: the side handle's arrows are vertical
+	await setField(app, 'rotation', '90');
+	await expectElement(app, rect.id, (el) => el.rotation === 90);
+	expect(await cursorAt({ x: 700, y: 200 })).toBe('ns-resize');
+});
