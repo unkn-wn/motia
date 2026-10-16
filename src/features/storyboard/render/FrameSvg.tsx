@@ -89,7 +89,9 @@ function Placeholder({ x, y, w, h, label, caption, dashed = true }: { x: number;
 	);
 }
 
-function ElementSvg({ el, props, clipId }: { el: FrameElement; props: Props; clipId: string }) {
+type ElementProps = { el: FrameElement; props: Props; clipId: string };
+
+function ElementSvgImpl({ el, props, clipId }: ElementProps) {
 	const common = {
 		'data-id': el.id,
 		'data-type': el.type,
@@ -213,6 +215,27 @@ function ElementSvg({ el, props, clipId }: { el: FrameElement; props: Props; cli
 		}
 	}
 }
+
+/**
+ * Elements are immutable, so one re-renders only when it changed or when a lookup it uses did: moving one element
+ * of a frame re-renders that element, not the frame's others.
+ */
+const ElementSvg = memo(ElementSvgImpl, (a: ElementProps, b: ElementProps) => {
+	if (a.el !== b.el || a.clipId !== b.clipId) return false;
+	const p = a.props;
+	const q = b.props;
+	if (p === q) return true;
+	switch (b.el.type) {
+		case 'box':
+		case 'image':
+			return p.assetUrl === q.assetUrl && p.resolveSymbol === q.resolveSymbol;
+		case 'frameRef':
+			// Draws another frame with every lookup
+			return p.board === q.board && p.depth === q.depth && p.resolveFrame === q.resolveFrame && p.assetUrl === q.assetUrl && p.resolveSymbol === q.resolveSymbol;
+		default:
+			return true;
+	}
+});
 
 function FrameSvgImpl(props: Props) {
 	const { frame, board, depth = 0, className, transparent } = props;

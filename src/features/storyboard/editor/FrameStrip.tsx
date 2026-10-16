@@ -1,63 +1,113 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Copy, Play, Plus } from 'lucide-react';
 import { useAudioActions } from '@contexts/objects/AudioContextObject';
-import { currentTimeStore, durationStore, isPlayingStore, waveformDataStore } from '@components/AudioControls/state';
 import { FrameSvg } from '../render/FrameSvg';
 import { useFrameRender } from '../render/useFrameRender';
 import { formatFrameTime } from '../canvas/layout';
-import { neighbours } from '../timeline';
 import type { BoardFormat, Frame } from '../types';
+import { Timeline } from './Timeline';
 
-const NEIGHBOUR_RADIUS = 3;
-const RANGE_PADDING_S = 1;
 const THUMB_WIDTH = 96;
 
-const action =
-	'inline-flex items-center gap-1.5 rounded-full bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-1 text-xs text-neutral-200 cursor-pointer';
+const action = 'inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 cursor-pointer';
+const iconAction = 'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 cursor-pointer';
+
+/** Play from the frame, new frame from it, duplicate: labelled, or icons only (small screens). */
+function Actions({ iconOnly, onPlay, onNewFromThis, onDuplicate }: { iconOnly: boolean; onPlay: () => void; onNewFromThis: () => void; onDuplicate: () => void }) {
+	const items = [
+		{ label: 'preview', title: 'Preview: play from this frame, showing each frame as the song reaches it', icon: <Play className="w-3.5 h-3.5" />, run: onPlay },
+		{ label: 'new frame from this', title: 'New frame from this one (same objects)', icon: <Plus className="w-3.5 h-3.5" />, run: onNewFromThis },
+		{ label: 'duplicate', title: 'Duplicate this frame', icon: <Copy className="w-3.5 h-3.5" />, run: onDuplicate },
+	];
+	return (
+		<>
+			{items.map((a) => (
+				<button key={a.label} type="button" className={iconOnly ? iconAction : action} onClick={a.run} title={a.title} aria-label={iconOnly ? a.label : undefined}>
+					{a.icon}
+					{iconOnly ? null : ` ${a.label}`}
+				</button>
+			))}
+		</>
+	);
+}
 
 type Props = {
 	frame: Frame;
 	ordered: Frame[];
 	board: BoardFormat;
 	onOpen: (id: string) => void;
+	/** Plays from this frame, showing each frame as the song reaches it */
+	onPreview: () => void;
 	onNewFromThis: () => void;
 	onDuplicate: () => void;
 };
 
 /** Bottom strip of the frame editor: neighbouring frames, the waveform around them, and frame actions. */
-export function FrameStrip({ frame, ordered, board, onOpen, onNewFromThis, onDuplicate }: Props) {
+export function FrameStrip({ frame, ordered, board, onOpen, onPreview, onNewFromThis, onDuplicate }: Props) {
 	// Stable actions and stores: the strip doesn't re-render on every playback tick
-	const { seekToTime, playPause } = useAudioActions();
+	const { seekToTime } = useAudioActions();
 	const lookups = useFrameRender();
-	const duration = useSyncExternalStore(durationStore.subscribe, durationStore.getSnapshot);
-	const near = neighbours(ordered, frame.id, NEIGHBOUR_RADIUS);
-	const first = near[0] ?? frame;
-	const last = near[near.length - 1] ?? frame;
-	const start = Math.max(0, first.time - RANGE_PADDING_S);
-	const end = Math.min(duration || Infinity, Math.max(last.time, last.endTime ?? 0, frame.endTime ?? 0) + RANGE_PADDING_S);
-	const span = Math.max(0.001, end - start);
+	// A frame pointed at on the timeline or among the thumbnails: highlighted in both
+	const [hoverId, setHoverId] = useState<string | null>(null);
 
-	const playFromFrame = () => {
-		seekToTime(frame.time);
-		if (!isPlayingStore.getSnapshot()) playPause();
-	};
+	// Every frame, in a row that keeps the open one in the middle
+	const rowRef = useRef<HTMLDivElement>(null);
+	const scrolled = useRef(false);
+	useLayoutEffect(() => {
+		const row = rowRef.current;
+		const el = row?.querySelector<HTMLElement>('[aria-current="true"]');
+		if (!row || !el) return;
+		row.scrollTo({ left: el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2, behavior: scrolled.current ? 'smooth' : 'auto' });
+		scrolled.current = true;
+	}, [frame.id]);
+	// A thumbnail draws its frame once it has come near view (a long board doesn't draw every frame at once)
+	const [seen, setSeen] = useState<ReadonlySet<string>>(() => new Set());
+	const thumbIds = ordered.map((f) => f.id).join(' ');
+	useEffect(() => {
+		const row = rowRef.current;
+		if (!row) return;
+		const io = new IntersectionObserver(
+			(entries) => {
+				const ids = entries.filter((e) => e.isIntersecting).map((e) => (e.target as HTMLElement).dataset.thumb!);
+				if (ids.length) setSeen((prev) => (ids.every((id) => prev.has(id)) ? prev : new Set([...prev, ...ids])));
+			},
+			{ root: row, rootMargin: '0px 400px' }
+		);
+		row.querySelectorAll('[data-thumb]').forEach((el) => io.observe(el));
+		return () => io.disconnect();
+	}, [thumbIds]);
 
+	const actions = { onPlay: onPreview, onNewFromThis, onDuplicate };
+
+	// Small screens: one row, the surrounding waveform and the actions as icons (the header has prev/next frame)
 	return (
-		<div className="shrink-0 border-t border-neutral-800 bg-neutral-900 px-3 py-2 space-y-2" data-testid="frame-strip">
-			<div className="flex items-end gap-2">
-				<div className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto">
-					{near.map((f) => (
+		<div className="shrink-0 border-t border-neutral-800 bg-neutral-900 px-3 py-2 space-y-2 compact:space-y-0 compact:py-1.5 compact:flex compact:items-center compact:gap-2" data-testid="frame-strip">
+			<div className="flex items-end gap-2 compact:hidden">
+				{/* Padded so the rings aren't clipped by the scrolling row */}
+				<div ref={rowRef} className="relative flex min-w-0 flex-1 items-end gap-2 overflow-x-auto p-1">
+					{ordered.map((f) => (
 						<button
 							key={f.id}
 							type="button"
-							onClick={() => onOpen(f.id)}
+							data-thumb={f.id}
+							// The open frame: back to its start
+							onClick={() => (f.id === frame.id ? seekToTime(f.time) : onOpen(f.id))}
+							title={f.id === frame.id ? "Go to this frame's start" : undefined}
 							aria-current={f.id === frame.id}
 							aria-label={`Frame at ${formatFrameTime(f.time)}${f.title ? `: ${f.title}` : ''}`}
-							className={`shrink-0 rounded-md overflow-hidden border cursor-pointer ${f.id === frame.id ? 'border-blue-400 ring-1 ring-blue-400' : 'border-neutral-700 hover:border-neutral-500'}`}
+							onMouseEnter={() => setHoverId(f.id)}
+							onMouseLeave={() => setHoverId(null)}
+							className={`shrink-0 rounded-md overflow-hidden cursor-pointer ${
+								f.id === frame.id ? 'ring-2 ring-blue-500' : f.id === hoverId ? 'ring-2 ring-neutral-300' : 'ring-1 ring-white/10 opacity-70 hover:opacity-100'
+							}`}
 							style={{ width: THUMB_WIDTH }}
 						>
 							<div style={{ aspectRatio: `${board.width} / ${board.height}` }}>
-								<FrameSvg frame={f} board={board} {...lookups} className="block w-full h-full pointer-events-none" />
+								{seen.has(f.id) || f.id === frame.id ? (
+									<FrameSvg frame={f} board={board} {...lookups} className="block w-full h-full pointer-events-none" />
+								) : (
+									<div className="h-full w-full" style={{ background: f.background }} />
+								)}
 							</div>
 							<div className="px-1 py-0.5 text-[10px] text-neutral-400 tabular-nums bg-neutral-800 text-left truncate">
 								{formatFrameTime(f.time)}
@@ -67,97 +117,15 @@ export function FrameStrip({ frame, ordered, board, onOpen, onNewFromThis, onDup
 					))}
 				</div>
 				<div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-					<button type="button" className={action} onClick={playFromFrame} title="Play from this frame">
-						<Play className="w-3.5 h-3.5" /> play from frame
-					</button>
-					<button type="button" className={action} onClick={onNewFromThis} title="New frame from this one (same objects)">
-						<Plus className="w-3.5 h-3.5" /> new frame from this
-					</button>
-					<button type="button" className={action} onClick={onDuplicate} title="Duplicate this frame">
-						<Copy className="w-3.5 h-3.5" /> duplicate
-					</button>
+					<Actions iconOnly={false} {...actions} />
 				</div>
 			</div>
-			<RangeWaveform
-				start={start}
-				span={span}
-				duration={duration}
-				ticks={near.map((f) => ({ id: f.id, time: f.time, current: f.id === frame.id }))}
-				onSeek={seekToTime}
-			/>
+			<div className="min-w-0 compact:flex-1">
+				<Timeline frames={ordered} currentId={frame.id} hoverId={hoverId} onHover={setHoverId} onOpen={onOpen} />
+			</div>
+			<div className="hidden compact:flex shrink-0 items-center gap-1.5">
+				<Actions iconOnly {...actions} />
+			</div>
 		</div>
 	);
-}
-
-function RangeWaveform(props: {
-	start: number;
-	span: number;
-	duration: number;
-	ticks: Array<{ id: string; time: number; current: boolean }>;
-	onSeek: (t: number) => void;
-}) {
-	const { start, span, duration, ticks, onSeek } = props;
-	const waveformData = useSyncExternalStore(waveformDataStore.subscribe, waveformDataStore.getSnapshot);
-	const canvasRef = useRef<HTMLCanvasElement>(null);
-
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas) return;
-		const draw = () => {
-			const w = canvas.clientWidth;
-			const h = canvas.clientHeight;
-			const dpr = window.devicePixelRatio || 1;
-			canvas.width = Math.max(1, Math.round(w * dpr));
-			canvas.height = Math.max(1, Math.round(h * dpr));
-			const ctx = canvas.getContext('2d');
-			if (!ctx) return;
-			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-			ctx.clearRect(0, 0, w, h);
-			if (duration <= 0 || waveformData.length === 0) return;
-			ctx.fillStyle = '#404040';
-			for (let x = 0; x < w; x += 3) {
-				const t = start + (x / w) * span;
-				const amp = Math.min(1, (waveformData[Math.min(waveformData.length - 1, Math.floor((t / duration) * waveformData.length))] || 0) * 1.8);
-				const bar = Math.max(1, amp * h);
-				ctx.fillRect(x, (h - bar) / 2, 2, bar);
-			}
-		};
-		draw();
-		const ro = new ResizeObserver(draw);
-		ro.observe(canvas);
-		return () => ro.disconnect();
-	}, [start, span, duration, waveformData]);
-
-	const toTime = (clientX: number, el: HTMLElement) => {
-		const r = el.getBoundingClientRect();
-		return start + ((clientX - r.left) / r.width) * span;
-	};
-
-	return (
-		<div
-			className="relative h-10 rounded-md bg-neutral-950 cursor-pointer"
-			onClick={(e) => onSeek(Math.max(0, toTime(e.clientX, e.currentTarget)))}
-			data-testid="strip-waveform"
-			data-start={start}
-			data-span={span}
-		>
-			<canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-			{ticks.map((t) => (
-				<div
-					key={t.id}
-					className={`absolute top-0 bottom-0 w-0.5 ${t.current ? 'bg-blue-400' : 'bg-neutral-400/70'}`}
-					style={{ left: `${((t.time - start) / span) * 100}%` }}
-				/>
-			))}
-			<Playhead start={start} span={span} />
-		</div>
-	);
-}
-
-/** Only this re-renders while the song plays. */
-function Playhead({ start, span }: { start: number; span: number }) {
-	const t = useSyncExternalStore(currentTimeStore.subscribe, currentTimeStore.getSnapshot);
-	const at = (t - start) / span;
-	if (at < 0 || at > 1) return null;
-	return <div className="absolute top-0 bottom-0 w-px bg-white pointer-events-none" style={{ left: `${at * 100}%` }} />;
 }

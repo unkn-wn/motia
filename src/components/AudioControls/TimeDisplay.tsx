@@ -1,5 +1,6 @@
-import React, { memo } from 'react';
+import React, { memo, useSyncExternalStore } from 'react';
 import { useAudio } from '@/contexts/objects/AudioContextObject';
+import { currentTimeStore } from './state';
 import { formatTime } from '@utils/timeUtils';
 
 interface TimeDisplayProps {
@@ -30,7 +31,8 @@ TimeDisplay.displayName = 'TimeDisplay';
 
 // Connected version that uses context internally
 export const ConnectedTimeDisplay: React.FC = memo(() => {
-  const { currentTime, duration, trimStart, trimEnd } = useAudio();
+  const { duration, trimStart, trimEnd } = useAudio();
+  const currentTime = useSyncExternalStore(currentTimeStore.subscribe, currentTimeStore.getSnapshot);
 
   return (
     <TimeDisplay currentTime={currentTime} duration={duration} trimStart={trimStart} trimEnd={trimEnd} />

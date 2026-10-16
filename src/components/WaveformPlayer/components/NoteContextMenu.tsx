@@ -1,6 +1,7 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { useAudio } from '@contexts/objects/AudioContextObject';
+import { currentTimeStore } from '@components/AudioControls/state';
 import { useStoryboard } from '@/features/storyboard/StoryboardContext';
 import { cardPositionAt } from '../hooks/frameCanvas';
 import { duplicateTime } from '@/features/storyboard/timeline';
@@ -25,7 +26,9 @@ export const NoteContextMenu: React.FC = () => {
 
 const OpenContextMenu: React.FC = () => {
   const { contextMenu, setContextMenu, setEditingNote, setEditContent, notes, setDeleteConfirmNoteId, frames, board, orientation, canvasRef, onChangeNoteColor } = useWaveformContext();
-  const { currentTime, duration } = useAudio();
+  const { duration } = useAudio();
+  // Mounted only while open, so following the playhead here costs nothing the rest of the time
+  const currentTime = useSyncExternalStore(currentTimeStore.subscribe, currentTimeStore.getSnapshot);
   const { openFrameEditor, handleDuplicateFrame, handleUpdateFrame, handleDeleteFrames } = useStoryboard();
   const ref = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string | null>(null);

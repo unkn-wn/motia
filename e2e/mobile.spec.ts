@@ -1,6 +1,6 @@
 import { test, expect } from './support/app';
 import { addFrameAt } from './support/frames';
-import { draw } from './support/editor';
+import { draw, elements, pickTool } from './support/editor';
 
 // M9: a phone-sized screen (touch only): the editor's inspector is a bottom sheet, touch targets on the index rail are
 // at least 24 px across, and nothing scrolls sideways.
@@ -28,6 +28,23 @@ test('phone: inspector as a bottom sheet, 24 px rail targets, no sideways scroll
 	expect(sheet.height).toBeLessThanOrEqual(PHONE.height * 0.45 + 1);
 	expect(await noSidewaysScroll()).toBe(true);
 	await page.screenshot({ path: 'test-results/m9-phone-editor.png' });
+
+	// Panning the board: two fingers anywhere, or one finger on the surround (select tool); neither draws
+	const board = page.getByTestId('artboard');
+	const offset = async () => ({ x: Number(await board.getAttribute('data-offset-x')), y: Number(await board.getAttribute('data-offset-y')) });
+	const count = (await elements(app)).length;
+	const box = (await board.boundingBox())!;
+	let before = await offset();
+	await app.twoFingerDrag({ x: box.x + 150, y: box.y + 200 }, { x: box.x + 250, y: box.y + 200 }, { x: 60, y: 80 });
+	let after = await offset();
+	expect(after.x - before.x).toBeCloseTo(60, -1);
+	expect(after.y - before.y).toBeCloseTo(80, -1);
+	await pickTool(app, 'Select');
+	before = after;
+	await app.drag({ x: box.x + box.width / 2, y: box.y + 20 }, { x: box.x + box.width / 2 - 40, y: box.y + 120 });
+	after = await offset();
+	expect(after.y - before.y).toBeCloseTo(100, -1);
+	expect((await elements(app)).length).toBe(count);
 	await app.press(page.getByRole('button', { name: 'Close frame editor' }));
 
 	// The index rail: each mark and the window answer to a touch at least 24 px across

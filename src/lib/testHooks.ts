@@ -19,8 +19,10 @@ const hooks = (): Hooks => {
 type StoryboardHooks = {
 	storyboard: StoryboardDoc;
 	storyboardStatus: 'idle' | 'loaded' | 'unreadable';
-	handleAddFrame: (time: number, canvasX: number, canvasY: number) => string;
-	handleDeleteFrames: (ids: ReadonlySet<string>) => void;
+	actions: {
+		handleAddFrame: (time: number, canvasX: number, canvasY: number) => string;
+		handleDeleteFrames: (ids: ReadonlySet<string>) => void;
+	};
 };
 
 export function useTestHooks(
@@ -49,7 +51,11 @@ export function useTestHooks(
 		};
 	}, [notes]);
 
-	const { storyboard, storyboardStatus, handleAddFrame, handleDeleteFrames } = sb;
+	const {
+		storyboard,
+		storyboardStatus,
+		actions: { handleAddFrame, handleDeleteFrames },
+	} = sb;
 	useEffect(() => {
 		if (!enabled) return;
 		const h = hooks();

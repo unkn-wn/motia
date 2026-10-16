@@ -134,13 +134,10 @@ export function useStoryboardState() {
 	// What autosave writes: the board once a readable one has loaded (even an empty one), else nothing
 	const storyboardToSave = loaded.status === 'loaded' ? storyboard : undefined;
 
-	return useMemo(
+	// Stable actions and refs (the storyboard context): they never change, so nothing re-renders for them
+	const actions = useMemo(
 		() => ({
-			storyboard,
 			storyboardRef,
-			storyboardToSave,
-			storyboardStatus: loaded.status,
-			changedSinceLoad: storyboard !== loaded.doc,
 			loadStoryboard,
 			resetStoryboard,
 			commit,
@@ -156,9 +153,6 @@ export function useStoryboardState() {
 			isLiveEditOpen,
 		}),
 		[
-			storyboard,
-			storyboardToSave,
-			loaded,
 			loadStoryboard,
 			resetStoryboard,
 			commit,
@@ -174,4 +168,12 @@ export function useStoryboardState() {
 			isLiveEditOpen,
 		]
 	);
+
+	return {
+		storyboard,
+		storyboardToSave,
+		storyboardStatus: loaded.status,
+		changedSinceLoad: storyboard !== loaded.doc,
+		actions,
+	};
 }

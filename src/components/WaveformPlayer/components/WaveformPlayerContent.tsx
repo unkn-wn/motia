@@ -10,6 +10,7 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { deleteSelection } from '../hooks/mouse/selectionMouseHandlers';
 import { useStoryboard } from '@/features/storyboard/StoryboardContext';
 import { thumbnailStore } from '@/features/storyboard/canvas/thumbnails';
+import { currentTimeStore } from '@components/AudioControls/state';
 import { isFrameEditorOpen, isUserTyping } from '@utils/shortcutsUtils';
 
 export const WaveformPlayerContent: React.FC = () => {
@@ -32,6 +33,10 @@ export const WaveformPlayerContent: React.FC = () => {
   // Set up global mouse handlers
   useGlobalMouseHandlers();
 
+  // The loop calls the latest renderer, so a new one (each transform change) doesn't restart it
+  const renderRef = useRef(renderCanvas);
+  useEffect(() => { renderRef.current = renderCanvas; }, [renderCanvas]);
+
   // RAF-driven render when actively changing (playback, panning, drawing, dragging)
   useEffect(() => {
     // Treat selection drag and erase interactions as active so we get smooth live feedback
@@ -51,7 +56,7 @@ export const WaveformPlayerContent: React.FC = () => {
     }
 
     const tick = () => {
-      renderCanvas();
+      renderRef.current();
       frameRef.current = requestAnimationFrame(tick);
     };
 
@@ -63,6 +68,15 @@ export const WaveformPlayerContent: React.FC = () => {
       }
     };
   }, [isPlaying, isPanning, isDrawing, dragging, selectionBox?.dragging, toolMode, renderCanvas, renderPaused]);
+
+  // A time change while nothing animates (a seek, a click on the waveform) redraws the playhead once
+  useEffect(
+    () =>
+      currentTimeStore.subscribe(() => {
+        if (!activeRef.current) renderRef.current();
+      }),
+    []
+  );
 
   // Bumps when frame thumbnails finish rendering
   const thumbnailVersion = useSyncExternalStore(thumbnailStore.subscribe, thumbnailStore.getVersion);

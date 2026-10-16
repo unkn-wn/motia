@@ -30,7 +30,7 @@ import { OrientationBanner } from '@/components/WaveformPlayer/components/Orient
 import type { CanvasOrientation } from '@/types';
 import { useTestHooks } from '@/lib/testHooks';
 import { useStoryboardState } from '@/features/storyboard/useStoryboardState';
-import { StoryboardContext, type StoryboardContextValue } from '@/features/storyboard/StoryboardContext';
+import { StoryboardContext, StoryboardDocContext, type StoryboardContextValue } from '@/features/storyboard/StoryboardContext';
 import { FrameEditor } from '@/features/storyboard/editor/FrameEditor';
 import { PreviewMonitor } from '@/features/storyboard/PreviewMonitor';
 import { clearAssetCache } from '@/features/storyboard/assets/assetStore';
@@ -92,8 +92,8 @@ function Home() {
 	const togglePreview = useCallback(() => setPreviewOpen((v) => !v), []);
 	// Frame open in the frame editor (full overlay)
 	const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
-	const { storyboard, storyboardToSave, storyboardStatus, changedSinceLoad: storyboardChanged, loadStoryboard, resetStoryboard } =
-		storyboardState;
+	const { storyboard, storyboardToSave, storyboardStatus, changedSinceLoad: storyboardChanged, actions: storyboardActions } = storyboardState;
+	const { loadStoryboard, resetStoryboard } = storyboardActions;
 
 	// Project lifecycle
 	const {
@@ -235,7 +235,7 @@ function Home() {
 	);
 
 	// Export: everything is read when the button is pressed (no re-render while notes, board or playhead change)
-	const storyboardRef = storyboardState.storyboardRef;
+	const storyboardRef = storyboardActions.storyboardRef;
 	const handleExport = useCallback(
 		async (includeAudio: boolean, onProgress: (fraction: number) => void) => {
 			const { exportProject } = await import('@/features/storyboard/io/exportZip');
@@ -309,8 +309,8 @@ function Home() {
 	const canvasSymbols = editingFrameId === null ? storyboard.symbols : canvasSymbolsRef.current;
 
 	const storyboardContextValue = useMemo<StoryboardContextValue>(
-		() => ({ ...storyboardState, projectId, editingFrameId, openFrameEditor, closeFrameEditor, placeCard }),
-		[storyboardState, projectId, editingFrameId, openFrameEditor, closeFrameEditor, placeCard]
+		() => ({ ...storyboardActions, projectId, editingFrameId, openFrameEditor, closeFrameEditor, placeCard }),
+		[storyboardActions, projectId, editingFrameId, openFrameEditor, closeFrameEditor, placeCard]
 	);
 
 	// Test-mode state access (no-op outside emulator test mode)
@@ -548,6 +548,7 @@ function Home() {
 
 	return (
 		<StoryboardContext.Provider value={storyboardContextValue}>
+		<StoryboardDocContext.Provider value={storyboard}>
 		<div className="min-h-dvh" style={{ backgroundColor: 'var(--bg-primary)' }}>
 			{shouldRedirectToProjects ? <Navigate to="/projects" /> : null}
 			{redirectTo && redirectTo !== 'PROJECTS' ? <Navigate to="/project/$projectId" params={{ projectId: redirectTo }} /> : null}
@@ -720,6 +721,7 @@ function Home() {
 			{/* Profile Modal lives at root to overlay */}
 			<ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 		</div>
+		</StoryboardDocContext.Provider>
 		</StoryboardContext.Provider>
 	);
 }

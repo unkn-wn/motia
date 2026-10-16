@@ -35,7 +35,17 @@ export async function viewScale(app: App): Promise<number> {
 }
 
 export async function pickTool(app: App, name: string) {
-	const button = app.page.getByRole('navigation', { name: 'Tools' }).getByRole('button', { name, exact: true });
+	const dock = app.page.getByRole('navigation', { name: 'Tools' });
+	// A collapsed dock (phones, short screens) shows the current tool, which opens all of them
+	if ((await dock.getAttribute('data-level')) === 'collapsed') {
+		const current = dock.getByRole('button', { name: /^Tools: / });
+		if ((await current.getAttribute('aria-label')) === `Tools: ${name}`) return;
+		await app.press(current);
+		await app.press(dock.getByRole('menu').getByRole('button', { name, exact: true }));
+		await expect(current).toHaveAttribute('aria-label', `Tools: ${name}`);
+		return;
+	}
+	const button = dock.getByRole('button', { name, exact: true });
 	await app.press(button);
 	await expect(button).toHaveAttribute('aria-pressed', 'true');
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { useAudio } from '@contexts/objects/AudioContextObject';
+import { currentTimeStore } from '@components/AudioControls/state';
 import { decompressSession } from '@utils/advancedCompression';
 import { getColorCode } from '@utils/colorUtils';
 import type { Note } from '@types';
@@ -32,7 +33,7 @@ export const useCanvasRenderer = () => {
 		renderPaused,
 	} = useWaveformContext();
 
-	const { currentTime, duration, waveformData, trimStart, trimEnd } = useAudio();
+	const { duration, waveformData, trimStart, trimEnd } = useAudio();
 
 	// Small caches to avoid repeated layout/decompression work between frames
 	const sizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
@@ -354,6 +355,9 @@ export const useCanvasRenderer = () => {
 		const canvas = canvasRef.current;
 		// Covered by the frame editor: skip drawing (and thumbnail work) until it closes
 		if (!canvas || renderPaused) return;
+		// Read when drawing (not a dependency): during playback the animation loop draws each frame with the latest
+		// time, and this callback stays the same
+		const currentTime = currentTimeStore.getSnapshot();
 
 		// Drop cache entries for removed notes (only when notes array identity changes)
 		if (notes !== lastNotesRef.current) {
@@ -803,7 +807,6 @@ export const useCanvasRenderer = () => {
 		canvasRef,
 		notes,
 		transform,
-		currentTime,
 		duration,
 		waveformData,
 		trimStart,

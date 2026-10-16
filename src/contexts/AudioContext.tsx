@@ -28,7 +28,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 
 	// Audio state
 	const [isPlaying, setIsPlaying] = useState(false);
-	const [currentTime, setCurrentTime] = useState(0);
 	const [duration, setDuration] = useState(0);
 	const [volume, setVolumeState] = useState(initialVolume ?? 0.5);
 	const [waveformData, setWaveformData] = useState<number[]>([]);
@@ -39,7 +38,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 	// Refs for stable access to changing values
 	const wavesurferRef = useRef<WaveSurfer | null>(null);
 	const recenterToPlayheadRef = useRef<(() => void) | null>(null);
-	const currentTimeRef = useRef(currentTime);
 	const durationRef = useRef(duration);
 	const volumeRef = useRef(volume);
 	const trimStartRef = useRef(trimStart);
@@ -49,7 +47,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 	const saveVolumeTimeoutRef = useRef<number | undefined>(undefined);
 
 	// Keep refs in sync with state
-	currentTimeRef.current = currentTime;
 	durationRef.current = duration;
 	volumeRef.current = volume;
 	trimStartRef.current = trimStart;
@@ -63,8 +60,10 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 		onPlayStateChangeRef.current?.(playing);
 	}, []);
 
+	// Playback time lives in `currentTimeStore`, not in this provider's state: it changes every animation frame
+	// while playing, and only what shows the time subscribes to it (not every consumer of this context)
 	const setCurrentTimeInternal = useCallback((time: number) => {
-		setCurrentTime(time);
+		currentTimeStore.set(time);
 		onCurrentTimeChangeRef.current?.(time);
 	}, []);
 
@@ -250,7 +249,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 		() => ({
 			// State
 			isPlaying,
-			currentTime,
 			duration,
 			volume,
 			waveformData,
@@ -283,7 +281,6 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 			// Only include state values that should trigger rerenders
 			// Functions are excluded since they should be stable with useCallback
 			isPlaying,
-			currentTime,
 			duration,
 			volume,
 			waveformData,
@@ -330,7 +327,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 			<AudioActionsContext.Provider value={actionsValue}>{children}</AudioActionsContext.Provider>
 			{/* Synchronize external stores for fine-grained subscribers */}
 			<AudioProviderEffects isPlaying={isPlaying} volume={volume} />
-			<AudioTimeEffects currentTime={currentTime} duration={duration} waveformData={waveformData} trimStart={trimStart} trimEnd={trimEnd} />
+			<AudioTimeEffects duration={duration} waveformData={waveformData} trimStart={trimStart} trimEnd={trimEnd} />
 		</AudioContext.Provider>
 	);
 };
@@ -347,17 +344,13 @@ export const AudioProviderEffects: React.FC<{
 	return null;
 };
 
-// Mirror currentTime/duration for decoupled consumers (e.g., progress bar)
+// Mirror duration, waveform and trim for decoupled consumers (e.g., progress bar)
 export const AudioTimeEffects: React.FC<{
-	currentTime: number;
 	duration: number;
 	waveformData: number[];
 	trimStart: number;
 	trimEnd: number;
-}> = ({ currentTime, duration, waveformData, trimStart, trimEnd }) => {
-	useEffect(() => {
-		currentTimeStore.set(currentTime);
-	}, [currentTime]);
+}> = ({ duration, waveformData, trimStart, trimEnd }) => {
 	useEffect(() => {
 		durationStore.set(duration);
 	}, [duration]);

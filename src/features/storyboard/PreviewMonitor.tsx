@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 import { currentTimeStore } from '@components/AudioControls/state';
-import { useStoryboard } from './StoryboardContext';
+import { useStoryboardDoc } from './StoryboardContext';
 import { FrameSvg } from './render/FrameSvg';
 import { useFrameRender } from './render/useFrameRender';
 import { activeFrameAt, framesByTime } from './timeline';
@@ -23,7 +23,7 @@ const CORNER_CLASS: Record<Corner, string> = {
  * playback, so the board can be watched as an animatic. Drag it by its header to any corner.
  */
 export function PreviewMonitor({ onClose }: { onClose: () => void }) {
-	const { storyboard } = useStoryboard();
+	const storyboard = useStoryboardDoc();
 	const ordered = useMemo(() => framesByTime(storyboard.frames), [storyboard.frames]);
 	// Re-renders only when the active frame changes, not on every playback tick
 	const activeId = useSyncExternalStore(currentTimeStore.subscribe, () => activeFrameAt(ordered, currentTimeStore.getSnapshot())?.id ?? null);

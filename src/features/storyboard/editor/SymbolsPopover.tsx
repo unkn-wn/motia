@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Image as ImageIcon, Plus } from 'lucide-react';
-import { useStoryboard } from '../StoryboardContext';
+import { useStoryboard, useStoryboardDoc } from '../StoryboardContext';
 import { updateSymbol } from '../model';
 import { assetObjectUrl, assetStore } from '../assets/assetStore';
 import type { StoryboardSymbol } from '../types';
@@ -8,12 +8,12 @@ import { TextField } from './fields';
 import { ImagePickButton } from './ImagePick';
 import { useImageIntake } from './useImages';
 
-const rowButton =
-	'inline-flex items-center gap-1 rounded-full bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2 py-0.5 text-xs text-neutral-200 cursor-pointer';
+const rowButton = 'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 cursor-pointer';
 
 /** The project's symbol library: boxes saved for reuse. Place an instance, rename, or change the shared image. */
 export function SymbolsPopover({ onPlace, notify }: { onPlace: (symbol: StoryboardSymbol) => void; notify: (message: string) => void }) {
-	const { storyboard, commit, storyboardRef } = useStoryboard();
+	const { commit, storyboardRef } = useStoryboard();
+	const storyboard = useStoryboardDoc();
 	const intake = useImageIntake(notify);
 	useSyncExternalStore(assetStore.subscribe, assetStore.getVersion);
 
@@ -21,7 +21,7 @@ export function SymbolsPopover({ onPlace, notify }: { onPlace: (symbol: Storyboa
 		<div
 			role="dialog"
 			aria-label="Symbols"
-			className="absolute left-20 top-3 z-20 w-72 max-h-[60vh] overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900/95 p-3 shadow-xl space-y-3"
+			className="absolute left-24 top-3 z-20 w-72 max-md:w-auto max-md:right-3 max-h-[60vh] overflow-y-auto rounded-2xl border-2 border-neutral-600/20 bg-neutral-900/95 p-3 shadow-lg space-y-3"
 		>
 			<div className="text-xs uppercase tracking-wide text-neutral-500">Symbols</div>
 			{storyboard.symbols.length === 0 ? (

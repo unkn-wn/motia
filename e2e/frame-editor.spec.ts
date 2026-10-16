@@ -172,9 +172,14 @@ test('the inspector edits every property; the header edits title and times; undo
 	await expect(editor(app)).toBeVisible();
 	await setField(app, 'frame-notes', "camera snaps on 'over'");
 	await app.page.getByTestId('inspector').locator('[name="frame-background"]').fill('#0b0b0b');
-	await app.press(app.page.getByRole('button', { name: '1:1', exact: true }));
-	await setField(app, 'board-fps', '30');
-	await setField(app, 'board-style', 'hard hitting, heavy glow');
+	// The board format (all frames) opens from the board size under the artboard
+	await app.press(app.page.getByRole('button', { name: 'Board format' }));
+	const boardFormat = app.page.getByTestId('board-format');
+	await app.press(boardFormat.getByRole('button', { name: '1:1', exact: true }));
+	await boardFormat.locator('[name="board-fps"]').fill('30');
+	await boardFormat.locator('[name="board-fps"]').press('Enter');
+	await boardFormat.locator('[name="board-style"]').fill('hard hitting, heavy glow');
+	await boardFormat.locator('[name="board-style"]').press('Enter');
 	await expect.poll(async () => frameById(app, f.id)).toMatchObject({ notes: "camera snaps on 'over'", background: '#0b0b0b' });
 	await expect.poll(async () => (await app.storyboard()).board).toEqual({ width: 1080, height: 1080, fps: 30, style: 'hard hitting, heavy glow' });
 
@@ -397,4 +402,32 @@ test('marquee and Shift select; tilt a line by its endpoint; move a tiny element
 		await app.press(page.getByTitle('Fit to view'));
 		await expect.poll(() => viewScale(app)).toBeCloseTo(before, 4);
 	}
+});
+
+test('text finished by pressing elsewhere is added once, and selects alone with its settings', async ({ app }) => {
+	await openNewFrame(app);
+	await pickTool(app, 'Text');
+	await app.tap(await boardToScreen(app, { x: 300, y: 300 }));
+	await app.page.keyboard.type('hero');
+	// Not Enter: a press elsewhere on the board finishes the edit
+	await app.tap(await boardToScreen(app, { x: 1500, y: 900 }));
+	await expect.poll(async () => (await elements(app)).map((e) => e.type)).toEqual(['text']);
+	await app.page.waitForTimeout(200);
+	expect((await elements(app)).length).toBe(1);
+	// Selecting it shows its own settings, not "1 selected"
+	await app.tap(await boardToScreen(app, { x: 330, y: 340 }));
+	await expect(app.page.getByTestId('inspector')).toHaveAttribute('aria-label', 'Element properties');
+	await expect(app.page.getByTestId('inspector').locator('[name="text"]')).toHaveValue('hero');
+});
+
+test('dragging the label of a number changes it live, as one undo step', async ({ app }) => {
+	await openNewFrame(app);
+	const rect = await draw(app, 'Rectangle', { x: 300, y: 300 }, { x: 500, y: 450 });
+	const field = app.page.getByTestId('inspector').locator('label', { has: app.page.locator('[name="opacity"]') });
+	const box = (await field.boundingBox())!;
+	// The label sits at the field's left edge: drag it 40 px to the left (opacity 100 → 60)
+	await app.drag({ x: box.x + 8, y: box.y + box.height / 2 }, { x: box.x - 32, y: box.y + box.height / 2 });
+	await expectElement(app, rect.id, (el) => el.opacity === 0.6);
+	await app.undo();
+	await expectElement(app, rect.id, (el) => el.opacity === undefined);
 });

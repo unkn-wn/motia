@@ -3,7 +3,7 @@ import type WaveSurfer from 'wavesurfer.js';
 
 interface AudioState {
 	isPlaying: boolean;
-	currentTime: number;
+	/** Playback time is not here: read `currentTimeStore` (it changes every frame while playing) */
 	duration: number;
 	volume: number;
 	waveformData: number[];

@@ -110,11 +110,79 @@ test('frame strip: neighbours switch frames, the waveform seeks, play from frame
 	await expect.poll(async () => (await app.time()).current).toBeCloseTo(start + span * 0.8, 0);
 	expect(start + span * 0.8).toBeGreaterThan(a.time + 1);
 
-	// Play from frame: jumps back to the frame, then plays on
-	await app.press(strip(app).getByRole('button', { name: /play from frame/ }));
-	await expect.poll(async () => (await app.time()).current).toBeLessThan(a.time + 0.5);
-	await expect.poll(async () => (await app.time()).current).toBeGreaterThan(a.time + 0.2);
+	// The open frame's thumbnail goes back to its start
+	await seekTo(app, a.time + 2);
+	await app.press(thumbs.nth(0));
+	await expect.poll(async () => (await app.time()).current).toBeCloseTo(a.time, 1);
+	expect(await editingId(app)).toBe(a.id);
+
+	// Preview: plays from the frame, showing each frame as the song reaches it; stopping opens the frame it stopped on
+	await app.press(strip(app).getByRole('button', { name: /preview/ }));
+	const preview = app.page.getByTestId('playback-preview');
+	await expect(preview).toHaveAttribute('data-frame-id', a.id);
+	await expect(preview).toHaveAttribute('data-frame-id', b.id, { timeout: 8000 });
 	await app.page.keyboard.press(' ');
+	await expect(preview).toBeHidden();
+	await expect.poll(() => editingId(app)).toBe(b.id);
+});
+
+test('the strip shows every frame', async ({ app }) => {
+	await openProject(app);
+	for (const t of [1, 2, 3, 4, 5, 6, 7]) await addFrameAt(app, t);
+	const last = await addFrameAt(app, 8, { keepEditorOpen: true });
+	await expect(strip(app).getByRole('button', { name: /^Frame at/ })).toHaveCount(8);
+	await expect(strip(app).getByRole('button', { name: /^Frame at/ }).last()).toHaveAttribute('aria-current', 'true');
+	expect(await editingId(app)).toBe(last.id);
+});
+
+test('timeline: centred on the playhead and follows playback; drag scrubs; a frame in the lane highlights its thumbnail and opens', async ({ app }, testInfo) => {
+	await openProject(app);
+	const a = await addFrameAt(app, 3);
+	await addFrameAt(app, 6, { keepEditorOpen: true });
+	const wave = strip(app).getByTestId('strip-waveform');
+	const view = async () => ({ start: Number(await wave.getAttribute('data-start')), span: Number(await wave.getAttribute('data-span')) });
+
+	// The playhead stays in the middle of the view
+	const centre = async () => {
+		const v = await view();
+		return v.start + v.span / 2;
+	};
+	await expect.poll(async () => Math.abs((await centre()) - (await app.time()).current)).toBeLessThan(0.05);
+
+	// Playback moves the view with it
+	const before = (await view()).start;
+	await app.page.keyboard.press(' ');
+	await expect.poll(async () => (await view()).start).toBeGreaterThan(before + 0.3);
+	await app.page.keyboard.press(' ');
+
+	// Dragging scrubs: the song moves under the playhead (dragging right goes back in time)
+	const box = (await wave.boundingBox())!;
+	const t0 = (await app.time()).current;
+	const { span } = await view();
+	await app.drag({ x: box.x + box.width * 0.5, y: box.y + box.height * 0.7 }, { x: box.x + box.width * 0.75, y: box.y + box.height * 0.7 });
+	await expect.poll(async () => (await app.time()).current).toBeCloseTo(t0 - span * 0.25, 0);
+
+	// Frame a's time on screen sits in the lane: pointing at it highlights its thumbnail, a click opens it
+	await seekTo(app, a.time + 1);
+	const v = await view();
+	const laneX = box.x + ((a.time + 0.5 - v.start) / v.span) * box.width;
+	const thumb = strip(app).getByRole('button', { name: /^Frame at 0:03/ });
+	if (testInfo.project.name === 'desktop') {
+		await app.page.mouse.move(laneX, box.y + 6);
+		await expect(thumb).toHaveClass(/ring-neutral-300/);
+	}
+	await app.tap({ x: laneX, y: box.y + 6 });
+	await expect.poll(() => editingId(app)).toBe(a.id);
+
+	// Alt + wheel zooms (desktop)
+	if (testInfo.project.name === 'desktop') {
+		const spanBefore = (await view()).span;
+		await app.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		await app.page.keyboard.down('Alt');
+		await app.page.mouse.wheel(0, -300);
+		await app.page.keyboard.up('Alt');
+		await expect.poll(async () => (await view()).span).toBeLessThan(spanBefore);
+	}
 });
 
 test('the group tag is free text (trimmed), shown in the strip', async ({ app }) => {

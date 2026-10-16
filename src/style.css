@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Phones and short (landscape) screens: the frame editor's strip and toggles shrink to one row */
+@custom-variant compact {
+  @media (max-width: 767px), (max-height: 560px) {
+    @slot;
+  }
+}
+
 /* CSS Variables for Dark Theme */
 :root {
   --bg-primary: #171717;
@@ -96,11 +103,6 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 50%;
   border: none;
   cursor: pointer;
-}
-
-/* Smooth transitions */
-* {
-  transition: all 150ms ease;
 }
 
 /* Mobile long-press and selection suppression helpers */

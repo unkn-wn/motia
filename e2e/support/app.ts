@@ -225,6 +225,22 @@ export class App {
 		});
 	}
 
+	/** Two fingers down at `a` and `b`, moved together by `by` (a two-finger pan), then lifted. Touch project only. */
+	async twoFingerDrag(a: Pt, b: Pt, by: Pt, steps = 8) {
+		await this.touchEvent('touchStart', [a]);
+		await this.touchEvent('touchStart', [a, b]);
+		for (let i = 1; i <= steps; i++) {
+			const d = { x: (by.x * i) / steps, y: (by.y * i) / steps };
+			await this.touchEvent('touchMove', [
+				{ x: a.x + d.x, y: a.y + d.y },
+				{ x: b.x + d.x, y: b.y + d.y },
+			]);
+			await sleep(16);
+		}
+		await this.touchEvent('touchEnd', []);
+		await sleep(50);
+	}
+
 	async tap(p: Pt) {
 		if (this.touch) {
 			await this.touchEvent('touchStart', [p]);

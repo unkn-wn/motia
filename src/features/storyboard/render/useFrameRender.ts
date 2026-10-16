@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { useStoryboard } from '../StoryboardContext';
+import { useStoryboardDoc } from '../StoryboardContext';
 import { assetObjectUrl, assetStore } from '../assets/assetStore';
 
 /**
@@ -8,7 +8,7 @@ import { assetObjectUrl, assetStore } from '../assets/assetStore';
  * changes with every board edit; FrameSvg ignores that change unless the frame shows other frames.
  */
 export function useFrameRender() {
-	const { storyboard } = useStoryboard();
+	const storyboard = useStoryboardDoc();
 	const { frames, symbols } = storyboard;
 	const assetVersion = useSyncExternalStore(assetStore.subscribe, assetStore.getVersion);
 	const resolveFrame = useCallback((id: string) => frames.find((f) => f.id === id), [frames]);

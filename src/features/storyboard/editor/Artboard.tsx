@@ -37,13 +37,14 @@ type Gesture =
 	| { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; start: Pt; el: FrameElement; box: Box }
 	| { kind: 'rotate'; el: FrameElement; box: Box }
 	| { kind: 'marquee'; start: Pt; base: string[] }
-	| { kind: 'shape'; tool: ShapeTool; start: Pt; id: string }
+	| { kind: 'shape'; tool: ShapeTool; start: Pt; client: Pt; id: string }
 	| { kind: 'pen'; points: Point[] }
 	| { kind: 'text'; start: Pt; client: Pt };
 
 const FIT_PADDING = 32;
-/** Room on the left for the tool dock. */
-const FIT_PADDING_LEFT = 88;
+/** Room on the left for the tool dock (phones: its collapsed form floats over the board instead). */
+const FIT_PADDING_LEFT = 104;
+const NARROW_PX = 768;
 const HANDLE_PX = 8;
 const HANDLE_HIT_PX = 12;
 const ROTATE_OFFSET_PX = 28;
@@ -85,7 +86,14 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 
 	const [draft, setDraft] = useState<FrameElement | null>(null);
 	const [marquee, setMarquee] = useState<{ a: Pt; b: Pt } | null>(null);
-	const [textEdit, setTextEdit] = useState<TextEdit | null>(null);
+	const [textEdit, setTextEditState] = useState<TextEdit | null>(null);
+	// The element whose text edit is open. An edit commits once: a press on the board both blurs the editor (which
+	// commits) and finishes the edit, and a second commit would add a new text twice under the same id.
+	const openEditRef = useRef<string | null>(null);
+	const setTextEdit = useCallback((edit: TextEdit | null) => {
+		openEditRef.current = edit ? edit.el.id : null;
+		setTextEditState(edit);
+	}, []);
 	const gestureRef = useRef<Gesture | null>(null);
 	const pointersRef = useRef(new Map<number, Pt>());
 	const lastTapRef = useRef<{ id: string; t: number; client: Pt } | null>(null);
@@ -110,9 +118,10 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 	}, [fitSignal, board.width, board.height]);
 	useEffect(() => {
 		if (userViewRef.current || size.w === 0 || size.h === 0) return;
-		const availW = size.w - FIT_PADDING_LEFT - FIT_PADDING;
+		const padLeft = size.w < NARROW_PX ? FIT_PADDING : FIT_PADDING_LEFT;
+		const availW = size.w - padLeft - FIT_PADDING;
 		const scale = Math.max(0.01, Math.min(availW / board.width, (size.h - FIT_PADDING * 2) / board.height));
-		setView({ scale, x: FIT_PADDING_LEFT + (availW - board.width * scale) / 2, y: (size.h - board.height * scale) / 2 });
+		setView({ scale, x: padLeft + (availW - board.width * scale) / 2, y: (size.h - board.height * scale) / 2 });
 	}, [size, board.width, board.height, fitSignal]);
 
 	const toFrame = useCallback((client: Pt): Pt => {
@@ -150,6 +159,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 
 	const commitText = useCallback(
 		(edit: TextEdit) => {
+			if (openEditRef.current !== edit.el.id) return;
 			const doc = storyboardRef.current;
 			const value = edit.value;
 			if (edit.isNew) {
@@ -165,7 +175,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 			}
 			setTextEdit(null);
 		},
-		[commit, storyboardRef, frame.id, setSelectedIds]
+		[commit, storyboardRef, frame.id, setSelectedIds, setTextEdit]
 	);
 
 	const startTextEdit = (el: TextElement) => {
@@ -300,6 +310,12 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 				gestureRef.current = { kind: 'move', start: p, client, moved: false, originals: frame.elements.filter((el) => ids.includes(el.id)) };
 				return;
 			}
+			// Touch: one finger on the surround (off the board) pans; two fingers pan and pinch anywhere
+			if (e.pointerType === 'touch' && (p.x < 0 || p.y < 0 || p.x > board.width || p.y > board.height)) {
+				setSelectedIds([]);
+				gestureRef.current = { kind: 'pan', client, view: viewRef.current };
+				return;
+			}
 			const base = e.shiftKey ? selectedIds : [];
 			setSelectedIds(base);
 			gestureRef.current = { kind: 'marquee', start: p, base };
@@ -316,8 +332,8 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 		}
 		const start = snapPt(p);
 		const id = newId('e_');
-		gestureRef.current = { kind: 'shape', tool, start, id };
-		setDraft(shapeFromDrag(tool, start, start, false, id, defaultRefFrameId));
+		// No draft yet: a press alone would show the default-sized shape a click makes, then jump to the drag
+		gestureRef.current = { kind: 'shape', tool, start, client, id };
 	};
 
 	const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -389,6 +405,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 				return;
 			}
 			case 'shape':
+				if (Math.hypot(client.x - g.client.x, client.y - g.client.y) < DRAG_THRESHOLD_PX) return;
 				setDraft(shapeFromDrag(g.tool, g.start, snapPt(p), e.shiftKey, g.id, defaultRefFrameId));
 				return;
 			case 'pen': {
