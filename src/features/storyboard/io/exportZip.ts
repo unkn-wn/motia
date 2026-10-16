@@ -44,7 +44,7 @@ export function safeFileName(name: string, fallback: string): string {
 		.slice(0, NAME_LIMIT)
 		.join('')
 		.replace(/[\s.]+$/, '');
-	if (!cut) return fallback;
+	if (!cut) return fallback + ext.join('');
 	return (WINDOWS_RESERVED.test(cut) ? `${cut}_` : cut) + ext.join('');
 }
 

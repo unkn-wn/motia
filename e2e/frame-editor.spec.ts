@@ -430,4 +430,36 @@ test('dragging the label of a number changes it live, as one undo step', async (
 	await expectElement(app, rect.id, (el) => el.opacity === 0.6);
 	await app.undo();
 	await expectElement(app, rect.id, (el) => el.opacity === undefined);
+
+	// A field being typed in, then dragged on its label: the dragged value stays when the field loses focus
+	const opacity = app.page.getByTestId('inspector').locator('[name="opacity"]');
+	await app.press(opacity);
+	await app.drag({ x: box.x + 8, y: box.y + box.height / 2 }, { x: box.x - 22, y: box.y + box.height / 2 });
+	await expectElement(app, rect.id, (el) => el.opacity === 0.7);
+	await app.tap(await boardToScreen(app, { x: 1800, y: 1000 }));
+	await app.page.waitForTimeout(200);
+	await expectElement(app, rect.id, (el) => el.opacity === 0.7);
+});
+
+test('picking a stroke colour for a shape without one gives it a stroke that shows, also while dragging the picker', async ({ app }) => {
+	await openNewFrame(app);
+	const rect = await draw(app, 'Rectangle', { x: 200, y: 200 }, { x: 400, y: 400 });
+	expect(rect).toMatchObject({ stroke: null, strokeWidth: 0 });
+	// The picker dragged across a few colours over several frames, then closed: the width shows all along
+	const widths = await app.page.getByTestId('inspector').locator('[name="stroke"]').evaluate(async (el: HTMLInputElement, id: string) => {
+		const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+		const seen: number[] = [];
+		for (const v of ['#220000', '#660000', '#aa0000', '#ee0000']) {
+			setter.call(el, v);
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+			// Once this colour has landed (previews land on the next frame), read the width
+			const find = () => window.__motiaTest!.storyboard!.frames.flatMap((f) => f.elements).find((x) => x.id === id) as { stroke: string; strokeWidth: number };
+			for (let i = 0; i < 30 && find().stroke !== v; i++) await new Promise((r) => requestAnimationFrame(r));
+			seen.push(find().strokeWidth);
+		}
+		el.dispatchEvent(new Event('change', { bubbles: true }));
+		return seen;
+	}, rect.id);
+	expect(widths).toEqual([8, 8, 8, 8]);
+	await expectElement(app, rect.id, (el) => el.stroke === '#ee0000' && el.strokeWidth === 8);
 });

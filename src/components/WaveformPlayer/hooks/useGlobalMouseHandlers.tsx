@@ -215,7 +215,8 @@ export const useGlobalMouseHandlers = () => {
 			return () => {
 				document.removeEventListener('mousemove', handleGlobalMouseMove);
 				document.removeEventListener('mouseup', handleGlobalMouseUp as EventListener);
-				document.removeEventListener('contextmenu', handleGlobalMouseUp as EventListener);
+				// Same capture flag as when added, or the listener stays (one more per drag)
+				document.removeEventListener('contextmenu', handleGlobalMouseUp as EventListener, { capture: true } as EventListenerOptions);
 				document.removeEventListener('pointermove', handleGlobalMouseMove as EventListener);
 				document.removeEventListener('pointerup', handleGlobalMouseUp as EventListener);
 				document.removeEventListener('pointercancel', handleGlobalMouseUp as EventListener);

@@ -192,6 +192,8 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 	const { seekToTime, playPause } = useAudioActions();
 	const [previewing, setPreviewing] = useState(false);
 	const startPreview = useCallback(() => {
+		// Nothing to play (the song isn't on this device yet)
+		if (durationStore.getSnapshot() <= 0) return;
 		seekToTime(frame.time);
 		if (!isPlayingStore.getSnapshot()) playPause();
 		setPreviewing(true);
@@ -243,7 +245,11 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 
 			if (e.key === 'Escape') {
 				e.preventDefault();
-				closeFrameEditor();
+				// The topmost layer first: the preview, then an open popover, then the editor
+				if (previewing) stopPreview();
+				else if (showBoard) setShowBoard(false);
+				else if (showSymbols) setShowSymbols(false);
+				else closeFrameEditor();
 			} else if ((e.key === 'Delete' || e.key === 'Backspace') && !mod) {
 				if (!selected.length) return;
 				e.preventDefault();
@@ -280,7 +286,7 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 		};
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
-	}, [frame.id, commit, storyboardRef, closeFrameEditor, addCopies, setSelectedIds, projectId]);
+	}, [frame.id, commit, storyboardRef, closeFrameEditor, addCopies, setSelectedIds, projectId, previewing, stopPreview, showBoard, showSymbols]);
 
 	return (
 		<div
@@ -298,6 +304,7 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 			className="fixed inset-0 z-[60] flex flex-col bg-neutral-900 text-neutral-200 select-none animate-fade-in"
 		>
 			<EditorHeader
+				key={frame.id}
 				frameId={frame.id}
 				title={frame.title}
 				time={frame.time}

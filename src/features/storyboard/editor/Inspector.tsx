@@ -84,6 +84,8 @@ type Apply<T = string | null> = (v: T) => (doc: StoryboardDoc) => StoryboardDoc;
 function useLiveEdit() {
 	const { commit, storyboardRef, beginLiveEdit, liveUpdate, endLiveEdit, isLiveEditOpen } = useStoryboard();
 	const token = useRef<number | null>(null);
+	// The field the open live edit belongs to
+	const openLabel = useRef<string | null>(null);
 	const pending = useRef<((doc: StoryboardDoc) => StoryboardDoc) | null>(null);
 	const frame = useRef(0);
 	const isOpen = useCallback(() => token.current !== null && isLiveEditOpen(token.current), [isLiveEditOpen]);
@@ -104,13 +106,25 @@ function useLiveEdit() {
 	return useCallback(
 		<T,>(apply: Apply<T>, label: string) => ({
 			onLive: (v: T) => {
-				if (!isOpen()) token.current = beginLiveEdit('commit', label);
+				// Another field's edit still open (a picker closed without a change): it lands as its own step
+				if (isOpen() && openLabel.current !== label) {
+					flush();
+					endLiveEdit();
+				}
+				if (!isOpen()) {
+					token.current = beginLiveEdit('commit', label);
+					openLabel.current = label;
+				}
 				pending.current = apply(v);
 				if (!frame.current) frame.current = requestAnimationFrame(flush);
 			},
 			onCommit: (v: T) => {
 				cancelAnimationFrame(frame.current);
 				frame.current = 0;
+				if (isOpen() && openLabel.current !== label) {
+					flush();
+					endLiveEdit();
+				}
 				pending.current = null;
 				if (isOpen()) {
 					liveUpdate(apply(v));
@@ -138,7 +152,8 @@ type InspectorProps = {
 /** Right panel (bottom sheet on small screens): the selection's properties, or the frame's. */
 export function Inspector({ frame, selectedIds, notify, ordered, sheet }: InspectorProps) {
 	const selected = frame.elements.filter((el) => selectedIds.includes(el.id));
-	if (selected.length === 0) return <FrameInspector frame={frame} sheet={sheet} />;
+	// Keyed by frame (as the element panel is by element): a field never carries a draft to another frame
+	if (selected.length === 0) return <FrameInspector key={frame.id} frame={frame} sheet={sheet} />;
 	if (selected.length > 1) return <MultiInspector frame={frame} ids={selectedIds} sheet={sheet} />;
 	// Remounted per element: a field never carries a draft from one element to another
 	return <ElementInspector key={selected[0].id} frame={frame} el={selected[0]} notify={notify} ordered={ordered} sheet={sheet} />;
@@ -239,28 +254,35 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 	const box = elementBox(el);
 	// Each number as a change to the board: committed when typed, previewed live when dragged on its label (one undo
 	// step at the end)
+	// From the element as it is in the doc being changed (a drag's start), not as last rendered mid-drag
+	const inDoc = (doc: StoryboardDoc) => doc.frames.find((f) => f.id === frame.id)?.elements.find((x) => x.id === el.id) ?? el;
 	const onBox =
 		(key: 'x' | 'y' | 'w' | 'h'): Apply<number> =>
 		(v) =>
-		(doc) =>
-			replaceElements(doc, frame.id, new Map([[el.id, applyBox(el, box, { ...box, [key]: v })]]));
+		(doc) => {
+			const from = inDoc(doc);
+			const b = elementBox(from);
+			return replaceElements(doc, frame.id, new Map([[el.id, applyBox(from, b, { ...b, [key]: v })]]));
+		};
 	const onPatch =
 		(p: (v: number) => ElementPatch): Apply<number> =>
 		(v) =>
 		(doc) =>
 			patchElements(doc, frame.id, new Map([[el.id, p(v)]]));
-	const onRotate: Apply<number> = (v) => (doc) => replaceElements(doc, frame.id, new Map([[el.id, applyRotation(el, box, v)]]));
+	const onRotate: Apply<number> = (v) => (doc) => {
+		const from = inDoc(doc);
+		return replaceElements(doc, frame.id, new Map([[el.id, applyRotation(from, elementBox(from), v)]]));
+	};
 	const number = (apply: Apply<number>, label: string) => ({ onCommit: (v: number) => commit(apply(v)(storyboardRef.current), label), scrub: live(apply, label) });
 	// A stroke turned on for a shape without one gets a width that shows (a bordered shape, e.g. with no fill)
 	const setColour =
 		(key: 'fill' | 'stroke'): Apply =>
 		(v) =>
-		(doc) =>
-			patchElements(
-				doc,
-				frame.id,
-				new Map([[el.id, key === 'stroke' && v !== null && 'strokeWidth' in el && el.strokeWidth === 0 ? { stroke: v, strokeWidth: STROKE_ON_WIDTH } : { [key]: v }]])
-			);
+		(doc) => {
+			const from = inDoc(doc);
+			const turnOn = key === 'stroke' && v !== null && 'strokeWidth' in from && from.strokeWidth === 0;
+			return patchElements(doc, frame.id, new Map([[el.id, turnOn ? { stroke: v, strokeWidth: STROKE_ON_WIDTH } : { [key]: v }]]));
+		};
 	const hasFill = el.type === 'rect' || el.type === 'ellipse' || el.type === 'text';
 	const hasStroke = el.type === 'rect' || el.type === 'ellipse' || isPointsElement(el);
 	const type = TYPES[el.type];
@@ -314,10 +336,10 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 			) : null}
 			<div className={section}>
 				<div className="grid grid-cols-2 gap-1.5">
-					<NumberField label="x" prefix="X" name="x" value={box.x} {...number(onBox('x'), 'Move')} />
-					<NumberField label="y" prefix="Y" name="y" value={box.y} {...number(onBox('y'), 'Move')} />
-					<NumberField label="width" prefix="W" name="w" value={box.w} min={1} {...number(onBox('w'), 'Resize')} />
-					<NumberField label="height" prefix="H" name="h" value={box.h} min={1} {...number(onBox('h'), 'Resize')} />
+					<NumberField label="x" prefix="X" name="x" value={box.x} {...number(onBox('x'), 'MoveX')} />
+					<NumberField label="y" prefix="Y" name="y" value={box.y} {...number(onBox('y'), 'MoveY')} />
+					<NumberField label="width" prefix="W" name="w" value={box.w} min={1} {...number(onBox('w'), 'ResizeW')} />
+					<NumberField label="height" prefix="H" name="h" value={box.h} min={1} {...number(onBox('h'), 'ResizeH')} />
 					{!isPointsElement(el) ? (
 						<NumberField
 							label="rotation"
@@ -363,6 +385,7 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 							onChange={(e) => patch({ refFrameId: e.target.value }, 'FrameRefTarget')}
 							className="w-full min-w-0 h-7 rounded-md bg-neutral-800/60 px-1.5 text-sm text-neutral-100 outline-none hover:bg-neutral-800 focus:bg-neutral-800"
 						>
+							{el.refFrameId === frame.id ? <option value={el.refFrameId}>(this frame: choose another)</option> : null}
 							{el.refFrameId && !ordered.some((f) => f.id === el.refFrameId) ? <option value={el.refFrameId}>(deleted frame)</option> : null}
 							{!el.refFrameId ? <option value="">(choose a frame)</option> : null}
 							{ordered

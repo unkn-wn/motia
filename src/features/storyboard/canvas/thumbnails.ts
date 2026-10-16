@@ -5,12 +5,13 @@ import { cardSize } from './layout';
 
 // Frame thumbnails for the main canvas: FrameSvg → static SVG markup → decoded <img> → rasterized once into a
 // small canvas. Cached on the frame's `elements` array (immutable, and unchanged when a card is only moved or
-// retimed). An entry also records what else it was drawn from — board, background, the frames it references,
+// retimed), then by frame: a duplicate shares its elements but can have another background, and one entry for both
+// would be redrawn for each in turn, forever. An entry also records what else it was drawn from — board, background, the frames it references,
 // the symbols it uses, and whether its images had loaded — and is redrawn when any of those change.
 
 type Entry = { deps: unknown[]; canvas: HTMLCanvasElement | null; failedAt?: number };
 const RETRY_MS = 5000;
-const cache = new WeakMap<FrameElement[], Entry>();
+const cache = new WeakMap<FrameElement[], Map<string, Entry>>();
 
 let version = 0;
 let bumpScheduled = false;
@@ -63,13 +64,18 @@ export function getFrameThumbnail(frame: Frame, board: BoardFormat, ctx: Thumbna
 	// Each image's URL: changes only when that image has loaded (or turned out missing)
 	const withAssets = () => [...base, ...assets.map((id) => assetDataUrl(id))];
 	const deps = withAssets();
-	const existing = cache.get(frame.elements);
+	let byFrame = cache.get(frame.elements);
+	if (!byFrame) {
+		byFrame = new Map();
+		cache.set(frame.elements, byFrame);
+	}
+	const existing = byFrame.get(frame.id);
 	if (existing && sameDeps(existing.deps, deps)) {
 		// A failed render is retried after a pause, not on every animation frame
 		if (!(existing.failedAt && Date.now() - existing.failedAt > RETRY_MS)) return existing.canvas;
 	}
 	const entry: Entry = { deps, canvas: existing?.canvas ?? null };
-	cache.set(frame.elements, entry);
+	byFrame.set(frame.id, entry);
 	rasterize(frame, board, ctx, assets)
 		.then((canvas) => {
 			entry.canvas = canvas;

@@ -97,6 +97,8 @@ describe('validateMotiaJson rejects', () => {
 		expect(bad((d) => (d.frames[1].elements[0].type = 'script'))[0]).toContain('unknown element type');
 		expect(bad((d) => (d.frames[1].background = 'url(javascript:x)'))[0]).toContain('expected a hex colour');
 		expect(bad((d) => (d.board.width = 1e9))[0]).toContain('out of range');
+		// A line, arrow or pen without points has no place or size
+		expect(bad((d) => (d.frames[1].elements[2].points = []))).toEqual(['frames[1].elements[2].points: expected at least one point']);
 	});
 
 	it('duplicate ids, non-raster assets, a newer version, a foreign file', () => {
@@ -175,6 +177,8 @@ describe('safeFileName', () => {
 		expect(safeFileName(`${'a'.repeat(200)}.wav`, 'song')).toBe(`${'a'.repeat(120)}.wav`);
 		expect(safeFileName('CON.wav', 'song')).toBe('CON_.wav');
 		expect(safeFileName(' ..', 'storyboard')).toBe('storyboard');
+		// Nothing left of the name but its extension: the fallback keeps the extension
+		expect(safeFileName('   .mp3', 'song')).toBe('song.mp3');
 		expect(safeFileName('tab	here. ', 'x')).toBe('tab_here');
 	});
 });

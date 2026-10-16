@@ -253,6 +253,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		// Initialize WaveSurfer when an audio file is present; otherwise synthesize a fallback waveform
 		useEffect(() => {
 			if (!waveformRef.current) return;
+			// A song (or none) starts at 0: playback time is kept outside React, so the last project's time would
+			// otherwise carry over (the trim start, if any, is applied once the song is ready)
+			setCurrentTime(0);
 
 			// NO AUDIO FILE - random placeholder waveform
 			if (!audioFile) {
@@ -342,9 +345,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				setCurrentTime(wavesurfer.getCurrentTime());
 			};
 			wavesurfer.on('interaction', syncTime);
-			wavesurfer.on('seeking', () => {
-				clock = null;
-			});
+			wavesurfer.on('seeking', syncTime);
 			wavesurfer.on('play', () => {
 				cancelAnimationFrame(timeFrame);
 				clock = null;

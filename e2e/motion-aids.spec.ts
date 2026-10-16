@@ -124,6 +124,13 @@ test('frame strip: neighbours switch frames, the waveform seeks, play from frame
 	await app.page.keyboard.press(' ');
 	await expect(preview).toBeHidden();
 	await expect.poll(() => editingId(app)).toBe(b.id);
+
+	// Escape stops a preview, not the editor
+	await app.press(strip(app).getByRole('button', { name: /preview/ }));
+	await expect(preview).toBeVisible();
+	await app.page.keyboard.press('Escape');
+	await expect(preview).toBeHidden();
+	await expect(app.page.getByRole('dialog', { name: 'Frame editor' })).toBeVisible();
 });
 
 test('the strip shows every frame', async ({ app }) => {

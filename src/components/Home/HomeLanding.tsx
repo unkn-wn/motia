@@ -21,7 +21,7 @@ const HomeLanding: React.FC<Props> = ({ onUpload, uploading, onSignOut }) => {
 
   return (
     <>
-      <FileDropzone onFileSelect={onUpload} isLoading={uploading || importing}>
+      <FileDropzone onFileSelect={onUpload} isLoading={uploading || importing} onImportFile={importFile}>
         <HomeHero
           onUpload={onUpload}
           uploading={uploading || importing}

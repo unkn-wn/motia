@@ -1,6 +1,7 @@
 import { test, expect, type App } from './support/app';
 import { boundsOf, strokesOf } from './support/strokes';
 import { makeWav } from './support/wav';
+import { seekTo } from './support/frames';
 
 // Baseline behaviour that the storyboard work must not break. Runs on the desktop (mouse) and touch projects.
 
@@ -203,4 +204,17 @@ test('guest: the sign-in dialog stays open while the page updates', async ({ app
 	await app.addFrameViaHook(3, -410, 250);
 	await page.waitForTimeout(500);
 	await expect(email).toBeVisible();
+});
+
+test('the next project opened in the app starts at its own time, not the last one', async ({ app }) => {
+	const { page } = app;
+	await app.signIn();
+	await app.createProject('a.wav');
+	await app.chooseOrientation('vertical');
+	await seekTo(app, 12);
+	// In-app navigation keeps the page (and its playback state) loaded
+	await app.press(page.getByTitle('Projects', { exact: true }));
+	await page.waitForURL('**/projects');
+	await app.createProject('b.wav');
+	await expect.poll(async () => (await app.time()).current).toBeLessThan(0.5);
 });

@@ -137,10 +137,19 @@ export function NumberField(props: {
 				aria-hidden
 				onPointerDown={(e) => {
 					if (!scrub || e.button !== 0) return;
+					// A field being typed in settles first (what was typed lands), and the drag starts from that: this
+					// render's `value` is still the one before it
+					let from = value;
+					const input = inputRef.current;
+					if (input && document.activeElement === input) {
+						const typed = Number(input.value);
+						if (input.value.trim() !== '' && Number.isFinite(typed)) from = clamp(typed);
+						input.blur();
+					}
 					// Not a focus or text selection: a drag (a tap without moving still focuses the field, on release)
 					e.preventDefault();
 					e.currentTarget.setPointerCapture(e.pointerId);
-					drag.current = { x0: e.clientX, v0: value, v: value, moved: false };
+					drag.current = { x0: e.clientX, v0: from, v: from, moved: false };
 				}}
 				onPointerMove={(e) => {
 					const d = drag.current;
@@ -158,8 +167,9 @@ export function NumberField(props: {
 					drag.current = null;
 					if (!d || !scrub) return;
 					dragged.current = d.moved;
+					// A drag that moved always settles, even back at its start (its live edit is open)
 					if (!d.moved) inputRef.current?.focus();
-					else if (d.v !== d.v0) scrub.onCommit(d.v);
+					else scrub.onCommit(d.v);
 				}}
 				onClick={(e) => {
 					if (!dragged.current) return;
@@ -169,7 +179,7 @@ export function NumberField(props: {
 				onPointerCancel={() => {
 					const d = drag.current;
 					drag.current = null;
-					if (d?.moved && scrub && d.v !== d.v0) scrub.onCommit(d.v);
+					if (d?.moved && scrub) scrub.onCommit(d.v);
 				}}
 			>
 				{prefix}
@@ -244,8 +254,12 @@ export function ColorField(props: {
 						setDraft(e.target.value);
 						onLive(e.target.value);
 					}}
-					// A picker closed without a change (cancelled): show the value again
-					onBlur={() => setDraft(null)}
+					// A picker closed without a change event (cancelled): settle what it shows, so its live edit
+					// doesn't stay open under the next field's
+					onBlur={(e) => {
+						if (draft !== null) onCommitRef.current(e.currentTarget.value);
+						setDraft(null);
+					}}
 					className={`h-6 w-6 cursor-pointer rounded border border-neutral-700 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-[3px] [&::-webkit-color-swatch]:border-0 ${none ? 'opacity-0' : ''}`}
 				/>
 				{/* Transparent: a checkerboard with a slash (the picker still opens on it, to pick a colour) */}

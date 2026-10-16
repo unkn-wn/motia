@@ -74,6 +74,8 @@ export function useStoryboardState() {
 		(raw: string | undefined) => {
 			const { doc, readable } = parseStoryboard(raw);
 			if (!readable) console.error('Storyboard data could not be read; it will not be overwritten.');
+			// A drag left open belongs to the board being replaced: settling it later would write that board back
+			liveRef.current = null;
 			setStoryboard(doc);
 			setLoaded({ doc, status: readable ? 'loaded' : 'unreadable' });
 			history.clear();
@@ -84,6 +86,7 @@ export function useStoryboardState() {
 	/** An empty board that is not saved anywhere until a project loads. */
 	const resetStoryboard = useCallback(() => {
 		const doc = emptyStoryboard();
+		liveRef.current = null;
 		setStoryboard(doc);
 		setLoaded({ doc, status: 'idle' });
 	}, [setStoryboard]);

@@ -192,7 +192,8 @@ function ElementSvgImpl({ el, props, clipId }: ElementProps) {
 		}
 		case 'frameRef': {
 			const depth = props.depth ?? 0;
-			const target = depth < FRAME_REF_MAX_DEPTH ? props.resolveFrame?.(el.refFrameId) : undefined;
+			// A frame never shows itself (a reference pasted into the frame it points to)
+			const target = depth < FRAME_REF_MAX_DEPTH && el.refFrameId !== props.frame.id ? props.resolveFrame?.(el.refFrameId) : undefined;
 			return (
 				<g {...common} transform={transform}>
 					{target ? (
@@ -207,7 +208,13 @@ function ElementSvgImpl({ el, props, clipId }: ElementProps) {
 						w={w}
 						h={h}
 						label={target ? undefined : el.label}
-						caption={!target && el.refFrameId && props.resolveFrame && depth < FRAME_REF_MAX_DEPTH ? 'frame missing' : undefined}
+						caption={
+							!target && el.refFrameId && props.resolveFrame && depth < FRAME_REF_MAX_DEPTH
+								? el.refFrameId === props.frame.id
+									? 'this frame'
+									: 'frame missing'
+								: undefined
+						}
 						dashed
 					/>
 				</g>
@@ -231,7 +238,14 @@ const ElementSvg = memo(ElementSvgImpl, (a: ElementProps, b: ElementProps) => {
 			return p.assetUrl === q.assetUrl && p.resolveSymbol === q.resolveSymbol;
 		case 'frameRef':
 			// Draws another frame with every lookup
-			return p.board === q.board && p.depth === q.depth && p.resolveFrame === q.resolveFrame && p.assetUrl === q.assetUrl && p.resolveSymbol === q.resolveSymbol;
+			return (
+				p.frame.id === q.frame.id &&
+				p.board === q.board &&
+				p.depth === q.depth &&
+				p.resolveFrame === q.resolveFrame &&
+				p.assetUrl === q.assetUrl &&
+				p.resolveSymbol === q.resolveSymbol
+			);
 		default:
 			return true;
 	}

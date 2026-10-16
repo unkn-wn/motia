@@ -143,8 +143,12 @@ export function validateMotiaJson(input: unknown): ValidationResult {
 				return { ...base, type, ...box(), ...stroke(), fill: colorOrNull(o.fill, `${path}.fill`) };
 			case 'line':
 			case 'arrow':
-			case 'pen':
-				return { ...base, type, ...stroke(), points: points(o.points, `${path}.points`) };
+			case 'pen': {
+				// At least one point: an element without any has no place or size (NaN bounds in the editor)
+				const list = points(o.points, `${path}.points`);
+				if (list.length === 0) fail(`${path}.points`, 'expected at least one point');
+				return { ...base, type, ...stroke(), points: list };
+			}
 			case 'text':
 				return {
 					...base,

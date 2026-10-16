@@ -233,8 +233,9 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 			const effectiveTrimEnd = trimEnd || duration;
 			if (currentTime >= effectiveTrimEnd && isPlaying) {
 				ws.pause();
-				// Optionally seek back to trimStart
+				// Back to the trim start, and the playhead with it
 				ws.seekTo(trimStart / duration);
+				setCurrentTimeInternal(trimStart);
 			}
 		};
 
@@ -242,7 +243,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 		return () => {
 			ws.un('timeupdate', handleTimeUpdate);
 		};
-	}, [trimStart, trimEnd, duration, isPlaying]);
+	}, [trimStart, trimEnd, duration, isPlaying, setCurrentTimeInternal]);
 
 	// Memoize the context value to prevent unnecessary rerenders
 	const contextValue: AudioContextType = useMemo(

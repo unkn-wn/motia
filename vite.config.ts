@@ -39,6 +39,9 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				manualChunks(id) {
+					// The server renderer (frame thumbnails, export) is loaded on first use; in the react-dom chunk it
+					// would be downloaded on every page load
+					if (/node_modules[\/]react-dom[\/](server|cjs[\/]react-dom-server)/.test(id)) return 'react-dom-server';
 					if (id.includes('node_modules')) {
 						return id.toString().split('node_modules/')[1].split('/')[0].toString();
 					}

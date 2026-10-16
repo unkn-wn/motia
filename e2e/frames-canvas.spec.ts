@@ -2,6 +2,7 @@ import { test, expect, type App, type Pt } from './support/app';
 import { addFrameAt, anchorOnScreen, axis, cardGrip, frameById, frames, seekTo } from './support/frames';
 import { boundsOf, strokesOf } from './support/strokes';
 import type { Frame } from '../src/features/storyboard/types';
+import { boardToScreen, draw } from './support/editor';
 
 // M2: frames on the main canvas, in both orientations, with mouse (desktop) and touch.
 
@@ -255,6 +256,21 @@ for (const orientation of ['vertical', 'horizontal'] as const) {
 
 			await app.tap(await cardGrip(app, f.id));
 			await app.page.waitForTimeout(300);
+			expect(await rafCallsOverOneSecond(app)).toBe(0);
+		});
+
+		test('idle canvas: a duplicate with another background redraws its thumbnail once, not in a loop', async ({ app }) => {
+			const { page } = app;
+			await addFrameAt(app, 5, { keepEditorOpen: true });
+			await draw(app, 'Rectangle', { x: 300, y: 300 }, { x: 900, y: 700 });
+			// The copy keeps the same elements; only this frame's background changes
+			await app.press(page.getByTestId('frame-strip').getByRole('button', { name: /duplicate/ }));
+			await expect.poll(async () => (await frames(app)).length).toBe(2);
+			await app.tap(await boardToScreen(app, { x: 1800, y: 1000 }));
+			await page.getByTestId('inspector').locator('[name="frame-background"]').fill('#3355aa');
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('dialog', { name: 'Frame editor' })).toBeHidden();
+			await page.waitForTimeout(1500);
 			expect(await rafCallsOverOneSecond(app)).toBe(0);
 		});
 

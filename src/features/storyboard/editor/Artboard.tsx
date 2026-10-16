@@ -33,9 +33,9 @@ type Gesture =
 	| { kind: 'pan'; client: Pt; view: View }
 	| { kind: 'pinch'; dist: number; mid: Pt; view: View }
 	| { kind: 'move'; start: Pt; client: Pt; moved: boolean; originals: FrameElement[] }
-	| { kind: 'endpoint'; index: number; el: Extract<FrameElement, { points: Point[] }> }
-	| { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; start: Pt; el: FrameElement; box: Box }
-	| { kind: 'rotate'; el: FrameElement; box: Box }
+	| { kind: 'endpoint'; index: number; el: Extract<FrameElement, { points: Point[] }>; client: Pt; moved: boolean }
+	| { kind: 'resize'; handle: Exclude<Handle, 'rotate'>; start: Pt; el: FrameElement; box: Box; client: Pt; moved: boolean }
+	| { kind: 'rotate'; el: FrameElement; box: Box; client: Pt; moved: boolean }
 	| { kind: 'marquee'; start: Pt; base: string[] }
 	| { kind: 'shape'; tool: ShapeTool; start: Pt; client: Pt; id: string }
 	| { kind: 'pen'; points: Point[] }
@@ -281,7 +281,7 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 			const end = endpointAt(client);
 			if (end !== null && lineEnds) {
 				beginLiveEdit('commit', 'MoveEndpoint');
-				gestureRef.current = { kind: 'endpoint', index: end, el: lineEnds };
+				gestureRef.current = { kind: 'endpoint', index: end, el: lineEnds, client, moved: false };
 				return;
 			}
 			const hit = hitTestElements(frame.elements, p, HIT_TOLERANCE_PX / view.scale);
@@ -292,10 +292,10 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 				const box = elementBox(single);
 				if (handle === 'rotate') {
 					beginLiveEdit('commit', 'Rotate');
-					gestureRef.current = { kind: 'rotate', el: single, box };
+					gestureRef.current = { kind: 'rotate', el: single, box, client, moved: false };
 				} else {
 					beginLiveEdit('commit', 'Resize');
-					gestureRef.current = { kind: 'resize', handle, start: snapPt(p), el: single, box };
+					gestureRef.current = { kind: 'resize', handle, start: snapPt(p), el: single, box, client, moved: false };
 				}
 				return;
 			}
@@ -343,6 +343,11 @@ export function Artboard({ frame, board, tool, setTool, selectedIds, setSelected
 		const g = gestureRef.current;
 		if (!g) return;
 		const p = toFrame(client);
+		// A press on a handle with a little jitter changes nothing (and records no undo step)
+		if (g.kind === 'resize' || g.kind === 'rotate' || g.kind === 'endpoint') {
+			if (!g.moved && Math.hypot(client.x - g.client.x, client.y - g.client.y) < DRAG_THRESHOLD_PX) return;
+			g.moved = true;
+		}
 		switch (g.kind) {
 			case 'pinch': {
 				if (pointersRef.current.size < 2) return;
