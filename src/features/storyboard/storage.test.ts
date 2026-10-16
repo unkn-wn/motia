@@ -24,19 +24,6 @@ describe('storyboard storage', () => {
 		expect(parsed).toEqual(doc);
 	});
 
-	it('gives an element id repeated within a frame a new id, and keeps ids shared across frames', () => {
-		const doc = sample();
-		const [el] = doc.frames[0].elements;
-		const other = { ...createFrame({ time: 70, canvasX: 0, canvasY: 0 }), elements: [el] };
-		const broken = { ...doc, frames: [{ ...doc.frames[0], elements: [...doc.frames[0].elements, { ...el, x: 50 }] }, other] };
-		const { doc: parsed } = parseStoryboard(serializeStoryboard(broken));
-		const ids = parsed.frames[0].elements.map((e) => e.id);
-		expect(new Set(ids).size).toBe(3);
-		expect(ids.slice(0, 2)).toEqual(['e1', 'e6']);
-		expect(parsed.frames[0].elements[2]).toMatchObject({ x: 50, type: 'rect' });
-		expect(parsed.frames[1].elements[0].id).toBe('e1');
-	});
-
 	it('treats a missing field as an empty, writable board', () => {
 		for (const raw of [undefined, null, '']) {
 			const { doc, readable } = parseStoryboard(raw);

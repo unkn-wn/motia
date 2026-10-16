@@ -14,7 +14,7 @@ import { canvasPng, createContactSheet, frameImage, frameMarkup, type RenderCont
 // every frame, the images, and the song when asked. Frames render one at a time, yielding between them, so the page
 // stays responsive on big boards.
 
-export type ExportInput = {
+type ExportInput = {
 	title: string;
 	orientation: 'vertical' | 'horizontal';
 	notes: Note[];
@@ -29,7 +29,7 @@ const XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>\n';
 const NAME_LIMIT = 120;
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
 /** Larger frame images are scaled down to fit (browsers refuse bigger canvases, Safari first). */
-export const MAX_CANVAS_PIXELS = 16_000_000;
+const MAX_CANVAS_PIXELS = 16_000_000;
 
 /** A name that is safe on every file system: no separators or control characters, extension kept. */
 export function safeFileName(name: string, fallback: string): string {
@@ -60,9 +60,9 @@ const nextTask = () =>
 	});
 const bytesOf = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
 
-export type ExportResult = { blob: Blob; fileName: string; warnings: string[] };
+type ExportResult = { blob: Blob; fileName: string; warnings: string[] };
 
-export async function buildExportZip(input: ExportInput): Promise<ExportResult> {
+async function buildExportZip(input: ExportInput): Promise<ExportResult> {
 	const { storyboard, onProgress } = input;
 	const ordered = framesByTime(storyboard.frames);
 	const steps = ordered.length + 2;

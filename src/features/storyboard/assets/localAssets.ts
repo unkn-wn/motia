@@ -1,7 +1,7 @@
-// Images used by boxes and image elements live only on this device, in IndexedDB (never in Firestore).
+// Pictures used by boxes and symbols live only on this device, in IndexedDB (never in Firestore).
 // Keyed by asset id; the projectId index lets a project's images be removed with the project.
 
-export type StoredAsset = {
+type StoredAsset = {
 	id: string;
 	projectId: string;
 	mime: string;

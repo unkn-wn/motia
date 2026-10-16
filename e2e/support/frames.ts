@@ -2,8 +2,8 @@ import { expect, type App, type Pt } from './app';
 import type { Frame } from '../../src/features/storyboard/types';
 
 // Frame geometry on the main canvas, mirrored from src/features/storyboard/canvas/layout.ts.
-export const CARD_WIDTH = 240;
-export const CARD_HEADER = 28;
+const CARD_WIDTH = 240;
+const CARD_HEADER = 28;
 
 export async function frames(app: App): Promise<Frame[]> {
 	return (await app.storyboard()).frames;

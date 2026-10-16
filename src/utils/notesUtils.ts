@@ -7,7 +7,7 @@ import type { Note } from '../types';
 /**
  * Generates a unique note ID
  */
-export const generateNoteId = (): string => {
+const generateNoteId = (): string => {
   return `note_${Date.now()}_${Math.random()}`;
 };
 

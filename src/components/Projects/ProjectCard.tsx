@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { AudioLinesIcon, Trash2Icon } from '@/assets/icons';
 import { MAX_PROJECT_TITLE_LENGTH } from '@/types/firebase';
 
-export interface ProjectCardProps {
+interface ProjectCardProps {
   id: string;
   title: string;
   updatedAt?: Date | number | null;
@@ -21,7 +21,7 @@ function formatMeta(updatedAt?: Date | number | null, durationSec?: number | nul
   return bits.join(' • ');
 }
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, durationSec, thumbnailUrl, onRename, onDelete, isBusy }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ id, title, updatedAt, durationSec, thumbnailUrl, onRename, onDelete, isBusy }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const inputRef = useRef<HTMLInputElement>(null);

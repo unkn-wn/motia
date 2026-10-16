@@ -18,7 +18,6 @@ import {
 	SquareSquare,
 	Shapes,
 	Square,
-	SquareDashed,
 	Type,
 	Undo2,
 	X,
@@ -43,7 +42,6 @@ import { Inspector } from './Inspector';
 import { BoardPopover } from './BoardPopover';
 import { TextField } from './fields';
 import { moveElement, type Pt } from './geometry';
-import { ImagePickButton } from './ImagePick';
 import { SymbolsPopover } from './SymbolsPopover';
 import { useImageIntake } from './useImages';
 import { useDismiss, useDockFit } from '@/hooks/useDockFit';
@@ -66,7 +64,8 @@ const TOOLS: Array<{ tool: Tool; label: string; icon: React.ReactNode }> = [
 	{ tool: 'arrow', label: 'Arrow', icon: <MoveUpRight className="w-5 h-5" /> },
 	{ tool: 'text', label: 'Text', icon: <Type className="w-5 h-5" /> },
 	{ tool: 'pen', label: 'Pen', icon: <Pen className="w-5 h-5" /> },
-	{ tool: 'box', label: 'Box', icon: <SquareDashed className="w-5 h-5" /> },
+	// Draws the area an image goes in; the image itself is added in the panel (or dropped onto the board)
+	{ tool: 'box', label: 'Image', icon: <ImageIcon className="w-5 h-5" /> },
 	{ tool: 'frameRef', label: 'Frame reference', icon: <PictureInPicture2 className="w-5 h-5" /> },
 ];
 
@@ -126,7 +125,6 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 	const [fitSignal, setFitSignal] = useState(0);
 	const fit = useCallback(() => setFitSignal((n) => n + 1), []);
 	const toggleSymbols = useCallback(() => setShowSymbols((v) => !v), []);
-	const pickImage = useCallback((file: File) => void insertImageRef.current(file), []);
 	const dropImage = useCallback((file: File, at: Pt) => void insertImageRef.current(file, at), []);
 
 	// Selection belongs to this frame and only names elements that still exist (undo can remove them)
@@ -152,15 +150,14 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 	// A new frame reference shows the previous frame by time (or another frame when this is the first)
 	const defaultRefFrameId = prevFrame?.id ?? ordered.find((f) => f.id !== frame.id)?.id ?? '';
 
-	/** An image element from a file, fitted within half the board, centred at `at`. */
+	/** An image dropped onto the board: a box holding it, fitted within half the board, centred where it landed. */
 	const insertImage = useCallback(
-		async (file: File, at?: Pt) => {
+		async (file: File, at: Pt) => {
 			const added = await intake(file);
 			// The frame may have gone (undo, project change) while the image was read
 			if (!added || !storyboardRef.current.frames.some((f) => f.id === frame.id)) return;
 			const { width: w, height: h } = fitWithin(added.asset.width, added.asset.height, Math.min(board.width, board.height) * 0.5);
-			const c = at ?? { x: board.width / 2, y: board.height / 2 };
-			const el: FrameElement = { id: newId('e_'), type: 'image', x: c.x - w / 2, y: c.y - h / 2, w, h, rotation: 0, assetId: added.asset.id };
+			const el: FrameElement = { id: newId('e_'), type: 'box', x: at.x - w / 2, y: at.y - h / 2, w, h, rotation: 0, assetId: added.asset.id };
 			commit(addElements(added.record(storyboardRef.current), frame.id, [el]), 'AddImage');
 			setSelectedIds([el.id]);
 		},
@@ -334,7 +331,7 @@ function OpenFrameEditor({ frame, board, frames }: { frame: Frame; board: BoardF
 							fitSignal={fitSignal}
 						/>
 						{previewing ? <PlaybackPreview ordered={ordered} board={board} onStop={stopPreview} /> : null}
-						<ToolDock tool={tool} setTool={setTool} showSymbols={showSymbols} onToggleSymbols={toggleSymbols} onImage={pickImage} />
+						<ToolDock tool={tool} setTool={setTool} showSymbols={showSymbols} onToggleSymbols={toggleSymbols} />
 						{showSymbols ? <SymbolsPopover onPlace={placeSymbol} notify={notify} /> : null}
 						{showBoard ? <BoardPopover board={board} /> : null}
 						{notice ? (
@@ -381,13 +378,11 @@ const ToolDock = memo(function ToolDock({
 	setTool,
 	showSymbols,
 	onToggleSymbols,
-	onImage,
 }: {
 	tool: Tool;
 	setTool: (t: Tool) => void;
 	showSymbols: boolean;
 	onToggleSymbols: () => void;
-	onImage: (file: File) => void;
 }) {
 	const undoFlags = useSyncExternalStore(subscribeHistory, historyFlags);
 	// The tool keys, as bound in Settings (shown in the buttons' tooltips)
@@ -419,16 +414,6 @@ const ToolDock = memo(function ToolDock({
 					{t.icon}
 				</button>
 			))}
-			<ImagePickButton
-				className={dockButton(false, false, level)}
-				title="Image"
-				onFile={(file) => {
-					if (inMenu) closeMenu();
-					onImage(file);
-				}}
-			>
-				<ImageIcon className="w-5 h-5" />
-			</ImagePickButton>
 			<button
 				type="button"
 				onClick={() => {

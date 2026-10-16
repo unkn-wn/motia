@@ -43,17 +43,17 @@ const BannerButton: React.FC<BannerButtonProps> = ({ variant = 'neutral', alt, c
   );
 };
 
-export const Banner = Object.assign(BannerBase, { Button: BannerButton }) as BannerComponent;
+const Banner = Object.assign(BannerBase, { Button: BannerButton }) as BannerComponent;
 
 // Option API and orchestrator
-export type BannerOption = {
+type BannerOption = {
   id: string;
   show: boolean;
   priority: number; // higher wins
   render: () => React.ReactNode;
 };
 
-export const TopBanner: React.FC<{ options: BannerOption[] }> = ({ options }) => {
+const TopBanner: React.FC<{ options: BannerOption[] }> = ({ options }) => {
   const active = useMemo(() => {
     const candidates = options.filter(o => o.show);
     if (candidates.length === 0) return null;

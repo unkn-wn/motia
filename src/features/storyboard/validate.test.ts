@@ -27,7 +27,7 @@ const storyboard: StoryboardDoc = {
 				{ id: 'e4', type: 'box', x: 1500, y: 500, w: 400, h: 400, rotation: 0, symbolId: 's1' },
 				{ id: 'e5', type: 'frameRef', x: 100, y: 100, w: 600, h: 300, rotation: 0, refFrameId: 'f_early', label: 'PREV SCENE' },
 				{ id: 'e6', type: 'pen', points: [[10, 20], [14, 26]], stroke: '#9ca3af', strokeWidth: 4 },
-				{ id: 'e7', type: 'image', x: 0, y: 0, w: 100, h: 100, rotation: 0, assetId: 'a1', opacity: 0.5 },
+				{ id: 'e7', type: 'box', x: 0, y: 0, w: 100, h: 100, rotation: 0, assetId: 'a1', opacity: 0.5 },
 				{ id: 'e8', type: 'ellipse', x: 0, y: 0, w: 10, h: 10, rotation: 0, fill: null, stroke: '#fff', strokeWidth: 2 },
 			],
 		},
@@ -165,6 +165,8 @@ describe('STORYBOARD.md', () => {
 		expect(md).toContain('| e1 | rect | top border |  | tilts on the hit |');
 		expect(md).toContain('| e2 | text | hero | Taking overnight |  |');
 		expect(md).toContain('| e4 | box (symbol s1) | coin |  |  |');
+		// A box's own picture is marked (a symbol's is listed with the symbol)
+		expect(md).toContain('| e7 | box (image) |  |  |  |');
 		expect(md).toContain('| s1 | coin | gold casino coin | assets/a1.png |');
 		expect(md).toContain('Board 1920×1080 · 30 fps · style: hard hitting');
 	});

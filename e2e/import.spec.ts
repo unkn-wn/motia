@@ -3,6 +3,7 @@ import { test, expect, type App } from './support/app';
 import { mergeDoc, notesDocsMentioning, projectIds, projectMetaPath, projectNotesPath, readDoc, writeDoc } from './support/emulator';
 import { exportZip } from './support/export';
 import { makePng, svgFile } from './support/images';
+import { draw } from './support/editor';
 import { compressDrawingAdaptive } from '../src/utils/drawingUtils';
 import type { MotiaJson } from '../src/features/storyboard/io/motiaJson';
 import type { StoryboardDoc } from '../src/features/storyboard/types';
@@ -68,7 +69,8 @@ async function seedProjectA(app: App) {
 	// An image in the first frame (stored on this device); the editor is opened directly (opening it is tested elsewhere)
 	await app.page.evaluate(() => window.__motiaTest!.openFrameEditor!('f_check'));
 	await expect(app.page.getByRole('dialog', { name: 'Frame editor' })).toBeVisible();
-	await app.page.getByTestId('file-Image').setInputFiles({ name: 'coin.png', mimeType: 'image/png', buffer: makePng(80, 60, [255, 200, 0]) });
+	await draw(app, 'Image', { x: 100, y: 100 }, { x: 400, y: 325 });
+	await app.page.getByTestId('file-Add image').setInputFiles({ name: 'coin.png', mimeType: 'image/png', buffer: makePng(80, 60, [255, 200, 0]) });
 	await expect.poll(async () => (await app.storyboard()).assets.length).toBe(1);
 	await app.press(app.page.getByRole('button', { name: 'Close frame editor' }));
 	await app.saveAndWaitForStoryboard((doc) => doc.assets.length === 1);

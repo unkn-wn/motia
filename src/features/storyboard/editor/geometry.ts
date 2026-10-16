@@ -6,8 +6,8 @@ import type { FrameElement, Point } from '../types';
 export type Pt = { x: number; y: number };
 export type Box = { x: number; y: number; w: number; h: number; rotation: number };
 export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | 'rotate';
-export type PointsElement = Extract<FrameElement, { points: Point[] }>;
-export type BoxElement = Exclude<FrameElement, PointsElement>;
+type PointsElement = Extract<FrameElement, { points: Point[] }>;
+type BoxElement = Exclude<FrameElement, PointsElement>;
 
 export const isPointsElement = (el: FrameElement): el is PointsElement => 'points' in el;
 
@@ -156,13 +156,13 @@ export function rotationToward(b: Box, p: Pt, snap: boolean): number {
 }
 
 /** Maps points from one box onto another (resizing a line, arrow or pen stroke). */
-export function mapPoints(points: Point[], from: Box, to: Box): Point[] {
+function mapPoints(points: Point[], from: Box, to: Box): Point[] {
 	const kx = from.w ? to.w / from.w : 1;
 	const ky = from.h ? to.h / from.h : 1;
 	return points.map(([x, y]) => [to.x + (x - from.x) * kx, to.y + (y - from.y) * ky]);
 }
 
-export function rotatePoints(points: Point[], c: Pt, deg: number): Point[] {
+function rotatePoints(points: Point[], c: Pt, deg: number): Point[] {
 	return points.map(([x, y]) => {
 		const q = rotatePoint({ x, y }, c, deg);
 		return [q.x, q.y];

@@ -12,27 +12,6 @@ export const formatTime = (time: number): string => {
 };
 
 /**
- * Converts time to progress ratio (0-1)
- */
-export const timeToProgress = (time: number, duration: number): number => {
-  return duration > 0 ? time / duration : 0;
-};
-
-/**
- * Converts progress ratio (0-1) to time
- */
-export const progressToTime = (progress: number, duration: number): number => {
-  return progress * duration;
-};
-
-/**
- * Clamps time value between 0 and duration
- */
-export const clampTime = (time: number, duration: number): number => {
-  return Math.max(0, Math.min(duration, time));
-};
-
-/**
  * Calculate how long ago
  */
 export const formatTimeAgo = (date: Date): string => {

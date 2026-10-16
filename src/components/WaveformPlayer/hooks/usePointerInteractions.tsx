@@ -308,6 +308,8 @@ export const usePointerInteractions = () => {
 		[
 			isDrawingMode,
 			toolMode,
+			noteLayoutCache,
+			setDragging,
 			setIsPanning,
 			setIsFollowingPlayhead,
 			canvasRef,
@@ -682,7 +684,7 @@ export const usePointerInteractions = () => {
 				}
 			}
 		},
-		[setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform, toolMode, ctx, frameTargetAt, storyboard]
+		[setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform, toolMode, ctx, frameTargetAt, storyboard, selectionBox, setSelectionBox]
 	);
 
 	const handleWheel = useCallback(

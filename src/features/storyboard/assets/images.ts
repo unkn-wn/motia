@@ -1,9 +1,9 @@
-// Images for boxes and image elements: raster only, recognised by their bytes (not the name or the browser's type),
+// Pictures for boxes (and symbols): raster only, recognised by their bytes (not the name or the browser's type),
 // and downscaled to at most MAX_IMAGE_SIDE on the long side. Vector images (SVG) are never accepted.
 
-export type RasterMime = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+type RasterMime = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
 
-export const MAX_IMAGE_SIDE = 2048;
+const MAX_IMAGE_SIDE = 2048;
 
 const startsWith = (b: Uint8Array, sig: number[], at = 0) => sig.every((v, i) => b[at + i] === v);
 

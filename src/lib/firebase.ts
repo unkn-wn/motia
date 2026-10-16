@@ -1,8 +1,7 @@
-// Firebase bootstrap: initialize App/Auth/Firestore and safely expose Analytics
+// Firebase bootstrap: initialize App/Auth/Firestore
 // Note: These public client keys are fine to ship; consider moving to Vite env vars later if preferred.
 
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAnalytics, isSupported as analyticsIsSupported, type Analytics } from 'firebase/analytics';
 import { connectAuthEmulator, getAuth, type Auth } from 'firebase/auth';
 import {
   connectFirestoreEmulator,
@@ -63,14 +62,4 @@ try {
 }
 if (useEmulator) connectFirestoreEmulator(firestore, '127.0.0.1', 8080);
 
-// Analytics: only in the browser and when supported. Expose via a helper to avoid SSR build issues.
-export async function getAnalyticsIfSupported(): Promise<Analytics | undefined> {
-  if (typeof window === 'undefined') return undefined;
-  try {
-    return (await analyticsIsSupported()) ? getAnalytics(app) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export { app, auth, firestore };
+export { auth, firestore };

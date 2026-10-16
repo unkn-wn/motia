@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { KeyboardShortcut } from '@utils/shortcutsUtils';
-import { XIcon } from '@assets/icons'; // RotateCcwIcon commented out with reset button
+import { XIcon } from '@assets/icons';
 import Modal from '@/components/Modal';
 import { AudioTrimSettings } from './AudioTrimSettings';
 import { KeyboardShortcutsContent } from './KeyboardShortcutsContent';

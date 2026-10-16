@@ -3,11 +3,20 @@ import { addFrameAt, cardGrip, frameById } from './support/frames';
 import { boardToScreen, draw, editingId, elements, expectElement, setField } from './support/editor';
 import { makePng, svgFile } from './support/images';
 
-// M5: boxes, frame references, images and symbols; images stay on the device.
+// M5: boxes (a dashed placeholder, or a picture), frame references and symbols; pictures stay on the device.
 
 const editor = (app: App) => app.page.getByRole('dialog', { name: 'Frame editor' });
 const artboardSvg = (app: App) => app.page.getByTestId('artboard').locator('svg[data-frame-id]').first();
 const png = (name: string, w: number, h: number, rgb: [number, number, number]) => ({ name, mimeType: 'image/png', buffer: makePng(w, h, rgb) });
+/** An image element holding its own picture. */
+const isPicture = (el: { type: string }) => el.type === 'box' && typeof (el as { assetId?: unknown }).assetId === 'string';
+type Pt = { x: number; y: number };
+/** Draws an image's area with the Image tool, then picks its picture in the panel. */
+async function addPicture(app: App, from: Pt, to: Pt, file: { name: string; mimeType: string; buffer: Buffer }) {
+	const el = await draw(app, 'Image', from, to);
+	await app.page.getByTestId('file-Add image').setInputFiles(file);
+	return el;
+}
 
 async function openProject(app: App) {
 	await app.signIn();
@@ -51,10 +60,10 @@ const imageHrefWidth = (app: App, selector: string) =>
 		return (await createImageBitmap(await (await fetch(href)).blob())).width;
 	}, selector);
 
-test('box: a dashed placeholder with its label; an attached image fills it', async ({ app }) => {
+test('box: a dashed placeholder with its label; with a picture, just the picture; removing it brings the placeholder back', async ({ app }) => {
 	await openProject(app);
 	await addFrameAt(app, 5, { keepEditorOpen: true });
-	const box = await draw(app, 'Box', { x: 600, y: 300 }, { x: 1000, y: 700 });
+	const box = await draw(app, 'Image', { x: 600, y: 300 }, { x: 1000, y: 700 });
 	await setField(app, 'label', 'coin');
 	const node = artboardSvg(app).locator(`[data-id="${box.id}"]`);
 	await expect(node.locator('rect[stroke-dasharray]')).toHaveCount(1);
@@ -63,7 +72,42 @@ test('box: a dashed placeholder with its label; an attached image fills it', asy
 	await app.page.getByTestId('file-Add image').setInputFiles(png('coin.png', 64, 64, [255, 200, 0]));
 	await expectElement(app, box.id, (el) => typeof el.assetId === 'string');
 	await expect(node.locator('image')).toHaveAttribute('preserveAspectRatio', 'xMidYMid slice');
+	// Just the picture: no dashed outline, no label drawn (it stays the element's name)
+	await expect(node.locator('rect[stroke-dasharray]')).toHaveCount(0);
+	await expect(node).not.toContainText('coin');
+	await expect(node).toHaveAttribute('data-label', 'coin');
+	await expect(app.page.getByTestId('inspector').locator('[name="label"]')).toHaveValue('coin');
+
+	await app.press(app.page.getByTestId('inspector').getByRole('button', { name: 'Remove image' }));
+	await expectElement(app, box.id, (el) => el.assetId === undefined);
+	await expect(node.locator('rect[stroke-dasharray]')).toHaveCount(1);
 	await expect(node).toContainText('coin');
+});
+
+test('an image with a picture: saved as a symbol and placed again', async ({ app }) => {
+	const { page } = app;
+	await openProject(app);
+	await addFrameAt(app, 5, { keepEditorOpen: true });
+	await addPicture(app, { x: 200, y: 200 }, { x: 600, y: 600 }, png('logo.png', 80, 40, [200, 0, 0]));
+	await expect.poll(async () => (await elements(app)).filter(isPicture).length).toBe(1);
+	const picture = (await elements(app))[0];
+	// The panel calls it an image and offers saving it as a symbol
+	await expect(page.getByTestId('inspector').locator('[name="label"]')).toHaveAttribute('placeholder', 'Image');
+	await app.press(page.getByRole('button', { name: 'Save as symbol' }));
+	await expect.poll(async () => (await app.storyboard()).symbols.map((s) => s.label)).toEqual(['image']);
+	const symbol = (await app.storyboard()).symbols[0];
+	expect(typeof symbol.assetId).toBe('string');
+	await expectElement(app, picture.id, (el) => el.symbolId === symbol.id && el.assetId === undefined);
+	// Now an instance: the panel shows the symbol's name
+	await expect(page.getByTestId('inspector').locator('[name="label"]')).toHaveAttribute('placeholder', 'image');
+
+	await app.press(page.getByRole('button', { name: 'Symbols' }));
+	await app.press(page.getByRole('dialog', { name: 'Symbols' }).getByRole('button', { name: /place/ }));
+	await expect.poll(async () => (await elements(app)).filter((e) => (e as { symbolId?: string }).symbolId === symbol.id).length).toBe(2);
+	// Both show the picture, nothing else
+	const instances = artboardSvg(app).locator('[data-type="box"]');
+	await expect(instances.locator('image')).toHaveCount(2);
+	await expect(instances.locator('rect[stroke-dasharray]')).toHaveCount(0);
 });
 
 test('frame reference: shows the previous frame, live; nesting stops at depth 2', async ({ app }) => {
@@ -102,14 +146,19 @@ test('frame reference: shows the previous frame, live; nesting stops at depth 2'
 	await expectElement(app, ref.id, (el) => el.refFrameId === c);
 });
 
-test('image: file picker and drag-drop, raster only, downscaled to 2048 px, stored on the device', async ({ app }) => {
+test('image: picked in the panel or dropped on the board, raster only, downscaled to 2048 px, stored on the device', async ({ app }) => {
 	const { page } = app;
 	await openProject(app);
 	await addFrameAt(app, 5, { keepEditorOpen: true });
 
-	await page.getByTestId('file-Image').setInputFiles(png('wide.png', 3000, 1000, [0, 120, 255]));
-	await expect.poll(async () => (await elements(app)).filter((e) => e.type === 'image').length).toBe(1);
-	const img = (await elements(app))[0] as { assetId: string; w: number; h: number };
+	// The first picture fits inside the drawn area, whole and centred
+	await addPicture(app, { x: 200, y: 200 }, { x: 1400, y: 800 }, png('wide.png', 3000, 1000, [0, 120, 255]));
+	await expect.poll(async () => (await elements(app)).filter(isPicture).length).toBe(1);
+	const img = (await elements(app))[0] as { id: string; assetId: string; x: number; y: number; w: number; h: number };
+	// (stored at 2048×683, so the height is about a third of the width)
+	expect(img).toMatchObject({ x: 200, w: 1200 });
+	expect(img.h).toBeCloseTo(400, 0);
+	expect(img.y + img.h / 2).toBeCloseTo(500, 0);
 	const meta = (await app.storyboard()).assets.find((x) => x.id === img.assetId)!;
 	expect(meta).toMatchObject({ mime: 'image/png', width: 2048, height: 683 });
 	expect(await storedImage(app, img.assetId)).toEqual({ width: 2048, height: 683, type: 'image/png' });
@@ -117,6 +166,8 @@ test('image: file picker and drag-drop, raster only, downscaled to 2048 px, stor
 	expect(await assetCount(app)).toBe(1);
 	await expect(artboardSvg(app).locator(`[data-id] image`)).toHaveCount(1);
 	expect(await imageHrefWidth(app, '[data-testid="artboard"] svg[data-frame-id] [data-id] image')).toBe(2048);
+	// A picture, not a placeholder
+	await expect(artboardSvg(app).locator(`[data-id="${img.id}"] rect[stroke-dasharray]`)).toHaveCount(0);
 
 	// Drag and drop a file onto the artboard
 	const drop = await boardToScreen(app, { x: 1500, y: 800 });
@@ -130,15 +181,15 @@ test('image: file picker and drag-drop, raster only, downscaled to 2048 px, stor
 		},
 		{ x: drop.x, y: drop.y, bytes }
 	);
-	await expect.poll(async () => (await elements(app)).filter((e) => e.type === 'image').length).toBe(2);
+	await expect.poll(async () => (await elements(app)).filter(isPicture).length).toBe(2);
 	const dropped = (await elements(app))[1] as { x: number; y: number; w: number; h: number };
 	expect(dropped.x + dropped.w / 2).toBeCloseTo(1500, -1);
 	expect(dropped.y + dropped.h / 2).toBeCloseTo(800, -1);
 
-	// SVG (and anything not PNG/JPEG/WebP/GIF by its bytes) is refused with a message, nothing added
-	await page.getByTestId('file-Image').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: svgFile });
+	// SVG (and anything not PNG/JPEG/WebP/GIF by its bytes) is refused with a message; the image stays empty
+	const empty = await addPicture(app, { x: 100, y: 700 }, { x: 400, y: 1000 }, { name: 'logo.png', mimeType: 'image/png', buffer: svgFile });
 	await expect(editor(app).getByRole('alert')).toContainText('Only PNG, JPEG, WebP and GIF images can be used.');
-	expect((await elements(app)).length).toBe(2);
+	expect(((await elements(app)).find((e) => e.id === empty.id) as { assetId?: string }).assetId).toBeUndefined();
 	expect(await assetCount(app)).toBe(2);
 });
 
@@ -146,7 +197,7 @@ test('symbols: save a box, place it, rename it, change its image for every insta
 	const { page } = app;
 	await openProject(app);
 	await addFrameAt(app, 5, { keepEditorOpen: true });
-	const box = await draw(app, 'Box', { x: 200, y: 200 }, { x: 500, y: 500 });
+	const box = await draw(app, 'Image', { x: 200, y: 200 }, { x: 500, y: 500 });
 	await setField(app, 'label', 'coin');
 	await app.press(page.getByRole('button', { name: 'Save as symbol' }));
 	await expect.poll(async () => (await app.storyboard()).symbols.map((s) => s.label)).toEqual(['coin']);
@@ -172,6 +223,7 @@ test('symbols: save a box, place it, rename it, change its image for every insta
 	await page.getByTestId('file-Change image of gold coin').setInputFiles(png('gold.png', 50, 50, [255, 215, 0]));
 	await expect.poll(async () => typeof (await app.storyboard()).symbols[0].assetId).toBe('string');
 	await expect(instances.locator('image')).toHaveCount(2);
+	await expect(instances.locator('rect[stroke-dasharray]')).toHaveCount(0);
 	await page.screenshot({ path: `test-results/m5-symbols-${app.touch ? 'touch' : 'desktop'}.png` });
 });
 
@@ -180,8 +232,8 @@ test('images are local: the cloud copy holds no image bytes; another browser sho
 	await openProject(app);
 	const f = await addFrameAt(app, 5, { keepEditorOpen: true });
 	// Random pixels: about 190 KB that can't be compressed, so image bytes in any form would break the size limit
-	await page.getByTestId('file-Image').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: makePng(256, 256, 'noise') });
-	await expect.poll(async () => (await elements(app)).length).toBe(1);
+	await addPicture(app, { x: 300, y: 200 }, { x: 900, y: 800 }, { name: 'photo.png', mimeType: 'image/png', buffer: makePng(256, 256, 'noise') });
+	await expect.poll(async () => (await elements(app)).filter(isPicture).length).toBe(1);
 	await app.press(page.getByRole('button', { name: 'Close frame editor' }));
 	await expect.poll(async () => (await app.storedStoryboard())?.frames[0].elements.length).toBe(1);
 

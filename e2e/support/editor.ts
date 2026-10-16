@@ -14,7 +14,7 @@ export async function elements(app: App): Promise<FrameElement[]> {
 	return frame.elements;
 }
 
-export function artboard(app: App) {
+function artboard(app: App) {
 	return app.page.getByTestId('artboard');
 }
 

@@ -63,20 +63,6 @@ function perpendicularDistance(point: DrawingPoint, lineStart: DrawingPoint, lin
 	return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Approximate memory footprint for raw drawing data (for telemetry/heuristics)
-export const calculateDrawingMemoryFootprint = (strokes: DrawingStroke[]): number => {
-	let totalPoints = 0;
-	strokes.forEach((stroke) => {
-		totalPoints += stroke.points.length;
-	});
-	const pointsSize = totalPoints * 16; // approx bytes per point
-	const strokeMetadataSize = strokes.length * 50; // approx metadata
-	return pointsSize + strokeMetadataSize;
-};
-
-// Length of serialized compressed data (cheap proxy for storage size)
-export const calculateCompressedSize = (compressedData: unknown): number => JSON.stringify(compressedData).length;
-
 // Compress an array of strokes using an adaptive strategy with inter-stroke optimization
 export const compressDrawingAdaptive = (strokes: DrawingStroke[]): CompressionResult => {
 	const originalSize = JSON.stringify(strokes).length;
@@ -156,14 +142,14 @@ function optimizeStrokeSession(strokes: CompressedStroke[]): CompressedStroke[] 
 
 // --- Geometry helpers ---
 
-export interface Bounds {
+interface Bounds {
 	minX: number;
 	minY: number;
 	maxX: number;
 	maxY: number;
 }
 
-export const getStrokeBounds = (points: { x: number; y: number }[]): Bounds => {
+const getStrokeBounds = (points: { x: number; y: number }[]): Bounds => {
 	if (!points.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 	let minX = points[0].x,
 		maxX = points[0].x,
@@ -177,21 +163,6 @@ export const getStrokeBounds = (points: { x: number; y: number }[]): Bounds => {
 		if (p.y > maxY) maxY = p.y;
 	}
 	return { minX, minY, maxX, maxY };
-};
-
-export const strokeAABBOverlap = (
-	points: { x: number; y: number }[],
-	noteOffsetX: number,
-	noteOffsetY: number,
-	box: { x: number; y: number; w: number; h: number }
-): boolean => {
-	if (!points || points.length === 0) return false;
-	const b = getStrokeBounds(points);
-	const worldX1 = noteOffsetX + b.minX;
-	const worldX2 = noteOffsetX + b.maxX;
-	const worldY1 = noteOffsetY + b.minY;
-	const worldY2 = noteOffsetY + b.maxY;
-	return !(worldX2 < box.x || worldX1 > box.x + box.w || worldY2 < box.y || worldY1 > box.y + box.h);
 };
 
 // Precise polyline-rectangle intersection
@@ -279,7 +250,7 @@ export const strokeIntersectsRect = (
 	return false;
 };
 
-export const pointToSegmentDistanceSq = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
+const pointToSegmentDistanceSq = (px: number, py: number, ax: number, ay: number, bx: number, by: number): number => {
 	const dx = bx - ax;
 	const dy = by - ay;
 	const lenSq = dx * dx + dy * dy || 1e-6;

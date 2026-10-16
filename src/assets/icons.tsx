@@ -13,16 +13,12 @@ import {
   Trash2,
   X,
   Check,
-  Keyboard,
   LogIn,
   UserPlus,
-  Wand2,
-  RotateCcw,
   Upload,
   Undo2,
   Redo2,
   AudioLines,
-  Scissors,
 } from 'lucide-react';
 import { Eye, EyeOff, User, Home, Eraser, Square, Frame } from 'lucide-react';
 
@@ -112,11 +108,6 @@ export const CheckIcon = memo(({ className = "w-4 h-4" }: { className?: string }
 CheckIcon.displayName = 'CheckIcon';
 
 // UI Icons
-export const KeyboardIcon = memo(({ className = "w-5 h-5" }: { className?: string }) => (
-  <Keyboard className={className} />
-));
-KeyboardIcon.displayName = 'KeyboardIcon';
-
 export const LogInIcon = memo(({ className = "w-6 h-6" }: { className?: string }) => (
   <LogIn className={className} />
 ));
@@ -126,16 +117,6 @@ export const UserPlusIcon = memo(({ className = "w-6 h-6" }: { className?: strin
   <UserPlus className={className} />
 ));
 UserPlusIcon.displayName = 'UserPlusIcon';
-
-export const Wand2Icon = memo(({ className = "w-6 h-6" }: { className?: string }) => (
-  <Wand2 className={className} />
-));
-Wand2Icon.displayName = 'Wand2Icon';
-
-export const RotateCcwIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
-  <RotateCcw className={className} />
-));
-RotateCcwIcon.displayName = 'RotateCcwIcon';
 
 // Undo / Redo Icons
 export const UndoIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
@@ -195,8 +176,3 @@ export const SelectionIcon = memo(({ className = "w-5 h-5" }: { className?: stri
 ));
 SelectionIcon.displayName = 'SelectionIcon';
 
-// Scissors Icon for trimming
-export const ScissorsIcon = memo(({ className = "w-4 h-4" }: { className?: string }) => (
-  <Scissors className={className} />
-));
-ScissorsIcon.displayName = 'ScissorsIcon';

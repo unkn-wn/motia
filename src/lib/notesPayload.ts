@@ -17,7 +17,7 @@ export const SKETCH_NOTE_ID = 'drawing-global';
 // Firestore does not support arrays-of-arrays and disallows undefined values.
 // We sanitize payloads by: (1) removing undefined fields, (2) wrapping any array element
 // that is itself an array into an object { __array: [...] }, recursively.
-export function sanitizeForFirestore(value: unknown): unknown {
+function sanitizeForFirestore(value: unknown): unknown {
 	if (value === undefined) return null; // avoid undefined
 	if (value === null) return null;
 	// Preserve Date and Firestore Timestamp as-is so Firestore can serialize them properly

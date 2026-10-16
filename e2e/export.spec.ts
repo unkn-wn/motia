@@ -53,7 +53,7 @@ test('export: every file of the zip, frames at board size, readable text, no aut
 	await setField(app, 'label', 'hero');
 	await app.press(page.getByRole('button', { name: 'Close frame editor' }));
 	const early = await addFrameAt(app, 5, { keepEditorOpen: true });
-	const box = await draw(app, 'Box', { x: 800, y: 300 }, { x: 1200, y: 700 });
+	const box = await draw(app, 'Image', { x: 800, y: 300 }, { x: 1200, y: 700 });
 	await page.getByTestId('file-Add image').setInputFiles({ name: 'coin.png', mimeType: 'image/png', buffer: makePng(64, 64, [255, 200, 0]) });
 	await expect.poll(async () => typeof ((await app.storyboard()).frames.find((f) => f.id === early.id)?.elements[0] as { assetId?: string })?.assetId).toBe('string');
 	await app.press(page.getByRole('button', { name: 'Close frame editor' }));
@@ -104,7 +104,7 @@ test('export: every file of the zip, frames at board size, readable text, no aut
 	expect(earlySvg).toContain(`href="../assets/${assetId}.png"`);
 	expect(pngSize(files['sheet.png']).width).toBeGreaterThan(0);
 	// The PNG really shows the frame: the box's image at its centre, the background beside it
-	// (the box draws a faint wash over its image)
+	// (a box with a picture shows just the picture)
 	const near = (got: number[], want: number[]) => got.every((v, i) => Math.abs(v - want[i]) <= 12);
 	expect(near(await pixel(app, files['frames/001_0m05.000.png'], 1000, 500), [255, 200, 0])).toBe(true);
 	expect(near(await pixel(app, files['frames/001_0m05.000.png'], 100, 900), [0x17, 0x17, 0x17])).toBe(true);

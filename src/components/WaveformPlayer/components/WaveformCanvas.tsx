@@ -259,7 +259,7 @@ export const WaveformCanvas: React.FC = () => {
 		return () => {
 			canvas.removeEventListener('touchstart', handleTouchStart);
 		};
-	}, [toolMode]);
+	}, [toolMode, canvasRef]);
 
 	return (
 		<canvas

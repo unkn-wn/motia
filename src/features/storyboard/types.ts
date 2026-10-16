@@ -40,9 +40,11 @@ export type LineElement = ElementBase & Stroke & { type: 'line'; points: Point[]
 export type ArrowElement = ElementBase & Stroke & { type: 'arrow'; points: Point[] };
 export type PenElement = ElementBase & Stroke & { type: 'pen'; points: Point[] };
 export type TextElement = ElementBase & BoxGeometry & { type: 'text'; text: string; fontSize: number; fill: string };
-/** A dashed placeholder that stands for something; may hold an image and belong to a symbol. */
+/**
+ * A box: with a picture (its own `assetId`, or its symbol's), it shows the picture; without one, it is a dashed
+ * placeholder showing its label ("logo", "coin"). It can be saved as a symbol, placed again by `symbolId`.
+ */
 export type BoxElement = ElementBase & BoxGeometry & { type: 'box'; symbolId?: string; assetId?: string };
-export type ImageElement = ElementBase & BoxGeometry & { type: 'image'; assetId: string };
 /** Shows another frame inside it, live. */
 export type FrameRefElement = ElementBase & BoxGeometry & { type: 'frameRef'; refFrameId: string };
 
@@ -54,10 +56,7 @@ export type FrameElement =
 	| PenElement
 	| TextElement
 	| BoxElement
-	| ImageElement
 	| FrameRefElement;
-
-export type ElementType = FrameElement['type'];
 
 export type Frame = {
 	id: string;

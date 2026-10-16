@@ -5,12 +5,12 @@ import type { BoardFormat, Frame, StoryboardDoc } from '../types';
 // Frame cards on the main canvas (SPEC §4). World units; the waveform is 120 wide, centred on the time axis
 // (x = 0 in vertical, y = 0 in horizontal). Frames sit on the side facing away from notes: left / above.
 
-export const CARD_WIDTH = 240;
+const CARD_WIDTH = 240;
 export const CARD_HEADER = 28;
 /** Below this zoom, cards collapse to their anchor dots (notes never collapse). */
 export const FRAME_COLLAPSE_SCALE = 0.2;
 /** Screen-space grab radius for anchor dots and span end ticks. */
-export const HANDLE_RADIUS_PX = 10;
+const HANDLE_RADIUS_PX = 10;
 const WAVEFORM_HALF = 60;
 const CARD_GAP_VERTICAL = 110;
 const CARD_GAP_HORIZONTAL = 60;
@@ -20,8 +20,8 @@ const SPAN_CLEAR_PX = 8;
 
 /** Where time runs on the canvas: `length` world units for `duration` seconds. */
 export type TimeAxis = { orientation: CanvasOrientation; length: number; duration: number };
-export type Rect = { x: number; y: number; w: number; h: number };
-export type Pt = { x: number; y: number };
+type Rect = { x: number; y: number; w: number; h: number };
+type Pt = { x: number; y: number };
 
 export function cardSize(board: BoardFormat): { w: number; h: number; thumbH: number } {
 	const aspect = board.width > 0 && board.height > 0 ? board.height / board.width : 9 / 16;

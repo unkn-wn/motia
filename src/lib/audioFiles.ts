@@ -1,5 +1,5 @@
 // Audio files motia takes in (upload, drop, import), by extension: the type to give a file that arrives without one.
-export const AUDIO_TYPES: Record<string, string> = {
+const AUDIO_TYPES: Record<string, string> = {
 	mp3: 'audio/mpeg',
 	wav: 'audio/wav',
 	m4a: 'audio/mp4',

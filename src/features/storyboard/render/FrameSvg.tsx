@@ -184,27 +184,32 @@ function ElementSvgImpl({ el, props, clipId }: ElementProps) {
 				</text>
 			);
 		}
-		case 'box':
-		case 'image': {
-			// A symbol instance takes the symbol's image (so changing it updates every instance) and, unless it
+		case 'box': {
+			// A symbol instance takes the symbol's picture (so changing it updates every instance) and, unless it
 			// has its own, the symbol's label. A box whose symbol isn't in the project draws as a plain box.
-			const symbol = el.type === 'box' && el.symbolId ? props.resolveSymbol?.(el.symbolId) : undefined;
+			const symbol = el.symbolId ? props.resolveSymbol?.(el.symbolId) : undefined;
 			const assetId = symbol ? symbol.assetId : el.assetId;
-			const label = el.type === 'box' ? (el.label ?? symbol?.label) : undefined;
-			// No resolver (plain static rendering) counts as missing; undefined from a resolver = still loading
+			const label = el.label ?? symbol?.label;
+			// With a picture: the URL, undefined while it loads, null when it isn't on this device (no resolver, as in
+			// plain static rendering, counts as missing)
 			const url = assetId ? (props.assetUrl ? props.assetUrl(assetId) : null) : undefined;
 			return (
-				<g {...common} data-label={xmlLabel(el.label || label)} transform={transform}>
+				<g {...common} data-label={xmlLabel(label)} transform={transform}>
 					{url ? (
+						// A picture shows just the picture; the label stays the element's name (panel, exports, search)
 						<>
 							<clipPath id={clipId}>
 								<rect x={x} y={y} width={w} height={h} />
 							</clipPath>
 							<image href={url} x={x} y={y} width={w} height={h} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clipId})`} />
 						</>
+					) : !assetId ? (
+						// No picture: the dashed placeholder with its label
+						<Placeholder x={x} y={y} w={w} h={h} label={label} />
+					) : url === null ? (
+						// A picture not on this device: the placeholder says so
+						<Placeholder x={x} y={y} w={w} h={h} label={label || 'Image missing'} caption={label ? 'image missing' : undefined} />
 					) : null}
-					{el.type === 'box' ? <Placeholder x={x} y={y} w={w} h={h} label={label} caption={url === null ? 'image missing' : undefined} /> : null}
-					{el.type === 'image' && url === null ? <Placeholder x={x} y={y} w={w} h={h} label="Image missing" /> : null}
 				</g>
 			);
 		}
@@ -252,7 +257,8 @@ const ElementSvg = memo(ElementSvgImpl, (a: ElementProps, b: ElementProps) => {
 	if (p === q) return true;
 	switch (b.el.type) {
 		case 'box':
-		case 'image':
+			// A plain box (no picture, no symbol) uses neither lookup: an image loading elsewhere doesn't redraw it
+			if (!b.el.assetId && !b.el.symbolId) return true;
 			return p.assetUrl === q.assetUrl && p.resolveSymbol === q.resolveSymbol;
 		case 'frameRef':
 			// Draws another frame with every lookup

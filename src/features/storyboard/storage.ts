@@ -1,6 +1,6 @@
 import { optimizeDrawingPoints } from '@utils/drawingUtils';
-import { emptyStoryboard, newId } from './model';
-import type { Frame, Point, StoryboardDoc } from './types';
+import { emptyStoryboard } from './model';
+import type { Point, StoryboardDoc } from './types';
 
 // The storyboard is stored as one JSON string field (`storyboard`) on users/{uid}/projects/{pid}/notes/all.
 // A string sidesteps Firestore's arrays-of-arrays limit and shares the doc's version check.
@@ -14,25 +14,6 @@ export function serializeStoryboard(doc: StoryboardDoc): string {
 }
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-
-/**
- * Gives a repeated element id within a frame (saved by an earlier bug that added a new text twice) a new id, so
- * every element can be selected and edited on its own. Ids shared across frames are intended and stay.
- */
-function withUniqueElementIds(frame: Frame): Frame {
-	if (!Array.isArray(frame?.elements)) return frame;
-	const seen = new Set<string>();
-	let changed = false;
-	const elements = frame.elements.map((el) => {
-		if (!seen.has(el.id)) {
-			seen.add(el.id);
-			return el;
-		}
-		changed = true;
-		return { ...el, id: newId('e_') };
-	});
-	return changed ? { ...frame, elements } : frame;
-}
 
 /**
  * Parses the stored string. A missing field is an empty board. `readable: false` means the stored value
@@ -52,7 +33,7 @@ export function parseStoryboard(raw: unknown): { doc: StoryboardDoc; readable: b
 			...data,
 			version: 1,
 			board,
-			frames: data.frames.map(withUniqueElementIds),
+			frames: data.frames,
 			symbols: Array.isArray(data.symbols) ? data.symbols : [],
 			assets: Array.isArray(data.assets) ? data.assets : [],
 		};

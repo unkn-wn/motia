@@ -2,68 +2,8 @@
  * Canvas transform and coordinate utilities
  */
 
-import type { CanvasTransform, WaveformDimensions } from '../types/canvas';
+import type { CanvasTransform } from '../types/canvas';
 import type { Note } from '@types';
-
-/**
- * Calculates waveform dimensions based on duration and window size
- */
-export const calculateWaveformDimensions = (duration: number): WaveformDimensions => {
-	const waveformHeight = Math.max(window.innerHeight * 3, duration * 100);
-	const waveformWidth = 120;
-	const canvasWidth = window.innerWidth;
-	const waveformX = (canvasWidth - waveformWidth) / 2;
-	const waveformCanvasX = waveformX + waveformWidth / 2;
-
-	return {
-		height: waveformHeight,
-		width: waveformWidth,
-		centerX: waveformCanvasX,
-		centerY: waveformHeight / 2,
-		offsetX: waveformX,
-	};
-};
-
-/**
- * Converts canvas coordinates to screen coordinates
- */
-export const canvasToScreen = (canvasX: number, canvasY: number, transform: CanvasTransform) => {
-	return {
-		screenX: canvasX * transform.scale + transform.offsetX,
-		screenY: canvasY * transform.scale + transform.offsetY,
-	};
-};
-
-/**
- * Converts screen coordinates to canvas coordinates
- */
-export const screenToCanvas = (screenX: number, screenY: number, transform: CanvasTransform) => {
-	return {
-		canvasX: (screenX - transform.offsetX) / transform.scale,
-		canvasY: (screenY - transform.offsetY) / transform.scale,
-	};
-};
-
-/**
- * Calculates new transform for zoom operation
- */
-export const calculateZoomTransform = (
-	currentTransform: CanvasTransform,
-	scaleFactor: number,
-	mouseX: number,
-	mouseY: number,
-	minScale = 0.1,
-	maxScale = 3
-): CanvasTransform => {
-	const newScale = Math.max(minScale, Math.min(maxScale, currentTransform.scale * scaleFactor));
-	const scaleChange = newScale / currentTransform.scale;
-
-	return {
-		scale: newScale,
-		offsetX: currentTransform.offsetX - (mouseX - currentTransform.offsetX) * (scaleChange - 1),
-		offsetY: currentTransform.offsetY - (mouseY - currentTransform.offsetY) * (scaleChange - 1),
-	};
-};
 
 /**
  * Converts screen coordinates to canvas coordinates using a bounding rect
@@ -223,29 +163,5 @@ export const isClickInWaveform = (
 export const getTimeFromCanvasY = (canvasY: number, waveformHeight: number, duration: number) => {
 	const relativeY = canvasY / waveformHeight;
 	return Math.max(0, Math.min(duration, relativeY * duration));
-};
-
-/**
- * Calculates time from canvas X position (horizontal)
- */
-export const getTimeFromCanvasX = (canvasX: number, waveformWidth: number, duration: number) => {
-	const relativeX = canvasX / waveformWidth;
-	return Math.max(0, Math.min(duration, relativeX * duration));
-};
-
-/**
- * Calculates time from canvas coordinates based on orientation
- */
-export const getTimeFromCanvasCoords = (
-	canvasX: number,
-	canvasY: number,
-	dims: { waveformHeight: number; waveformWidth: number },
-	duration: number,
-	orientation: import('@types').CanvasOrientation = 'vertical'
-) => {
-	if (orientation === 'horizontal') {
-		return getTimeFromCanvasX(canvasX, dims.waveformWidth, duration);
-	}
-	return getTimeFromCanvasY(canvasY, dims.waveformHeight, duration);
 };
 

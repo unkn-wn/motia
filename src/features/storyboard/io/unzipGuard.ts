@@ -4,8 +4,8 @@ import { Unzip, UnzipInflate } from 'fflate';
 // overlapping or lying entries hide, isn't used) and inflated in small steps, counting the bytes that really come
 // out; reading stops as soon as a limit is passed. Sizes written in the zip are never trusted.
 
-export type ZipLimits = { totalBytes: number; files: number };
-export type OpenedZip = { files: Record<string, Uint8Array> } | { error: string };
+type ZipLimits = { totalBytes: number; files: number };
+type OpenedZip = { files: Record<string, Uint8Array> } | { error: string };
 
 const STEP = 64 * 1024;
 export const TOO_LARGE = 'This file is too large to import (over 200 MB or 2,000 files).';

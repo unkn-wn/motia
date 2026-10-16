@@ -15,7 +15,7 @@ import { cardPositionAt, timeAxisOf } from './hooks/frameCanvas';
 import { timeToAxis } from '@/features/storyboard/canvas/layout';
 import { Navigation } from '@/features/navigation/Navigation';
 
-export interface WaveformPlayerProps {
+interface WaveformPlayerProps {
 	audioFile: File | null;
 	onLoadingChange?: (loading: boolean) => void;
 	onAddNote: (time: number, canvasX: number, canvasY: number) => void;

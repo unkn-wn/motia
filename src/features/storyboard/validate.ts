@@ -5,7 +5,7 @@ import { FRAME_REF_MAX_DEPTH, type BoardFormat, type FrameElement, type Point, t
 // Strict check of a `motia.json` (SPEC §7.4): an import file is untrusted input. Known types only, finite numbers,
 // hex colours, capped strings, unique ids. The result is rebuilt from known fields only; anything else is dropped.
 
-export const LIMITS = {
+const LIMITS = {
 	frames: 1000,
 	elementsPerFrame: 2000,
 	notes: 20_000,
@@ -25,7 +25,7 @@ export const LIMITS = {
 	renderedElements: 20_000,
 };
 
-export type ValidationResult = { ok: true; value: MotiaJson } | { ok: false; errors: string[] };
+type ValidationResult = { ok: true; value: MotiaJson } | { ok: false; errors: string[] };
 
 const MAX_ERRORS = 50;
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
@@ -37,7 +37,7 @@ const ASSET_PATH = new RegExp(`^assets/[\\w.:-]+\\.(${Object.values(ASSET_EXTENS
 const AUDIO_PATH = /^audio\/[^/\\]+$/;
 const NOTE_COLOR = /^(?:yellow|blue|green|pink|purple)$/;
 const MIMES = new Set(Object.keys(ASSET_EXTENSIONS));
-const ELEMENT_TYPES = new Set(['rect', 'ellipse', 'line', 'arrow', 'pen', 'text', 'box', 'image', 'frameRef']);
+const ELEMENT_TYPES = new Set(['rect', 'ellipse', 'line', 'arrow', 'pen', 'text', 'box', 'frameRef']);
 
 class Invalid extends Error {}
 
@@ -160,8 +160,6 @@ export function validateMotiaJson(input: unknown): ValidationResult {
 				};
 			case 'box':
 				return { ...base, type, ...box(), ...optional(o, 'symbolId', id, path), ...optional(o, 'assetId', id, path) };
-			case 'image':
-				return { ...base, type, ...box(), assetId: id(o.assetId, `${path}.assetId`) };
 			default:
 				return { ...base, type: 'frameRef', ...box(), refFrameId: o.refFrameId === '' ? '' : id(o.refFrameId, `${path}.refFrameId`) };
 		}

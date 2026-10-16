@@ -17,9 +17,9 @@ import { openZip } from './unzipGuard';
 // opened with size and count limits, `motia.json` is checked strictly, images must really be PNG/JPEG/WebP/GIF, and
 // nothing is written unless everything passes.
 
-export const IMPORT_LIMITS = { totalBytes: 200 * 1024 * 1024, files: 2000, jsonBytes: 50 * 1024 * 1024 };
+const IMPORT_LIMITS = { totalBytes: 200 * 1024 * 1024, files: 2000, jsonBytes: 50 * 1024 * 1024 };
 
-export type ParsedImport = {
+type ParsedImport = {
 	json: MotiaJson;
 	storyboard: StoryboardDoc;
 	/** Image bytes by their new asset id */
@@ -27,7 +27,7 @@ export type ParsedImport = {
 	audio: File | null;
 };
 
-export type ImportCheck = { ok: true; value: ParsedImport } | { ok: false; errors: string[] };
+type ImportCheck = { ok: true; value: ParsedImport } | { ok: false; errors: string[] };
 
 const fail = (...errors: string[]): ImportCheck => ({ ok: false, errors });
 const isZip = (b: Uint8Array) => b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04;
@@ -41,7 +41,6 @@ function withNewAssetIds(doc: StoryboardDoc): { doc: StoryboardDoc; ids: Map<str
 	const ids = new Map(doc.assets.map((a) => [a.id, newId('a_')]));
 	const id = (old: string | undefined) => (old === undefined ? undefined : (ids.get(old) ?? old));
 	const element = (el: FrameElement): FrameElement => {
-		if (el.type === 'image') return { ...el, assetId: id(el.assetId)! };
 		if (el.type === 'box' && el.assetId) return { ...el, assetId: id(el.assetId) };
 		return el;
 	};

@@ -1,6 +1,4 @@
-import React, { useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
-import { useAudio } from '@/contexts/objects/AudioContextObject';
-import { currentTimeStore } from './state';
+import React, { useCallback, useRef, useEffect } from 'react';
 
 interface ProgressBarProps {
   currentTime: number;
@@ -63,23 +61,5 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentTime, duration, onSeek
 };
 
 ProgressBar.displayName = 'ProgressBar';
-
-// Connected version uses memo since it only re-renders when context values change
-export const ConnectedProgressBar: React.FC = () => {
-  const { duration, seekToTime, trimStart, trimEnd } = useAudio();
-  const currentTime = useSyncExternalStore(currentTimeStore.subscribe, currentTimeStore.getSnapshot);
-
-  return (
-    <ProgressBar
-      currentTime={currentTime}
-      duration={duration}
-      onSeek={seekToTime}
-      trimStart={trimStart}
-      trimEnd={trimEnd}
-    />
-  );
-};
-
-ConnectedProgressBar.displayName = 'ConnectedProgressBar';
 
 export default ProgressBar;

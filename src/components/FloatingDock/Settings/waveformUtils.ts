@@ -8,7 +8,7 @@
  * and does not use these utilities due to fundamentally different coordinate systems.
  */
 
-export interface WaveformDrawOptions {
+interface WaveformDrawOptions {
 	/** Canvas 2D context */
 	ctx: CanvasRenderingContext2D;
 	/** Waveform amplitude data (0-1 normalized) */
@@ -122,22 +122,6 @@ export function drawWaveformBars(options: WaveformDrawOptions): void {
 }
 
 /**
- * Convert time (seconds) to pixel position
- */
-export function timeToPixel(time: number, duration: number, width: number): number {
-	if (duration === 0) return 0;
-	return (time / duration) * width;
-}
-
-/**
- * Convert pixel position to time (seconds)
- */
-export function pixelToTime(pixel: number, duration: number, width: number): number {
-	if (width === 0) return 0;
-	return (pixel / width) * duration;
-}
-
-/**
  * Setup canvas with proper DPR scaling
  */
 export function setupCanvas(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): { width: number; height: number; dpr: number } {
@@ -168,6 +152,6 @@ export function createGradientBackground(
 	colorStops.forEach(({ offset, color }) => {
 		gradient.addColorStop(offset, color);
 	});
-	ctx.fillStyle = gradient as any;
+	ctx.fillStyle = gradient;
 	ctx.fillRect(0, 0, width, height);
 }

@@ -111,15 +111,6 @@ export async function renameProject(uid: string, projectId: string, title: strin
 	await setDoc(userProjectDoc(uid, projectId), { title, updatedAt: serverTimestamp() }, { merge: true });
 }
 
-export async function updateProjectAudioDuration(uid: string, projectId: string, durationSec: number): Promise<void> {
-	// Use field path merge to avoid overwriting other audio fields
-	await setDoc(
-		userProjectDoc(uid, projectId),
-		{ 'audio.durationSec': durationSec, updatedAt: serverTimestamp() } as unknown as ProjectMetaDoc,
-		{ merge: true }
-	);
-}
-
 // Bump only the project's updatedAt timestamp (no other fields changed)
 export async function touchProjectUpdatedAt(uid: string, projectId: string): Promise<void> {
 	await setDoc(userProjectDoc(uid, projectId), { updatedAt: serverTimestamp() } as unknown as ProjectMetaDoc, { merge: true });
@@ -284,48 +275,6 @@ export async function getProjectNotesVersion(uid: string, projectId: string): Pr
 }
 
 // --- Migration ---
-/**
- * Move an existing project (meta + notes) from one user to another, preserving projectId.
- * Efficient single-batch write+delete. If overwrite=false and destination exists, it will throw.
- */
-export async function moveProjectBetweenUsers(
-	fromUid: string,
-	toUid: string,
-	projectId: string,
-	opts: { overwrite?: boolean; deleteSource?: boolean } = {}
-): Promise<void> {
-	const overwrite = opts.overwrite ?? false;
-	const deleteSource = opts.deleteSource ?? true;
-
-	const srcMetaRef = userProjectDoc(fromUid, projectId);
-	const srcNotesRef = userProjectNotesDoc(fromUid, projectId);
-	const dstMetaRef = userProjectDoc(toUid, projectId);
-	const dstNotesRef = userProjectNotesDoc(toUid, projectId);
-
-	const [srcMetaSnap, srcNotesSnap, dstMetaSnap] = await Promise.all([getDoc(srcMetaRef), getDoc(srcNotesRef), getDoc(dstMetaRef)]);
-
-	if (!srcMetaSnap.exists()) {
-		throw new Error(`Source project not found: users/${fromUid}/projects/${projectId}`);
-	}
-	if (!overwrite && dstMetaSnap.exists()) {
-		throw new Error(`Destination already has project ${projectId}`);
-	}
-
-	const meta = srcMetaSnap.data() as ProjectMetaDoc;
-	const notesDoc = srcNotesSnap.exists() ? (srcNotesSnap.data() as ProjectNotesDoc) : null;
-
-	const batch = writeBatch(firestore);
-	// Preserve createdAt; refresh updatedAt
-	batch.set(dstMetaRef, { ...meta, updatedAt: serverTimestamp() as Timestamp } as ProjectMetaDoc, { merge: false });
-	if (notesDoc) {
-		batch.set(dstNotesRef, { ...notesDoc, updatedAt: serverTimestamp() as Timestamp } as ProjectNotesDoc, { merge: false });
-	}
-	if (deleteSource) {
-		batch.delete(srcMetaRef);
-		if (srcNotesSnap.exists()) batch.delete(srcNotesRef);
-	}
-	await batch.commit();
-}
 
 export async function listUserProjectIds(uid: string): Promise<string[]> {
 	const col = userProjectsCol(uid);
@@ -350,7 +299,7 @@ export async function deleteProject(uid: string, projectId: string): Promise<voi
 }
 
 // --- Cleanup ---
-export async function deleteUserDoc(uid: string): Promise<void> {
+async function deleteUserDoc(uid: string): Promise<void> {
 	await deleteDoc(userDoc(uid));
 }
 

@@ -11,7 +11,7 @@ export type ShapeTool = 'rect' | 'ellipse' | 'line' | 'arrow' | 'box' | 'frameRe
 
 const SHAPE_FILL = '#d4d4d4';
 const LINE_STROKE = '#e5e5e5';
-export const TEXT_FONT_SIZE = 96;
+const TEXT_FONT_SIZE = 96;
 /** A click without a drag makes a shape of this size, centred on the click. */
 const CLICK_SIZE = { w: 320, h: 200 };
 

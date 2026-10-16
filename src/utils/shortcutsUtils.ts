@@ -13,7 +13,7 @@ export interface KeyboardShortcut {
 }
 
 /** The frame editor's tool keys: action `EDITOR_TOOL`, the tool named by the id after `editor-`. */
-export const EDITOR_TOOL_ACTION = 'EDITOR_TOOL';
+const EDITOR_TOOL_ACTION = 'EDITOR_TOOL';
 const editorTool = (tool: string, label: string, key: string): KeyboardShortcut => ({
 	id: `editor-${tool}`,
 	label,
@@ -24,7 +24,7 @@ const editorTool = (tool: string, label: string, key: string): KeyboardShortcut 
 	category: 'frameEditor',
 });
 
-export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
+const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 	{
 		id: 'play-pause',
 		label: 'Play/Pause',
@@ -132,7 +132,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
 	editorTool('line', 'Line', 'e'),
 	editorTool('arrow', 'Arrow', 'r'),
 	editorTool('text', 'Text', 't'),
-	editorTool('box', 'Box', 'b'),
+	editorTool('box', 'Image', 'b'),
 	editorTool('frameRef', 'Frame reference', ''),
 ];
 
@@ -219,16 +219,6 @@ export const subscribeShortcuts = (listener: (shortcuts: KeyboardShortcut[]) => 
 	return () => {
 		shortcutListeners.delete(listener);
 	};
-};
-
-// Single reset entrypoint used by UI to reset everything
-export const resetAllShortcutsAndPreferences = (): KeyboardShortcut[] => {
-	preferences = { ...DEFAULT_PREFERENCES };
-	// Reset global shortcuts store to defaults
-	const defaults = DEFAULT_SHORTCUTS.map((s) => ({ ...s }));
-	setShortcuts(defaults);
-	// Return a fresh array copy of defaults so callers can set state
-	return defaults;
 };
 
 

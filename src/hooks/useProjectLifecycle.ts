@@ -103,7 +103,7 @@ export function useProjectLifecycle(opts: {
 		return () => {
 			aborted = true;
 		};
-	}, [user, authLoading, params.projectId, navigate, setNotes, loadStoryboard, resetStoryboard]);
+	}, [user, authLoading, params.projectId, navigate, setNotes, loadStoryboard, resetStoryboard, setNotesVersion]);
 
 	const handleFileSelect = useCallback(
 		async (file: File) => {

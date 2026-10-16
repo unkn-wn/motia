@@ -5,7 +5,7 @@ import type { Note } from '../../src/types/notes';
 import type { StoryboardDoc } from '../../src/features/storyboard/types';
 
 export type Pt = { x: number; y: number };
-export type Transform = { offsetX: number; offsetY: number; scale: number };
+type Transform = { offsetX: number; offsetY: number; scale: number };
 /** A note as read from the page (JSON round-trip turns `createdAt` into a string). */
 export type NoteState = Omit<Note, 'createdAt'> & { createdAt: string };
 

@@ -38,7 +38,7 @@ export const thumbnailStore = {
 	getVersion: () => version,
 };
 
-export type ThumbnailContext = RenderContext;
+type ThumbnailContext = RenderContext;
 
 async function rasterize(frame: Frame, board: BoardFormat, ctx: ThumbnailContext, assets: string[]): Promise<HTMLCanvasElement> {
 	const img = await frameImage(frame, board, ctx, assets);

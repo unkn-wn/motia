@@ -112,6 +112,7 @@ export const useMouseInteractions = () => {
 		},
 		[
 			canvasRef,
+			noteLayoutCache,
 			transform,
 			isDrawingMode,
 			toolMode,
@@ -152,7 +153,7 @@ export const useMouseInteractions = () => {
 			}
 			// Drawing is now handled by global mouse handlers
 		},
-		[isPanning, lastPanPoint, setTransform, setLastPanPoint]
+		[isPanning, lastPanPoint, setTransform, setLastPanPoint, setIsPanning]
 	);
 
 	// Native wheel listener to support non-passive prevention of browser zoom (trackpad pinch)

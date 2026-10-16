@@ -167,7 +167,7 @@ export function useFirestoreAutosave(params: {
 				if (remoteVersion !== null && remoteVersion > notesVersion) {
 					setSaveError(new Error('Sync Conflict: Remote data is newer. Please refresh to avoid overwriting.'));
 				}
-			} catch (e) {
+			} catch {
 				// Ignore network errors
 			}
 		};

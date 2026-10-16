@@ -23,6 +23,8 @@ page.
 - Frame space is board pixels with the origin at the top-left and y pointing down.
 - \`x, y, w, h\` are the unrotated box. \`rotation\` is in degrees, clockwise, about the box centre.
 - \`points\` are absolute frame pixels.
+- A \`box\` with an \`assetId\` (its own, or its symbol's) shows that picture, from \`assets/\`. Without one it is a
+  placeholder for something not drawn yet, named by its \`label\`.
 - Times are seconds on the untrimmed song. \`trimStart\` and \`trimEnd\` give the range in use.
 - \`canvasX\` and \`canvasY\` are positions on the motia canvas. They only matter when importing again.
 - The same element \`id\` in two frames is the same object.
@@ -76,7 +78,9 @@ export function storyboardMarkdown(doc: MotiaJson): string {
 			const symbol = el.type === 'box' && el.symbolId ? doc.symbols.find((s) => s.id === el.symbolId) : undefined;
 			const label = el.label ?? symbol?.label ?? '';
 			const text = el.type === 'text' ? el.text : '';
-			lines.push(`| ${el.id} | ${el.type}${symbol ? ` (symbol ${symbol.id})` : ''} | ${cell(label)} | ${cell(text)} | ${cell(el.note ?? '')} |`);
+			// A box's own picture is marked; a symbol's picture is listed with the symbol below
+			const kind = symbol ? ` (symbol ${symbol.id})` : el.type === 'box' && el.assetId ? ' (image)' : '';
+			lines.push(`| ${el.id} | ${el.type}${kind} | ${cell(label)} | ${cell(text)} | ${cell(el.note ?? '')} |`);
 		}
 	}
 

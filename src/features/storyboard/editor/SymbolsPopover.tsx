@@ -25,7 +25,7 @@ export function SymbolsPopover({ onPlace, notify }: { onPlace: (symbol: Storyboa
 		>
 			<div className="text-xs uppercase tracking-wide text-neutral-500">Symbols</div>
 			{storyboard.symbols.length === 0 ? (
-				<p className="text-xs text-neutral-400">Select a box and choose "Save as symbol" to reuse it in any frame.</p>
+				<p className="text-xs text-neutral-400">Select an image and choose "Save as symbol" to reuse it in any frame.</p>
 			) : null}
 			{storyboard.symbols.map((s) => {
 				const url = s.assetId ? assetObjectUrl(s.assetId) : undefined;

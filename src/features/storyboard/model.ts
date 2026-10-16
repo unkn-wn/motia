@@ -2,8 +2,8 @@ import type { AssetMeta, BoardFormat, Frame, FrameElement, Point, StoryboardDoc,
 
 // Pure, immutable operations on the storyboard. Inputs are never modified; unchanged parts keep their identity.
 
-export const DEFAULT_BOARD: BoardFormat = Object.freeze({ width: 1920, height: 1080 });
-export const DEFAULT_FRAME_BACKGROUND = '#171717';
+const DEFAULT_BOARD: BoardFormat = Object.freeze({ width: 1920, height: 1080 });
+const DEFAULT_FRAME_BACKGROUND = '#171717';
 
 export function newId(prefix: string): string {
 	return prefix + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
@@ -115,7 +115,7 @@ const tenth = (n: number) => Math.round(n * 10) / 10;
  * Geometry to 0.1 board px (rotation and font size to 0.1): pointer maths gives values like 113.0000037273378,
  * which cost a third of a shape's stored size and mean nothing at any zoom. Unchanged elements keep their identity.
  */
-export function tidyGeometry(el: FrameElement): FrameElement {
+function tidyGeometry(el: FrameElement): FrameElement {
 	const src = el as unknown as Record<string, unknown>;
 	let out: Record<string, unknown> | null = null;
 	for (const key of GEOMETRY_KEYS) {

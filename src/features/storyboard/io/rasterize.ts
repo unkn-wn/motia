@@ -8,7 +8,7 @@ import { FRAME_REF_MAX_DEPTH, type BoardFormat, type Frame, type StoryboardSymbo
 // react-dom/server is loaded on first use, so the main bundle doesn't carry it.
 
 export type RenderContext = { frames: Frame[]; symbols: StoryboardSymbol[] };
-export type AssetUrl = (assetId: string) => string | null | undefined;
+type AssetUrl = (assetId: string) => string | null | undefined;
 
 /** Frames this one shows through frame references (to the render depth), and the images it uses. */
 export function frameDependencies(frame: Frame, ctx: RenderContext) {
@@ -17,7 +17,6 @@ export function frameDependencies(frame: Frame, ctx: RenderContext) {
 	let usesSymbols = false;
 	const visit = (f: Frame, depth: number) => {
 		for (const el of f.elements) {
-			if (el.type === 'image' && el.assetId) assets.add(el.assetId);
 			if (el.type === 'box') {
 				const symbol = el.symbolId ? ctx.symbols.find((s) => s.id === el.symbolId) : undefined;
 				if (el.symbolId) usesSymbols = true;

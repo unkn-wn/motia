@@ -11,7 +11,6 @@ import {
 	PictureInPicture2,
 	RotateCw,
 	Square,
-	SquareDashed,
 	SquareRoundCorner,
 	Trash2,
 	Type,
@@ -21,7 +20,7 @@ import { addSymbol, newId, patchElements, reorderElements, removeElements, repla
 import { formatFrameTime } from '../canvas/layout';
 import { ImagePickButton } from './ImagePick';
 import { useImageIntake } from './useImages';
-import type { Frame, FrameElement, StoryboardDoc } from '../types';
+import type { BoxElement, Frame, FrameElement, StoryboardDoc } from '../types';
 import { applyBox, applyRotation, elementBox, isPointsElement } from './geometry';
 import { ColorField, FieldRow, NumberField, TextField } from './fields';
 import { textPatch } from './elements';
@@ -33,21 +32,20 @@ const TYPES: Record<FrameElement['type'], { name: string; icon: React.ReactNode 
 	arrow: { name: 'Arrow', icon: <MoveUpRight className="w-4 h-4" /> },
 	text: { name: 'Text', icon: <Type className="w-4 h-4" /> },
 	pen: { name: 'Pen stroke', icon: <Pen className="w-4 h-4" /> },
-	box: { name: 'Box', icon: <SquareDashed className="w-4 h-4" /> },
-	image: { name: 'Image', icon: <ImageIcon className="w-4 h-4" /> },
+	box: { name: 'Image', icon: <ImageIcon className="w-4 h-4" /> },
 	frameRef: { name: 'Frame reference', icon: <PictureInPicture2 className="w-4 h-4" /> },
 };
 
 const section = 'space-y-1.5 pt-2';
 /** Stroke width given to a shape whose stroke is turned on while its width is 0. */
 const STROKE_ON_WIDTH = 8;
-const smallButton = 'flex-1 inline-flex items-center justify-center gap-1 rounded-md bg-neutral-800 hover:bg-neutral-700 px-2 py-1 text-xs text-neutral-200 cursor-pointer';
+const smallButton = 'inline-flex w-full items-center justify-center gap-1 rounded-md bg-neutral-800 hover:bg-neutral-700 px-2 py-1 text-xs text-neutral-200 cursor-pointer';
 const iconButton = 'grid h-7 w-7 shrink-0 place-items-center rounded-md text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100 cursor-pointer';
 const panelClass =
 	'shrink-0 overflow-y-auto bg-neutral-900 border-neutral-800 p-3 space-y-3 text-sm md:w-64 md:border-l max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[45vh] max-md:border-t max-md:rounded-t-2xl max-md:z-30 max-md:pb-[calc(env(safe-area-inset-bottom)+0.75rem)] max-md:shadow-[0_-8px_24px_rgba(0,0,0,0.4)]';
 
 /** On phones the panel is a bottom sheet: its header row always shows, the rest opens on demand. */
-export type Sheet = { open: boolean; onToggle: () => void };
+type Sheet = { open: boolean; onToggle: () => void };
 
 function Panel({ label, header, sheet, children }: { label: string; header: React.ReactNode; sheet: Sheet; children?: React.ReactNode }) {
 	return (
@@ -285,6 +283,9 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 		};
 	const hasFill = el.type === 'rect' || el.type === 'ellipse' || el.type === 'text';
 	const hasStroke = el.type === 'rect' || el.type === 'ellipse' || isPointsElement(el);
+	// A symbol instance takes its symbol's name and picture
+	const symbols = useStoryboardDoc().symbols;
+	const symbol = el.type === 'box' && el.symbolId ? symbols.find((s) => s.id === el.symbolId) : undefined;
 	const type = TYPES[el.type];
 
 	return (
@@ -302,7 +303,7 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 							label="Name"
 							name="label"
 							value={el.label ?? ''}
-							placeholder={type.name}
+							placeholder={symbol?.label || type.name}
 							className="font-medium"
 							title="Name (optional): used in exports and search"
 							onCommit={(v) => patch({ label: v || undefined }, 'Label')}
@@ -374,7 +375,7 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 					) : null}
 				</div>
 			</div>
-			{el.type === 'box' || el.type === 'image' ? <ImageSection frame={frame} el={el} notify={notify} /> : null}
+			{el.type === 'box' ? <ImageSection frame={frame} el={el} notify={notify} /> : null}
 			{el.type === 'frameRef' ? (
 				<div className={section}>
 					<FieldRow label="shows">
@@ -432,17 +433,15 @@ function ElementInspector({ frame, el, notify, ordered, sheet }: { frame: Frame;
 	);
 }
 
-type BoxLike = Extract<FrameElement, { type: 'box' | 'image' }>;
-
 /**
- * Images of boxes and image elements, and symbols. A symbol instance shows its symbol's name and image; changing
- * the image here changes it for every instance.
+ * A box's picture, and symbols. A symbol instance shows its symbol's name and picture; changing the picture here
+ * changes it for every instance.
  */
-function ImageSection({ frame, el, notify }: { frame: Frame; el: BoxLike; notify: (message: string) => void }) {
+function ImageSection({ frame, el, notify }: { frame: Frame; el: BoxElement; notify: (message: string) => void }) {
 	const { commit, storyboardRef } = useStoryboard();
 	const storyboard = useStoryboardDoc();
 	const intake = useImageIntake(notify);
-	const symbol = el.type === 'box' && el.symbolId ? storyboard.symbols.find((s) => s.id === el.symbolId) : undefined;
+	const symbol = el.symbolId ? storyboard.symbols.find((s) => s.id === el.symbolId) : undefined;
 	const hasImage = symbol ? !!symbol.assetId : !!el.assetId;
 
 	const setImage = async (file: File) => {
@@ -454,10 +453,20 @@ function ImageSection({ frame, el, notify }: { frame: Frame; el: BoxLike; notify
 			: current.frames.find((f) => f.id === frame.id)?.elements.some((x) => x.id === el.id);
 		if (!added || !stillThere) return;
 		const doc = added.record(current);
-		commit(
-			symbol ? updateSymbol(doc, symbol.id, { assetId: added.asset.id }) : patchElements(doc, frame.id, new Map([[el.id, { assetId: added.asset.id }]])),
-			'SetImage'
-		);
+		if (symbol) {
+			commit(updateSymbol(doc, symbol.id, { assetId: added.asset.id }), 'SetImage');
+			return;
+		}
+		// The first picture fits inside the drawn area, whole and centred (a replacement keeps the size it has)
+		const box = current.frames.find((f) => f.id === frame.id)?.elements.find((x) => x.id === el.id) as BoxElement;
+		const patch: ElementPatch = { assetId: added.asset.id };
+		if (!box.assetId) {
+			const scale = Math.min(box.w / added.asset.width, box.h / added.asset.height);
+			const w = added.asset.width * scale;
+			const h = added.asset.height * scale;
+			Object.assign(patch, { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h });
+		}
+		commit(patchElements(doc, frame.id, new Map([[el.id, patch]])), 'SetImage');
 	};
 	const removeImage = () =>
 		commit(
@@ -466,16 +475,16 @@ function ImageSection({ frame, el, notify }: { frame: Frame; el: BoxLike; notify
 				: patchElements(storyboardRef.current, frame.id, new Map([[el.id, { assetId: undefined }]])),
 			'RemoveImage'
 		);
-	// The box becomes the first instance: its label and image move to the symbol, its note is copied
+	// The box becomes the first instance: its label and picture move to the symbol, its note is copied
 	const saveAsSymbol = () => {
-		if (el.type !== 'box') return;
-		const s = { id: newId('s_'), label: el.label || 'symbol', ...(el.note ? { note: el.note } : {}), ...(el.assetId ? { assetId: el.assetId } : {}) };
+		const s = { id: newId('s_'), label: el.label || (el.assetId ? 'image' : 'symbol'), ...(el.note ? { note: el.note } : {}), ...(el.assetId ? { assetId: el.assetId } : {}) };
 		const doc = addSymbol(storyboardRef.current, s);
 		commit(patchElements(doc, frame.id, new Map([[el.id, { symbolId: s.id, label: undefined, assetId: undefined }]])), 'SaveSymbol');
 	};
 
 	return (
 		<div className={section}>
+			{/* Its own row: the symbol's name once it is one, in place of the button that makes it one */}
 			{symbol ? (
 				<TextField
 					label="Symbol name"
@@ -484,22 +493,21 @@ function ImageSection({ frame, el, notify }: { frame: Frame; el: BoxLike; notify
 					value={symbol.label}
 					onCommit={(v) => (v.trim() ? commit(updateSymbol(storyboardRef.current, symbol.id, { label: v.trim() }), 'RenameSymbol') : false)}
 				/>
-			) : null}
-			<div className="flex gap-2">
-				<ImagePickButton className={smallButton} title={hasImage ? 'Replace image' : 'Add image'} onFile={(f) => void setImage(f)}>
+			) : (
+				<button type="button" className={smallButton} onClick={saveAsSymbol} title="Save as symbol, to place it in any frame">
+					Save as symbol
+				</button>
+			)}
+			<div className="grid grid-cols-2 gap-2">
+				<ImagePickButton className={`${smallButton} ${hasImage ? '' : 'col-span-2'}`} title={hasImage ? 'Replace image' : 'Add image'} onFile={(f) => void setImage(f)}>
 					{hasImage ? 'Replace image' : 'Add image'}
 				</ImagePickButton>
-				{hasImage && el.type === 'box' ? (
+				{hasImage ? (
 					<button type="button" className={smallButton} onClick={removeImage} title="Remove image">
 						Remove image
 					</button>
 				) : null}
 			</div>
-			{el.type === 'box' && !symbol ? (
-				<button type="button" className={smallButton} onClick={saveAsSymbol} title="Save as symbol, to place it in any frame">
-					Save as symbol
-				</button>
-			) : null}
 		</div>
 	);
 }

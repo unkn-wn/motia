@@ -1,7 +1,7 @@
 // Local Firebase emulator access for tests. Everything here targets 127.0.0.1 and the `demo-motia` project.
-export const PROJECT_ID = 'demo-motia';
-export const AUTH_ORIGIN = 'http://127.0.0.1:9099';
-export const FIRESTORE_ORIGIN = 'http://127.0.0.1:8080';
+const PROJECT_ID = 'demo-motia';
+const AUTH_ORIGIN = 'http://127.0.0.1:9099';
+const FIRESTORE_ORIGIN = 'http://127.0.0.1:8080';
 export const TEST_EMAIL = 'newuser@test.com';
 export const TEST_PASSWORD = 'passwordpassword';
 
@@ -46,7 +46,7 @@ export const signInUser = (email: string, password: string) => identityToolkit('
 // --- Firestore REST value decoding / encoding ---
 type FsValue = Record<string, unknown>;
 
-export function fromFs(v: FsValue): unknown {
+function fromFs(v: FsValue): unknown {
 	if ('nullValue' in v) return null;
 	if ('booleanValue' in v) return v.booleanValue;
 	if ('integerValue' in v) return Number(v.integerValue);
@@ -62,7 +62,7 @@ function fromFsFields(fields: Record<string, FsValue>): Record<string, unknown> 
 	return Object.fromEntries(Object.entries(fields).map(([k, val]) => [k, fromFs(val)]));
 }
 
-export function toFs(v: unknown): FsValue {
+function toFs(v: unknown): FsValue {
 	if (v === null || v === undefined) return { nullValue: null };
 	if (typeof v === 'boolean') return { booleanValue: v };
 	if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };

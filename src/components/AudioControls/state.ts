@@ -1,5 +1,5 @@
 // Minimal external store used with useSyncExternalStore to decouple frequent updates
-export type Unsubscribe = () => void;
+type Unsubscribe = () => void;
 
 class SimpleStore<T> {
   private value: T;

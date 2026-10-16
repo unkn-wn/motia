@@ -29,7 +29,7 @@ export type MotiaJson = {
 	canvasSketch: { untimed: true; strokes: MotiaStroke[] };
 };
 
-export type ExportSource = {
+type ExportSource = {
 	title: string;
 	orientation: 'vertical' | 'horizontal';
 	audio?: MotiaAudio;

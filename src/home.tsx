@@ -14,7 +14,6 @@ import HomeLanding from '@components/Home/HomeLanding';
 import {
 	type KeyboardShortcut,
 	createKeyboardHandler,
-	// resetAllShortcutsAndPreferences, // Deprecated - no longer using reset button
 	isUserTyping,
 	getShortcuts,
 	setShortcuts as setGlobalShortcuts,
@@ -363,12 +362,6 @@ function Home() {
 			return next;
 		});
 	}, []);
-
-	// Reset shortcuts function deprecated (reset button removed from UI)
-	// const handleResetShortcuts = useCallback(() => {
-	// 	const defaults = resetAllShortcutsAndPreferences();
-	// 	setShortcuts(defaults);
-	// }, []);
 
 	// Sync local view with global store after sign-in/settings load
 	useEffect(() => {

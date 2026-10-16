@@ -334,7 +334,7 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({
 };
 
 // Keep external stores in sync with provider state changes
-export const AudioProviderEffects: React.FC<{
+const AudioProviderEffects: React.FC<{
 	isPlaying: boolean;
 	volume: number;
 }> = ({ isPlaying, volume }) => {
@@ -346,7 +346,7 @@ export const AudioProviderEffects: React.FC<{
 };
 
 // Mirror duration, waveform and trim for decoupled consumers (e.g., progress bar)
-export const AudioTimeEffects: React.FC<{
+const AudioTimeEffects: React.FC<{
 	duration: number;
 	waveformData: number[];
 	trimStart: number;
