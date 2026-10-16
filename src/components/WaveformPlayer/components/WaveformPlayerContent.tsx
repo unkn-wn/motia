@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { WaveformCanvas } from './WaveformCanvas';
 import { NoteContextMenu } from './NoteContextMenu';
 import { InlineNoteEditor } from './InlineNoteEditor';
@@ -18,7 +18,6 @@ export const WaveformPlayerContent: React.FC = () => {
   const { isPlaying } = useAudio();
   const ctx = useWaveformContext();
   const { renderPaused, isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, toolMode, movingStrokePreview, canvasRef } = ctx;
-  const frameRef = useRef<number | null>(null);
   const activeRef = useRef(false);
   const suppressContextUntilRef = useRef<number>(0);
   const rcOriginInsideEditorRef = useRef<boolean>(false);
@@ -33,41 +32,29 @@ export const WaveformPlayerContent: React.FC = () => {
   // Set up global mouse handlers
   useGlobalMouseHandlers();
 
-  // The loop calls the latest renderer, so a new one (each transform change) doesn't restart it
+  // The loop draws with the latest renderer. While following the playhead the view moves every frame, so the
+  // renderer changes every frame: it must not restart the loop. A restart cancels the frame the loop was waiting for,
+  // and when the playback clock's own frame runs first (it updates the time, which re-renders and settles this
+  // effect before the canvas's frame), every frame is cancelled and the canvas stops drawing.
   const renderRef = useRef(renderCanvas);
-  useEffect(() => { renderRef.current = renderCanvas; }, [renderCanvas]);
+  useLayoutEffect(() => { renderRef.current = renderCanvas; }, [renderCanvas]);
 
-  // RAF-driven render when actively changing (playback, panning, drawing, dragging)
+  // Animated while something changes continuously (playback, panning, drawing, dragging, erasing); nothing to draw
+  // while the frame editor covers the canvas. Only becoming active or idle starts or stops the loop.
+  const active = !renderPaused && (isPlaying || isPanning || isDrawing || !!dragging || !!selectionBox?.dragging || toolMode === 'erase');
   useEffect(() => {
-    // Treat selection drag and erase interactions as active so we get smooth live feedback
-    // Nothing to draw while the frame editor covers the canvas
-    const active = !renderPaused && (isPlaying || isPanning || isDrawing || !!dragging || !!selectionBox?.dragging || toolMode === 'erase');
     activeRef.current = active;
-
     if (!active) {
-      // If not active, render once to reflect latest state
-      renderCanvas();
-      // Ensure any pending RAF is canceled
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
+      // Idle: draw once with the latest state
+      renderRef.current();
       return;
     }
-
-    const tick = () => {
+    let frame = requestAnimationFrame(function tick() {
       renderRef.current();
-      frameRef.current = requestAnimationFrame(tick);
-    };
-
-    frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-    };
-  }, [isPlaying, isPanning, isDrawing, dragging, selectionBox?.dragging, toolMode, renderCanvas, renderPaused]);
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active]);
 
   // A time change while nothing animates (a seek, a click on the waveform) redraws the playhead once
   useEffect(

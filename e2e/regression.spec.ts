@@ -218,3 +218,34 @@ test('the next project opened in the app starts at its own time, not the last on
 	await app.createProject('b.wav');
 	await expect.poll(async () => (await app.time()).current).toBeLessThan(0.5);
 });
+
+for (const orientation of ['vertical', 'horizontal'] as const) {
+	test(`${orientation}: the canvas keeps drawing during playback while following the playhead`, async ({ app }) => {
+		const { page } = app;
+		await app.signIn();
+		await app.createProject();
+		await app.chooseOrientation(orientation);
+		await app.settled();
+		await page.keyboard.press(' ');
+		// Count the canvas's frames for half a second of playback (following is on by default)
+		const draws = await page.evaluate(
+			() =>
+				new Promise<number>((resolve) => {
+					const ctx = (document.querySelector('canvas') as HTMLCanvasElement).getContext('2d')!;
+					const clear = ctx.clearRect.bind(ctx);
+					let n = 0;
+					ctx.clearRect = (...a: Parameters<CanvasRenderingContext2D['clearRect']>) => {
+						n += 1;
+						clear(...a);
+					};
+					setTimeout(() => {
+						ctx.clearRect = clear;
+						resolve(n);
+					}, 500);
+				})
+		);
+		await page.keyboard.press(' ');
+		expect((await app.transform()).offsetX !== 0 || (await app.transform()).offsetY !== 0).toBe(true);
+		expect(draws).toBeGreaterThan(10);
+	});
+}
