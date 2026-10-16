@@ -1,5 +1,5 @@
 // Minimal external store used with useSyncExternalStore to decouple frequent updates
-export type Unsubscribe = () => void;
+type Unsubscribe = () => void;
 
 class SimpleStore<T> {
   private value: T;
@@ -29,3 +29,6 @@ export const isPlayingStore = new SimpleStore<boolean>(false);
 export const volumeStore = new SimpleStore<number>(0.5);
 export const currentTimeStore = new SimpleStore<number>(0);
 export const durationStore = new SimpleStore<number>(0);
+export const waveformDataStore = new SimpleStore<number[]>([]);
+/** Trim range in use, [start, end] in seconds (end 0 = the whole song) */
+export const trimStore = new SimpleStore<readonly [number, number]>([0, 0]);

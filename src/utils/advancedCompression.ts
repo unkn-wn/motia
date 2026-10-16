@@ -6,7 +6,7 @@
 import type { DrawingPoint, DrawingStroke, CompressedStroke } from '../types/drawing';
 
 // Local types for compressed representations to avoid any
-export interface UltraCompactCompressedStroke {
+interface UltraCompactCompressedStroke {
 	p: [number, number][]; // relative integer points
 	ox: number; // offset x
 	oy: number; // offset y
@@ -15,14 +15,14 @@ export interface UltraCompactCompressedStroke {
 	s: number; // precision scale
 }
 
-export type RLEPoint = [number, number] | [number, number, number];
-export interface RLECompressedStroke {
+type RLEPoint = [number, number] | [number, number, number];
+interface RLECompressedStroke {
 	r: RLEPoint[];
 	c: string;
 	w: number;
 }
 
-export interface VectorQuantCompressedStroke {
+interface VectorQuantCompressedStroke {
 	q: [number, number][];
 	g: number; // grid size
 	c: string;
@@ -33,7 +33,7 @@ export interface VectorQuantCompressedStroke {
  * Ultra-compact binary-like representation
  * Stores coordinates as 16-bit integers with configurable precision
  */
-export const compressStrokeUltraCompact = (
+const compressStrokeUltraCompact = (
 	stroke: DrawingStroke,
 	precision: number = 100
 ): UltraCompactCompressedStroke | DrawingStroke => {
@@ -72,7 +72,7 @@ export const compressStrokeUltraCompact = (
 /**
  * Decompress ultra-compact format
  */
-export const decompressStrokeUltraCompact = (compressed: UltraCompactCompressedStroke): DrawingStroke => {
+const decompressStrokeUltraCompact = (compressed: UltraCompactCompressedStroke): DrawingStroke => {
 	const scale = compressed.s ?? 10;
 	return {
 		points: compressed.p.map(([x, y]: [number, number]) => ({
@@ -87,7 +87,7 @@ export const decompressStrokeUltraCompact = (compressed: UltraCompactCompressedS
 /**
  * Run-length encoding for repetitive patterns
  */
-export const compressStrokeRLE = (stroke: DrawingStroke): RLECompressedStroke | DrawingStroke => {
+const compressStrokeRLE = (stroke: DrawingStroke): RLECompressedStroke | DrawingStroke => {
 	if (stroke.points.length <= 1) return stroke;
 
 	const encoded: RLEPoint[] = [];
@@ -136,7 +136,7 @@ export const compressStrokeRLE = (stroke: DrawingStroke): RLECompressedStroke | 
 /**
  * Decompress RLE format
  */
-export const decompressStrokeRLE = (compressed: RLECompressedStroke): DrawingStroke => {
+const decompressStrokeRLE = (compressed: RLECompressedStroke): DrawingStroke => {
 	const points: DrawingPoint[] = [];
 
 	for (const item of compressed.r) {
@@ -159,7 +159,7 @@ export const decompressStrokeRLE = (compressed: RLECompressedStroke): DrawingStr
 /**
  * Vector quantization - round coordinates to a grid
  */
-export const compressStrokeVectorQuantization = (stroke: DrawingStroke): VectorQuantCompressedStroke => {
+const compressStrokeVectorQuantization = (stroke: DrawingStroke): VectorQuantCompressedStroke => {
 	// Adjust grid size to maintain constant visual precision (approx 0.5 screen pixels)
 	// Base gridSize passed in is usually 2 (world units), but we dont want it responsive to scale.
 	// So, let's just enforce a visual target: 0.5px.
@@ -190,7 +190,7 @@ export const compressStrokeVectorQuantization = (stroke: DrawingStroke): VectorQ
 /**
  * Decompress vector quantization
  */
-export const decompressStrokeVectorQuantization = (compressed: VectorQuantCompressedStroke): DrawingStroke => {
+const decompressStrokeVectorQuantization = (compressed: VectorQuantCompressedStroke): DrawingStroke => {
 	return {
 		points: compressed.q.map(([x, y]: [number, number]) => ({ x, y })),
 		color: compressed.c,
@@ -234,7 +234,7 @@ export const compressStrokeAdvancedAdaptive = (stroke: DrawingStroke): Compresse
 /**
  * Decompress advanced adaptive format
  */
-export const decompressStrokeAdvancedAdaptive = (compressed: CompressedStroke): DrawingStroke => {
+const decompressStrokeAdvancedAdaptive = (compressed: CompressedStroke): DrawingStroke => {
 	switch (compressed.type) {
 		case 'raw':
 			return compressed.data as DrawingStroke;

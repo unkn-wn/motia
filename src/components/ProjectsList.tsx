@@ -10,7 +10,10 @@ import { UserIcon } from '@/assets/icons';
 import FileDropzone from '@/components/FileDropzone';
 import FileUploader from '@/components/FileUploader';
 import { saveLocalAudio, deleteLocalAudio } from '@/lib/localAudio';
+import { deleteProjectAssets } from '@/features/storyboard/assets/localAssets';
 import Modal from '@/components/Modal';
+import { useStoryboardImport } from '@/features/storyboard/io/useImport';
+import { ImportErrorsModal, ImportStoryboardButton } from '@/features/storyboard/io/ImportControls';
 
 type Item = { id: string; title: string; updatedAt?: Date | number | null; durationSec?: number | null; thumbnail?: string | null };
 
@@ -43,6 +46,7 @@ const ProjectsList: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null); // projectId under action
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const { importFile, busy: importing, errors: importErrors, clearErrors } = useStoryboardImport();
   const invalidate = useCallback((uid: string) => { projectsCache.delete(uid); }, []);
   // If we ever enter here from an external navigation, ensure playing audio is paused
   // (Primary pause happens in Home before navigate.)
@@ -124,7 +128,7 @@ const ProjectsList: React.FC = () => {
   // (No session flag needed; we already invalidated once this mount)
 
   return (
-    <FileDropzone onFileSelect={handleUpload} isLoading={uploading}>
+    <FileDropzone onFileSelect={handleUpload} isLoading={uploading || importing} onImportFile={importFile}>
       <div className="min-h-dvh p-6" style={{ backgroundColor: 'var(--bg-primary)' }}>
         <div className="mx-auto max-w-5xl">
           <div className="flex items-center justify-between mb-4">
@@ -132,13 +136,16 @@ const ProjectsList: React.FC = () => {
               <img src={`${base}motia-logo-light.svg`} alt="motia" className="h-8 w-auto opacity-90 select-none" />
               <h1 className="text-2xl font-semibold tracking-tight text-neutral-100 -translate-y-0.5">motia</h1>
             </div>
-            <button
-              onClick={openProfile}
-              className="group cursor-pointer hover:bg-neutral-800 ring-1 ring-neutral-800 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
-              title="Account"
-            >
-              <UserIcon className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <ImportStoryboardButton onFile={importFile} busy={importing || uploading} variant="button" />
+              <button
+                onClick={openProfile}
+                className="group cursor-pointer hover:bg-neutral-800 ring-1 ring-neutral-800 text-white rounded-full p-2.5 shadow-md transition-all duration-300"
+                title="Account"
+              >
+                <UserIcon className="w-5 h-5" />
+              </button>
+            </div>
           </div>
           <Suspense fallback={
             <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -149,6 +156,7 @@ const ProjectsList: React.FC = () => {
           </Suspense>
         </div>
         <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
+        <ImportErrorsModal errors={importErrors} onClose={clearErrors} />
         {/* Delete Modal */}
         <DeleteModal
           open={!!deleteTarget}
@@ -160,6 +168,7 @@ const ProjectsList: React.FC = () => {
             try {
               await deleteProject(user.uid, deleteTarget.id);
               try { await deleteLocalAudio(deleteTarget.id); } catch { /* ignore */ }
+              try { await deleteProjectAssets(deleteTarget.id); } catch { /* ignore */ }
               invalidate(user.uid);
               setDeleteTarget(null);
             } finally {

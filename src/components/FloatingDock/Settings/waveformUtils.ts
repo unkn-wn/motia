@@ -8,7 +8,7 @@
  * and does not use these utilities due to fundamentally different coordinate systems.
  */
 
-export interface WaveformDrawOptions {
+interface WaveformDrawOptions {
 	/** Canvas 2D context */
 	ctx: CanvasRenderingContext2D;
 	/** Waveform amplitude data (0-1 normalized) */
@@ -35,6 +35,8 @@ export interface WaveformDrawOptions {
 	playedColor?: string;
 	/** Whether to show playhead indicator */
 	showPlayhead?: boolean;
+	/** Where a time is drawn (default: the whole song across the width; a zoomed view passes its own) */
+	timeToX?: (t: number) => number;
 }
 
 /**
@@ -55,6 +57,7 @@ export function drawWaveformBars(options: WaveformDrawOptions): void {
 		dimmedColor = '#262626',
 		playedColor = '#a3a3a3',
 		showPlayhead = true,
+		timeToX = (t: number) => (t / duration) * width,
 	} = options;
 
 	// Clear background
@@ -65,14 +68,16 @@ export function drawWaveformBars(options: WaveformDrawOptions): void {
 
 	if (!waveformData || waveformData.length === 0 || duration === 0) return;
 
-	const barWidth = width / waveformData.length;
 	const maxAmp = Math.max(...waveformData, 1);
 	const trimmedDuration = trimEnd - trimStart;
 	const progress = trimmedDuration > 0 ? (currentTime - trimStart) / trimmedDuration : 0;
 
 	// Draw bars
 	for (let i = 0; i < waveformData.length; i++) {
-		const x = i * barWidth;
+		const x = timeToX((i / waveformData.length) * duration);
+		const barWidth = timeToX(((i + 1) / waveformData.length) * duration) - x;
+		// Outside the part shown (zoomed in)
+		if (x + barWidth < 0 || x > width) continue;
 		const amp = waveformData[i] / maxAmp;
 		const barHeight = amp * height * 0.85;
 		const y = (height - barHeight) / 2;
@@ -98,8 +103,7 @@ export function drawWaveformBars(options: WaveformDrawOptions): void {
 
 	// Draw playhead if needed (only show when playing and within trim range)
 	if (showPlayhead && currentTime >= trimStart && currentTime <= trimEnd) {
-		// Position playhead based on absolute time within the full waveform width
-		const playheadX = (currentTime / duration) * width;
+		const playheadX = timeToX(currentTime);
 
 		// White flat color playhead line (no gradient)
 		ctx.strokeStyle = '#ffffff';
@@ -115,22 +119,6 @@ export function drawWaveformBars(options: WaveformDrawOptions): void {
 		ctx.arc(playheadX, height / 2, 4, 0, Math.PI * 2);
 		ctx.fill();
 	}
-}
-
-/**
- * Convert time (seconds) to pixel position
- */
-export function timeToPixel(time: number, duration: number, width: number): number {
-	if (duration === 0) return 0;
-	return (time / duration) * width;
-}
-
-/**
- * Convert pixel position to time (seconds)
- */
-export function pixelToTime(pixel: number, duration: number, width: number): number {
-	if (width === 0) return 0;
-	return (pixel / width) * duration;
 }
 
 /**
@@ -164,6 +152,6 @@ export function createGradientBackground(
 	colorStops.forEach(({ offset, color }) => {
 		gradient.addColorStop(offset, color);
 	});
-	ctx.fillStyle = gradient as any;
+	ctx.fillStyle = gradient;
 	ctx.fillRect(0, 0, width, height);
 }

@@ -1,7 +1,6 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import WaveformPlayer, { type WaveformPlayerRef } from '@components/WaveformPlayer';
 import AudioControls from '@components/AudioControlsContainer';
-import NotesSidebarConnected from '@components/NotesSidebar/NotesSidebarConnected';
 import FloatingDock from '@components/FloatingDock';
 import ProfileModal from '@/components/ProfileModal';
 import { AudioProvider } from '@contexts/AudioContext';
@@ -15,7 +14,6 @@ import HomeLanding from '@components/Home/HomeLanding';
 import {
 	type KeyboardShortcut,
 	createKeyboardHandler,
-	// resetAllShortcutsAndPreferences, // Deprecated - no longer using reset button
 	isUserTyping,
 	getShortcuts,
 	setShortcuts as setGlobalShortcuts,
@@ -27,9 +25,17 @@ import { useNotesState } from '@/hooks/useNotesState';
 import { useProjectLifecycle } from '@/hooks/useProjectLifecycle';
 import { fetchProjectMeta, updateProjectThumbnail, renameProject, fetchUserSettings, updateProjectOrientation } from '@/lib/db';
 import { TitleBar } from '@/components/TitleBar';
-import SidebarToggle from '@/components/SidebarToggle';
 import { OrientationBanner } from '@/components/WaveformPlayer/components/OrientationBanner';
 import type { CanvasOrientation } from '@/types';
+import { useTestHooks } from '@/lib/testHooks';
+import { useStoryboardState } from '@/features/storyboard/useStoryboardState';
+import { StoryboardContext, StoryboardDocContext, type StoryboardContextValue } from '@/features/storyboard/StoryboardContext';
+import { FrameEditor } from '@/features/storyboard/editor/FrameEditor';
+import { PreviewMonitor } from '@/features/storyboard/PreviewMonitor';
+import { clearAssetCache } from '@/features/storyboard/assets/assetStore';
+import { durationStore, trimStore } from '@components/AudioControls/state';
+import { history } from '@utils/history';
+import { PROJECT_TOO_BIG_ERROR } from '@/lib/notesPayload';
 
 function Home() {
 	const navigate = useNavigate();
@@ -38,7 +44,8 @@ function Home() {
 	const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(() => getShortcuts());
 	const [isDrawingMode, setIsDrawingMode] = useState(false); // legacy
 	const [toolMode, setToolMode] = useState<'draw' | 'select' | 'erase' | null>(null);
-	const [sidebarOpen, setSidebarOpen] = useState(false);
+	// Index rail along the canvas edge (key B); shown by default
+	const [railOpen, setRailOpen] = useState(true);
 	const [projectTitle, setProjectTitle] = useState<string>('Untitled Project');
 	const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 	const [notesVersion, setNotesVersion] = useState<number | undefined>(undefined);
@@ -62,6 +69,7 @@ function Home() {
 	// Centralized notes state & actions
 	const {
 		notes,
+		notesRef,
 		setNotes,
 		handleAddNote,
 		handleUpdateNote,
@@ -75,6 +83,16 @@ function Home() {
 		handleUndo,
 		handleRedo,
 	} = useNotesState();
+
+	// Storyboard frames, symbols and board format
+	const storyboardState = useStoryboardState();
+	// Floating preview of the frame at the playhead (off by default)
+	const [previewOpen, setPreviewOpen] = useState(false);
+	const togglePreview = useCallback(() => setPreviewOpen((v) => !v), []);
+	// Frame open in the frame editor (full overlay)
+	const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
+	const { storyboard, storyboardToSave, storyboardStatus, changedSinceLoad: storyboardChanged, actions: storyboardActions } = storyboardState;
+	const { loadStoryboard, resetStoryboard } = storyboardActions;
 
 	// Project lifecycle
 	const {
@@ -92,7 +110,19 @@ function Home() {
 		handleFileSelect,
 		handleRelinkSelected,
 		handleSignOut,
-	} = useProjectLifecycle({ setNotes, onCurrentTimeChange: () => {}, setNotesVersion });
+	} = useProjectLifecycle({
+		setNotes,
+		loadStoryboard,
+		resetStoryboard,
+		onCurrentTimeChange: () => {},
+		setNotesVersion,
+	});
+
+	// Undo/redo never crosses projects; image URLs are per project
+	useEffect(() => {
+		history.setProject(projectId);
+		clearAssetCache();
+	}, [projectId]);
 
 	// Mark as unsaved whenever notes change (user interaction)
 	useEffect(() => {
@@ -100,6 +130,9 @@ function Home() {
 			setHasUnsavedChanges(true);
 		}
 	}, [notes, projectId]);
+	useEffect(() => {
+		if (projectId && storyboardChanged) setHasUnsavedChanges(true);
+	}, [storyboard, storyboardChanged, projectId]);
 
 	// Fetch project metadata (title + thumbnail + trim data) + User Settings (volume) when project loads
 	const projectMetaRef = useRef<{ title: string; thumbnail: string | null } | null>(null);
@@ -200,6 +233,26 @@ function Home() {
 		[user, projectId]
 	);
 
+	// Export: everything is read when the button is pressed (no re-render while notes, board or playhead change)
+	const storyboardRef = storyboardActions.storyboardRef;
+	const handleExport = useCallback(
+		async (includeAudio: boolean, onProgress: (fraction: number) => void) => {
+			const { exportProject } = await import('@/features/storyboard/io/exportZip');
+			const duration = durationStore.getSnapshot();
+			const [trimStart, trimEnd] = trimStore.getSnapshot();
+			return exportProject({
+				title: projectTitle,
+				orientation,
+				notes: notesRef.current,
+				storyboard: storyboardRef.current,
+				audio: audioFile ? { file: audioFile, durationSec: duration, trimStart, trimEnd: trimEnd > 0 ? trimEnd : duration } : undefined,
+				includeAudio,
+				onProgress,
+			});
+		},
+		[projectTitle, orientation, notesRef, storyboardRef, audioFile]
+	);
+
 	// Handle orientation change
 	const handleSelectOrientation = useCallback(
 		async (newOrientation: CanvasOrientation) => {
@@ -216,6 +269,51 @@ function Home() {
 	);
 
 	// Add note via player button
+
+	const handleAddFrameAtCurrentTime = useCallback(() => {
+		waveformPlayerRef.current?.addFrameAtCurrentTime();
+	}, []);
+
+	// Opening the frame editor deselects the canvas tool
+	const openFrameEditor = useCallback((id: string) => {
+		setToolMode(null);
+		setIsDrawingMode(false);
+		setEditingFrameId(id);
+	}, []);
+	// Closing the editor saves right away (the autosave hook is created further down)
+	const flushAutosaveRef = useRef<() => void>(() => {});
+	const closeFrameEditor = useCallback(() => {
+		setEditingFrameId(null);
+		flushAutosaveRef.current();
+	}, []);
+	useEffect(() => {
+		setEditingFrameId(null);
+	}, [projectId]);
+	const placeCard = useCallback(
+		(time: number) => waveformPlayerRef.current?.cardPositionAt(time) ?? { canvasX: -410, canvasY: 0 },
+		[]
+	);
+
+	// The canvas is covered while the editor is open: it keeps the frames it had, so editor drags don't re-render it
+	const canvasFramesRef = useRef(storyboard.frames);
+	const canvasBoardRef = useRef(storyboard.board);
+	const canvasSymbolsRef = useRef(storyboard.symbols);
+	if (editingFrameId === null) {
+		canvasFramesRef.current = storyboard.frames;
+		canvasBoardRef.current = storyboard.board;
+		canvasSymbolsRef.current = storyboard.symbols;
+	}
+	const canvasFrames = editingFrameId === null ? storyboard.frames : canvasFramesRef.current;
+	const canvasBoard = editingFrameId === null ? storyboard.board : canvasBoardRef.current;
+	const canvasSymbols = editingFrameId === null ? storyboard.symbols : canvasSymbolsRef.current;
+
+	const storyboardContextValue = useMemo<StoryboardContextValue>(
+		() => ({ ...storyboardActions, projectId, editingFrameId, openFrameEditor, closeFrameEditor, placeCard }),
+		[storyboardActions, projectId, editingFrameId, openFrameEditor, closeFrameEditor, placeCard]
+	);
+
+	// Test-mode state access (no-op outside emulator test mode)
+	useTestHooks(waveformPlayerRef, notes, storyboardState, { editingFrameId, openFrameEditor, closeFrameEditor });
 
 	const handleAddNoteAtCurrentTime = useCallback(() => {
 		if (waveformPlayerRef.current) {
@@ -235,8 +333,8 @@ function Home() {
 		setIsDrawingMode(false);
 		setToolMode((m) => (m === 'erase' ? null : 'erase'));
 	}, []);
-	const handleToggleSidebar = useCallback(() => {
-		setSidebarOpen((prev) => !prev);
+	const handleToggleRail = useCallback(() => {
+		setRailOpen((prev) => !prev);
 	}, []);
 
 	const handleShowSettings = useCallback(() => {
@@ -265,12 +363,6 @@ function Home() {
 		});
 	}, []);
 
-	// Reset shortcuts function deprecated (reset button removed from UI)
-	// const handleResetShortcuts = useCallback(() => {
-	// 	const defaults = resetAllShortcutsAndPreferences();
-	// 	setShortcuts(defaults);
-	// }, []);
-
 	// Sync local view with global store after sign-in/settings load
 	useEffect(() => {
 		setShortcuts(getShortcuts());
@@ -281,10 +373,11 @@ function Home() {
 		// Create action handlers
 		const actionHandlers = {
 			ADD_NOTE: handleAddNoteAtCurrentTime,
+			ADD_FRAME: handleAddFrameAtCurrentTime,
 			TOOL_DRAW: handleDrawMode,
 			TOOL_SELECT: handleSelectMode,
 			TOOL_ERASE: handleEraseMode,
-			TOGGLE_SIDEBAR: handleToggleSidebar,
+			TOGGLE_SIDEBAR: handleToggleRail,
 			TOGGLE_PLAYBACK: () => {
 				if (waveformPlayerRef.current) {
 					waveformPlayerRef.current.playPause();
@@ -317,15 +410,10 @@ function Home() {
 
 		window.addEventListener('keydown', keyboardHandler);
 		return () => window.removeEventListener('keydown', keyboardHandler);
-	}, [shortcuts, handleAddNoteAtCurrentTime, handleDrawMode, handleSelectMode, handleEraseMode, handleToggleSidebar]);
+	}, [shortcuts, handleAddNoteAtCurrentTime, handleAddFrameAtCurrentTime, handleDrawMode, handleSelectMode, handleEraseMode, handleToggleRail]);
 
 	// note handlers provided by notes state
 
-	const handleJumpToTime = useCallback((time: number) => {
-		if (waveformPlayerRef.current) {
-			waveformPlayerRef.current.seekToTime(time);
-		}
-	}, []);
 
 	// color + undo/redo + sign out provided by hooks
 
@@ -358,14 +446,21 @@ function Home() {
 		saving,
 		lastSavedAt,
 		saveError,
+		payloadBytes,
+		storyboardHeld,
 		flush: flushAutosave,
 	} = useFirestoreAutosave({
 		uid: user?.uid,
 		projectId,
 		notes,
+		storyboard: storyboardToSave,
 		notesVersion,
 		setNotesVersion,
 	});
+
+	useLayoutEffect(() => {
+		flushAutosaveRef.current = flushAutosave;
+	}, [flushAutosave]);
 
 	// Reset unsaved changes flag when save completes
 	// Triggers whenever lastSavedAt updates (new save) regardless of saving state
@@ -443,9 +538,10 @@ function Home() {
 	}, [user, projectId, loadingWaveform]);
 
 	// Memoize text notes count to avoid unnecessary rerenders in toggle
-	const textNotesCount = useMemo(() => notes.filter((n) => n.type !== 'drawing').length, [notes]);
 
 	return (
+		<StoryboardContext.Provider value={storyboardContextValue}>
+		<StoryboardDocContext.Provider value={storyboard}>
 		<div className="min-h-dvh" style={{ backgroundColor: 'var(--bg-primary)' }}>
 			{shouldRedirectToProjects ? <Navigate to="/projects" /> : null}
 			{redirectTo && redirectTo !== 'PROJECTS' ? <Navigate to="/project/$projectId" params={{ projectId: redirectTo }} /> : null}
@@ -492,14 +588,16 @@ function Home() {
 								onAddDrawing={handleAddDrawing}
 								onUpdateDrawing={handleUpdateDrawing}
 								toolMode={toolMode}
+								frames={canvasFrames}
+								board={canvasBoard}
+								symbols={canvasSymbols}
+								showRail={railOpen}
+								onChangeNoteColor={handleChangeNoteColor}
 							/>
-							<AudioControls
-								onToggleNotes={() => setSidebarOpen(!sidebarOpen)}
-								notesOpen={sidebarOpen}
-								textNotesCount={textNotesCount}
-							/>
+							<AudioControls />
 							<FloatingDock
 								onAddNote={handleAddNoteAtCurrentTime}
+								onAddFrame={handleAddFrameAtCurrentTime}
 								onShowShortcuts={handleShowSettings}
 								canAddNote={true}
 								isDrawingMode={isDrawingMode}
@@ -515,26 +613,7 @@ function Home() {
 								onGoHome={handleGoProjects}
 								disableGoHome={!!user?.isAnonymous}
 							/>
-							{/* Sidebar toggle + Notes sidebar remain available */}
-							<SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
-							<div
-								data-prevent-erase
-								className={`fixed z-40 transition-transform duration-300 ease-out pointer-events-none
-									max-md:inset-x-0 max-md:bottom-0 max-md:top-auto
-									md:right-0 md:top-8 md:h-full md:z-20
-									${sidebarOpen ? 'max-md:translate-y-0 md:translate-x-0' : 'max-md:translate-y-full md:translate-x-full'}`}
-							>
-								<div className="pointer-events-auto">
-									<NotesSidebarConnected
-										notes={notes}
-										onDeleteNote={handleDeleteNote}
-										onJumpToTime={handleJumpToTime}
-										onChangeNoteColor={handleChangeNoteColor}
-										onUpdateNote={handleUpdateNote}
-										onClose={() => setSidebarOpen(false)}
-									/>
-								</div>
-							</div>
+							<FrameEditor />
 						</div>
 					</AudioProvider>
 				) : (
@@ -552,7 +631,7 @@ function Home() {
 					/>
 					<ProjectLoadingWrapper loadingProject={loadingProject} metadataLoaded={metadataLoaded}>
 						<div className="relative h-screen overflow-hidden">
-							{showOrientationBanner && notes.length === 0 && (
+							{showOrientationBanner && notes.length === 0 && storyboard.frames.length === 0 && (
 								<OrientationBanner onSelect={handleSelectOrientation} />
 							)}
 							{saveError && (
@@ -560,7 +639,9 @@ function Home() {
 									<div className="bg-red-900 text-white px-4 py-2 rounded shadow-lg font-bold pointer-events-auto">
 										{saveError.message === 'Conflict: Remote version is newer'
 											? 'Sync Conflict: This project was updated on another device. Please refresh to avoid overwriting data.'
-											: 'Error saving changes. Please check your connection.'}
+											: saveError.message === PROJECT_TOO_BIG_ERROR
+												? 'This project is too big to save. Remove some frames, pen strokes or notes.'
+												: 'Error saving changes. Please check your connection.'}
 									</div>
 								</div>
 							)}
@@ -572,6 +653,13 @@ function Home() {
 								onSaveClick={flushAutosave}
 								disabled={!user || !projectId}
 								hasUnsavedChanges={hasUnsavedChanges}
+								payloadBytes={payloadBytes}
+								storyboardHeld={storyboardHeld}
+								storyboardUnreadable={storyboardStatus === 'unreadable'}
+								previewOpen={previewOpen}
+								onTogglePreview={togglePreview}
+								// A board that couldn't be read isn't exported (the file would look like an empty board)
+								onExport={storyboardStatus === 'loaded' ? handleExport : undefined}
 							/>
 							<WaveformPlayer
 								ref={waveformPlayerRef}
@@ -586,19 +674,21 @@ function Home() {
 								onAddDrawing={handleAddDrawing}
 								onUpdateDrawing={handleUpdateDrawing}
 								toolMode={toolMode}
+								frames={canvasFrames}
+								board={canvasBoard}
+								symbols={canvasSymbols}
 								orientation={orientation}
+								showRail={railOpen}
+								onChangeNoteColor={handleChangeNoteColor}
 							/>
 
 							{/* Audio Controls - now outside WaveformPlayer */}
-							<AudioControls
-								onToggleNotes={() => setSidebarOpen(!sidebarOpen)}
-								notesOpen={sidebarOpen}
-								textNotesCount={textNotesCount}
-							/>
+							<AudioControls />
 
 							{/* Floating Dock with Add Note and Settings */}
 							<FloatingDock
 								onAddNote={handleAddNoteAtCurrentTime}
+								onAddFrame={handleAddFrameAtCurrentTime}
 								onShowShortcuts={handleShowSettings}
 								canAddNote={!!audioFile}
 								isDrawingMode={isDrawingMode}
@@ -614,28 +704,9 @@ function Home() {
 								onGoHome={handleGoProjects}
 								disableGoHome={!!user?.isAnonymous}
 							/>
-							{/* Sidebar Toggle Button */}
-							<SidebarToggle open={sidebarOpen} setOpen={setSidebarOpen} textNotesCount={textNotesCount} />
-
-							{/* Collapsible Sidebar (Desktop right panel / Mobile non-blocking bottom sheet) */}
-							<div
-								data-prevent-erase
-								className={`fixed z-40 transition-transform duration-300 ease-out pointer-events-none
-									max-md:inset-x-0 max-md:bottom-0 max-md:top-auto
-									md:right-0 md:top-8 md:h-full md:z-20
-									${sidebarOpen ? 'max-md:translate-y-0 md:translate-x-0' : 'max-md:translate-y-full md:translate-x-full'}`}
-							>
-								<div className="pointer-events-auto">
-									<NotesSidebarConnected
-										notes={notes}
-										onDeleteNote={handleDeleteNote}
-										onJumpToTime={handleJumpToTime}
-										onChangeNoteColor={handleChangeNoteColor}
-										onUpdateNote={handleUpdateNote}
-										onClose={() => setSidebarOpen(false)}
-									/>
-								</div>
-							</div>
+							<FrameEditor />
+							{/* Covered by the frame editor while it is open */}
+							{previewOpen && editingFrameId === null ? <PreviewMonitor onClose={togglePreview} /> : null}
 						</div>
 					</ProjectLoadingWrapper>
 				</AudioProvider>
@@ -643,6 +714,8 @@ function Home() {
 			{/* Profile Modal lives at root to overlay */}
 			<ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 		</div>
+		</StoryboardDocContext.Provider>
+		</StoryboardContext.Provider>
 	);
 }
 

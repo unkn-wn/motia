@@ -4,7 +4,10 @@ import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
 import { distanceBetween, midpoint, computePinchScale } from '@utils/touchUtils';
 import { screenToCanvasCoords, findNoteAtPosition, isClickInWaveform, getTimeFromCanvasY, getWaveformDimensions } from '@utils/canvasUtils';
 import { useDrawingInteractions } from './useDrawingInteractions';
-import { handleSelectionCreate, handleSelectionMove, finalizeSelectionMove } from './mouse/selectionMouseHandlers';
+import { handleSelectionCreate, handleSelectionMove, commitSelectionMove, startSelectionMove } from './mouse/selectionMouseHandlers';
+import { useStoryboard } from '@/features/storyboard/StoryboardContext';
+import type { CanvasDrag } from '@contexts/objects/WaveformContextObject';
+import { frameDragFrom, targetTime, useFrameTargetAt } from './frameCanvas';
 import { updateEraserPreview } from './mouse/eraserMouseHandlers';
 import { useAudio } from '@contexts/objects/AudioContextObject';
 import { history } from '@utils/history';
@@ -36,7 +39,6 @@ export const usePointerInteractions = () => {
 		noteLayoutCache,
 		selectionBox,
 		setSelectionBox,
-		selectedDrawingIds,
 	} = ctx;
 
 	// Track active pointers for pinch/drag
@@ -88,14 +90,24 @@ export const usePointerInteractions = () => {
 	// Track long-press for opening context menu on touch
 	const longPressTimerRef = useRef<number | null>(null);
 	const longPressTriggeredRef = useRef<boolean>(false);
-	// Track a candidate for touch-based note dragging (when no tool active)
+	// Track a candidate for touch-based dragging of a note or frame (when no tool active). `menu` says what a
+	// long-press opens: the note menu, the frame menu (cards only), or nothing (anchor dots, end ticks).
 	const touchDragCandidateRef = useRef<null | {
-		id: string;
+		drag: CanvasDrag;
 		startClientX: number;
 		startClientY: number;
-		initialCanvasX: number;
-		initialCanvasY: number;
+		menu: 'note' | 'frame' | null;
 	}>(null);
+	// Last tap on a note or frame card: a second tap opens its editor. The second tap counts by where the finger
+	// lands, not what is under it: the first tap seeks, and a view following the playhead may have moved the card.
+	const lastCardTapRef = useRef<{ id: string; kind: 'note' | 'frame'; x: number; y: number; t: number } | null>(null);
+	// Times are the events' own (when the finger lifted), so a busy page doesn't turn a quick double-tap into two taps
+	const isSecondTap = (x: number, y: number, t: number) => {
+		const last = lastCardTapRef.current;
+		return !!last && t - last.t <= 300 && Math.hypot(x - last.x, y - last.y) <= 20;
+	};
+	const frameTargetAt = useFrameTargetAt();
+	const storyboard = useStoryboard();
 	// Deferred selection create for touch — prevents 2-finger pan from starting/cancelling a selection
 	const pendingSelectionCreateRef = useRef<{ canvasX: number; canvasY: number; clientX: number; clientY: number } | null>(null);
 
@@ -111,7 +123,7 @@ export const usePointerInteractions = () => {
 			pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 			// Record tap start for single-pointer gestures
 			if (pointers.current.size === 1) {
-				tapStarts.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
+				tapStarts.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp });
 			}
 
 			const rect = canvasRef.current?.getBoundingClientRect();
@@ -142,9 +154,16 @@ export const usePointerInteractions = () => {
 				if (selectionBox?.dragging) {
 					// Cancel any in-progress selection drag on pinch start
 					setSelectionBox?.(sb => sb ? { ...sb, dragging: false } : sb);
+					// Cards moved live during a selection move go back with the strokes
+					storyboard.cancelLiveEdit();
 				}
 				// Cancel deferred selection create
 				pendingSelectionCreateRef.current = null;
+				// A frame drag in progress goes back where it started
+				if (ctx.dragging && ctx.dragging.kind !== 'note') {
+					storyboard.cancelLiveEdit();
+					setDragging(null);
+				}
 				// Cancel long-press and candidate drag on pinch start
 				if (longPressTimerRef.current) {
 					window.clearTimeout(longPressTimerRef.current);
@@ -180,19 +199,7 @@ export const usePointerInteractions = () => {
 					canvasY <= selectionBox.y + selectionBox.h
 				) {
 					// Begin move of existing selection
-					setSelectionBox?.({
-						...selectionBox,
-						dragging: true,
-						mode: 'move',
-						startPointerX: canvasX,
-						startPointerY: canvasY,
-						originX: selectionBox.x,
-						originY: selectionBox.y,
-						originalPositions: Array.from(selectedDrawingIds || []).map((id) => {
-							const n = notes.find((n) => n.id === id);
-							return { id, x: n?.canvasX || 0, y: n?.canvasY || 0 };
-						}),
-					});
+					startSelectionMove(ctx as Ctx, storyboard, canvasX, canvasY);
 				} else {
 					// Touched outside selection — defer create until we confirm single-finger drag.
 					// If a second finger arrives (pinch), we'll cancel without affecting the old selection.
@@ -239,15 +246,30 @@ export const usePointerInteractions = () => {
 					true, // exclude drawings: only text notes are draggable/contextable
 					noteLayoutCache
 				);
-				if (clickedNote) {
-					// Candidate for dragging this note if finger moves beyond threshold
-					touchDragCandidateRef.current = {
-						id: clickedNote.id,
-						startClientX: e.clientX,
-						startClientY: e.clientY,
-						initialCanvasX: clickedNote.canvasX,
-						initialCanvasY: clickedNote.canvasY,
-					};
+				const frameTarget = clickedNote ? null : frameTargetAt(canvasX, canvasY);
+				if (clickedNote || frameTarget) {
+					// Candidate for dragging this note or frame if the finger moves beyond threshold
+					touchDragCandidateRef.current = clickedNote
+						? {
+								drag: {
+									kind: 'note',
+									id: clickedNote.id,
+									startX: e.clientX,
+									startY: e.clientY,
+									initialCanvasX: clickedNote.canvasX,
+									initialCanvasY: clickedNote.canvasY,
+								},
+								startClientX: e.clientX,
+								startClientY: e.clientY,
+								menu: 'note',
+							}
+						: {
+								drag: frameDragFrom(frameTarget!, e.clientX, e.clientY),
+								startClientX: e.clientX,
+								startClientY: e.clientY,
+								menu: frameTarget!.kind === 'card' ? 'frame' : null,
+							};
+					if (!touchDragCandidateRef.current.menu) return;
 					// Start long-press to open context menu
 					if (longPressTimerRef.current) window.clearTimeout(longPressTimerRef.current);
 					longPressTriggeredRef.current = false;
@@ -260,7 +282,11 @@ export const usePointerInteractions = () => {
 						setIsPanning(false);
 						setDragOccurred(true);
 						// Open at current finger position
-						ctx.setContextMenu?.({ isOpen: true, x: e.clientX, y: e.clientY, noteId: cand.id });
+						ctx.setContextMenu?.(
+							cand.menu === 'note'
+								? { isOpen: true, x: e.clientX, y: e.clientY, noteId: cand.drag.id }
+								: { isOpen: true, x: e.clientX, y: e.clientY, noteId: null, frameId: cand.drag.id }
+						);
 						// Clear candidate so we don't start dragging afterwards
 						touchDragCandidateRef.current = null;
 					}, 450);
@@ -282,6 +308,8 @@ export const usePointerInteractions = () => {
 		[
 			isDrawingMode,
 			toolMode,
+			noteLayoutCache,
+			setDragging,
 			setIsPanning,
 			setIsFollowingPlayhead,
 			canvasRef,
@@ -292,12 +320,13 @@ export const usePointerInteractions = () => {
 			NOTE_LABEL_HIDE_THRESHOLD,
 			selectionBox,
 			setSelectionBox,
-			selectedDrawingIds,
 			isDrawing,
 			setIsDrawing,
 			setCurrentStroke,
 			setDrawingStartPos,
 			ctx,
+			frameTargetAt,
+			storyboard,
 		]
 	);
 
@@ -341,6 +370,7 @@ export const usePointerInteractions = () => {
 				ctx.setErasingStrokeIds?.([]);
 				if (selectionBox?.dragging) {
 					setSelectionBox?.(null);
+					storyboard.cancelLiveEdit();
 				}
 				const pts = Array.from(pointers.current.values());
 				const dist = distanceBetween(pts[0], pts[1]);
@@ -401,6 +431,7 @@ export const usePointerInteractions = () => {
 				if (dx0 > 6 || dy0 > 6) {
 					// User is dragging with one finger — start actual selection create
 					ctx.setSelectedStrokeGroups?.([]);
+					ctx.setSelectedFrameIds(new Set());
 					ctx.setSelectedDrawingIds?.(new Set());
 					setSelectionBox?.({ x: pending.canvasX, y: pending.canvasY, w: 0, h: 0, dragging: true, mode: 'create', anchorX: pending.canvasX, anchorY: pending.canvasY });
 					pendingSelectionCreateRef.current = null;
@@ -414,7 +445,7 @@ export const usePointerInteractions = () => {
 				if (selectionBox.mode === 'create') {
 					handleSelectionCreate(ctx as Ctx, e.nativeEvent as unknown as PointerEvent, toCanvas);
 				} else if (selectionBox.mode === 'move') {
-					handleSelectionMove(ctx as Ctx, e.nativeEvent as unknown as PointerEvent, toCanvas);
+					handleSelectionMove(ctx as Ctx, e.nativeEvent as unknown as PointerEvent, toCanvas, storyboard);
 				}
 				return;
 			}
@@ -455,16 +486,11 @@ export const usePointerInteractions = () => {
 				const movedX = Math.abs(e.clientX - cand.startClientX);
 				const movedY = Math.abs(e.clientY - cand.startClientY);
 				if (movedX > 6 || movedY > 6) {
-					// Begin dragging the note
+					// Begin dragging the note or frame (moves and the end are handled by the global handlers)
 					setDragOccurred(true);
-					setDragging({
-						id: cand.id,
-						startX: cand.startClientX,
-						startY: cand.startClientY,
-						initialCanvasX: cand.initialCanvasX,
-						initialCanvasY: cand.initialCanvasY,
-					});
-					history.beginMove(cand.id, { x: cand.initialCanvasX, y: cand.initialCanvasY });
+					setDragging(cand.drag);
+					if (cand.drag.kind === 'note') history.beginMove(cand.drag.id, { x: cand.drag.initialCanvasX, y: cand.drag.initialCanvasY });
+					else storyboard.beginLiveEdit();
 					// Cancel long-press and candidate
 					if (longPressTimerRef.current) {
 						window.clearTimeout(longPressTimerRef.current);
@@ -520,6 +546,7 @@ export const usePointerInteractions = () => {
 			setIsFollowingPlayhead,
 			setLastPanPoint,
 			setDragging,
+			storyboard,
 		]
 	);
 
@@ -545,6 +572,7 @@ export const usePointerInteractions = () => {
 					// Clear selection entirely (tap-outside-to-deselect)
 					setSelectionBox?.(null);
 					ctx.setSelectedStrokeGroups?.([]);
+					ctx.setSelectedFrameIds(new Set());
 					ctx.setSelectedDrawingIds?.(new Set());
 					ctx.setShowSelectionActions?.(false);
 				}
@@ -552,19 +580,18 @@ export const usePointerInteractions = () => {
 				// Finalize selection move/create (set dragging:false)
 				if (selectionBox?.dragging) {
 					const isCreate = selectionBox.mode === 'create';
-					const hasHits = !!(ctx.selectedStrokeGroups && ctx.selectedStrokeGroups.length > 0);
+					const hasHits = !!(ctx.selectedStrokeGroups && ctx.selectedStrokeGroups.length > 0) || ctx.selectedFrameIds.size > 0;
 					if (isCreate && !hasHits) {
 						// Created a box with no hits — clear everything
 						setSelectionBox?.(null);
 						ctx.setSelectedStrokeGroups?.([]);
+						ctx.setSelectedFrameIds(new Set());
 						ctx.setSelectedDrawingIds?.(new Set());
 					} else {
 						// Keep box, just stop dragging
 						setSelectionBox?.(sb => sb ? { ...sb, dragging: false } : sb);
-						// Finalize move if applicable
-						if (selectionBox.mode === 'move' && ctx.selectedStrokeGroups && ctx.selectedStrokeGroups.length === 1) {
-							finalizeSelectionMove(ctx as Ctx);
-						}
+						// Commit the moved strokes and cards as one undo step
+						if (selectionBox.mode === 'move') commitSelectionMove(ctx as Ctx, storyboard);
 					}
 					ctx.setMovingStrokePreview?.(null);
 				}
@@ -604,22 +631,47 @@ export const usePointerInteractions = () => {
 				start &&
 				pointers.current.size === 0 && // gesture ended
 				!isPanning &&
-				!wasLongPress &&
-				duration > 0
+				!wasLongPress
 			) {
 				const dx = Math.abs(e.clientX - start.x);
 				const dy = Math.abs(e.clientY - start.y);
-				const dt = Date.now() - start.t;
+				const dt = e.timeStamp - start.t;
 				if (dx <= 6 && dy <= 6 && dt <= 300) {
 					const rect = canvasRef.current?.getBoundingClientRect();
 					if (rect) {
 						const { canvasX, canvasY } = screenToCanvasCoords(e.clientX, e.clientY, rect, transform);
+						const lastTap = lastCardTapRef.current;
+						if (!toolMode && lastTap && isSecondTap(e.clientX, e.clientY, e.timeStamp)) {
+							lastCardTapRef.current = null;
+							const tapped = lastTap.kind === 'note' ? notes.find((n) => n.id === lastTap.id) : undefined;
+							if (tapped) {
+								ctx.setEditingNote(tapped.id);
+								ctx.setEditContent(tapped.content || '');
+								return;
+							}
+							if (lastTap.kind === 'frame' && ctx.frames.some((f) => f.id === lastTap.id)) {
+								storyboard.openFrameEditor(lastTap.id);
+								return;
+							}
+						}
 						// Seek to note if tapped on note and not in drawing mode
 						const clickedNote = findNoteAtPosition(canvasX, canvasY, notes, transform.scale, NOTE_LABEL_HIDE_THRESHOLD, !isDrawingMode);
 						if (clickedNote && !isDrawingMode) {
 							seekToTime(clickedNote.time);
+							lastCardTapRef.current =
+								clickedNote.type !== 'drawing' ? { id: clickedNote.id, kind: 'note', x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
 							return;
 						}
+						// A frame: seek to its time; a second tap on the same card opens the frame editor
+						const frameTarget = !toolMode ? frameTargetAt(canvasX, canvasY) : null;
+						if (frameTarget) {
+							seekToTime(targetTime(frameTarget));
+							lastCardTapRef.current =
+								frameTarget.kind === 'card' ? { id: frameTarget.frame.id, kind: 'frame', x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+							return;
+						}
+						lastCardTapRef.current = null;
+						if (duration <= 0) return;
 						// Otherwise, seek to waveform time if inside bounds
 						const { waveformX, waveformY, waveformWidth, waveformHeight } = getWaveformDimensions(rect.width, rect.height, duration, ctx.orientation);
 						if (isClickInWaveform(canvasX, waveformX, waveformWidth, canvasY, waveformY, waveformHeight, ctx.orientation)) {
@@ -632,7 +684,7 @@ export const usePointerInteractions = () => {
 				}
 			}
 		},
-		[setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform, toolMode, ctx]
+		[setIsPanning, isPanning, canvasRef, duration, isDrawingMode, notes, NOTE_LABEL_HIDE_THRESHOLD, seekToTime, transform, toolMode, ctx, frameTargetAt, storyboard, selectionBox, setSelectionBox]
 	);
 
 	const handleWheel = useCallback(

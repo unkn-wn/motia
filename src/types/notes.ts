@@ -18,7 +18,7 @@ export interface Note {
   type?: 'note' | 'drawing'; // Default to 'note' for backward compatibility
 }
 
-export type NoteType = 'note' | 'drawing';
+type NoteType = 'note' | 'drawing';
 
 export interface NoteCreateData {
   time: number;

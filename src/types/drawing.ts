@@ -31,7 +31,7 @@ export interface DrawingSession {
   startPosition: { x: number; y: number };
 }
 
-export type CompressionType =
+type CompressionType =
   | 'raw'
   | 'optimized'
   | 'integer'

@@ -7,9 +7,7 @@
 export type {
   DrawingPoint,
   DrawingStroke,
-  DrawingData,
   DrawingSession,
-  CompressionType,
   CompressedStroke,
   CompressionResult
 } from './drawing';
@@ -17,16 +15,12 @@ export type {
 // Canvas types
 export type {
   CanvasTransform,
-  WaveformDimensions,
-  CanvasPoint,
-  CanvasBounds,
   CanvasOrientation
 } from './canvas';
 
 // Note types
 export type {
   Note,
-  NoteType,
   NoteCreateData
 } from './notes';
 
@@ -45,5 +39,4 @@ export type {
   UserSettingsDoc,
   ProjectMetaDoc,
   ProjectNotesDoc,
-
 } from './firebase';

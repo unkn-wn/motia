@@ -1,14 +1,21 @@
-import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef, useCallback, useMemo, memo } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { useAudio } from '@contexts/objects/AudioContextObject';
+import { currentTimeStore } from '@components/AudioControls/state';
 import type { Note, CanvasTransform, ToolMode } from '@types';
 import type { DrawingPoint, DrawingSession } from '@types';
 
 // Import refactored components and hooks
 import { WaveformProvider } from '@contexts/WaveformContext';
+import type { CanvasDrag, ContextMenuState } from '@contexts/objects/WaveformContextObject';
 import { WaveformPlayerContent } from './components/WaveformPlayerContent';
+import type { BoardFormat, Frame, StoryboardSymbol } from '@/features/storyboard/types';
+import { useStoryboard } from '@/features/storyboard/StoryboardContext';
+import { cardPositionAt, timeAxisOf } from './hooks/frameCanvas';
+import { timeToAxis } from '@/features/storyboard/canvas/layout';
+import { Navigation } from '@/features/navigation/Navigation';
 
-export interface WaveformPlayerProps {
+interface WaveformPlayerProps {
 	audioFile: File | null;
 	onLoadingChange?: (loading: boolean) => void;
 	onAddNote: (time: number, canvasX: number, canvasY: number) => void;
@@ -22,6 +29,13 @@ export interface WaveformPlayerProps {
 	onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
 	toolMode?: ToolMode; // new controlled tool mode
 	orientation?: import('@types').CanvasOrientation;
+	// Storyboard frames drawn on the canvas
+	frames: Frame[];
+	board: BoardFormat;
+	symbols: StoryboardSymbol[];
+	/** The index rail along the canvas edge (key B) */
+	showRail?: boolean;
+	onChangeNoteColor?: (id: string, color: string) => void;
 }
 
 export interface WaveformPlayerRef {
@@ -31,6 +45,10 @@ export interface WaveformPlayerRef {
 	skipBack: () => void;
 	skipForward: () => void;
 	addNoteAtCurrentTime: () => void;
+	/** Adds an empty frame at the playhead, beside the waveform, and opens it in the frame editor. */
+	addFrameAtCurrentTime: () => void;
+	/** Where a new frame card for `time` goes on the canvas. */
+	cardPositionAt: (time: number) => { canvasX: number; canvasY: number };
 	volumeUp: () => void;
 	volumeDown: () => void;
 	exportThumbnail: (width?: number, height?: number) => string | null;
@@ -52,6 +70,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			onUpdateDrawing,
 			toolMode: externalToolMode,
 			orientation = 'vertical',
+			frames,
+			board,
+			symbols,
+			showRail = true,
+			onChangeNoteColor,
 		},
 		ref
 	) => {
@@ -62,7 +85,6 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 		// Use audio context for shared state
 		const {
-			currentTime,
 			duration,
 			setIsPlaying,
 			setCurrentTime,
@@ -126,17 +148,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		// Note interaction state
 		const [editingNote, setEditingNote] = useState<string | null>(null);
 		const [editContent, setEditContent] = useState('');
-		const [dragging, setDragging] = useState<{
-			id: string;
-			startX: number;
-			startY: number;
-			initialCanvasX: number;
-			initialCanvasY: number;
-		} | null>(null);
+		const [dragging, setDragging] = useState<CanvasDrag | null>(null);
 		const [dragOccurred, setDragOccurred] = useState(false);
 
 		// Context menu and delete-confirm state
-		const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number; noteId: string | null }>({
+		const [contextMenu, setContextMenu] = useState<ContextMenuState>({
 			isOpen: false,
 			x: 0,
 			y: 0,
@@ -172,8 +188,13 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			originX?: number;
 			originY?: number;
 			originalPositions?: Array<{ id: string; x: number; y: number }>;
+			framePositions?: Array<{ id: string; x: number; y: number }>;
 		} | null>(null);
 		const [selectedStrokeGroups, setSelectedStrokeGroups] = useState<{ noteId: string; strokeIndexes: number[] }[]>([]);
+		const [selectedFrameIds, setSelectedFrameIds] = useState<Set<string>>(() => new Set());
+		const storyboard = useStoryboard();
+		const storyboardRef = useRef(storyboard);
+		storyboardRef.current = storyboard;
 		const [movingStrokePreview, setMovingStrokePreview] = useState<{
 			noteId: string;
 			strokeIndexes: number[];
@@ -183,6 +204,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		useEffect(() => {
 			if (toolMode !== 'select') {
 				setSelectionBox(null);
+				setSelectedFrameIds(new Set());
 				setSelectedDrawingIds(new Set());
 				setSelectedStrokeGroups([]);
 				setMovingStrokePreview(null);
@@ -198,6 +220,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				setCurrentStroke([]);
 			}
 			// Cancel any active dragging/panning when switching tools to avoid stuck states
+			// (a frame drag in progress is kept as one undo step; a selection move goes back)
+			storyboardRef.current.abortLiveEdit();
 			setDragging(null);
 			setIsPanning(false);
 		}, [toolMode]);
@@ -229,6 +253,9 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 		// Initialize WaveSurfer when an audio file is present; otherwise synthesize a fallback waveform
 		useEffect(() => {
 			if (!waveformRef.current) return;
+			// A song (or none) starts at 0: playback time is kept outside React, so the last project's time would
+			// otherwise carry over (the trim start, if any, is applied once the song is ready)
+			setCurrentTime(0);
 
 			// NO AUDIO FILE - random placeholder waveform
 			if (!audioFile) {
@@ -294,12 +321,46 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				onLoadingChange?.(false);
 			});
 
-			wavesurfer.on('audioprocess', () => setCurrentTime(wavesurfer.getCurrentTime()));
-			wavesurfer.on('interaction', () => setCurrentTime(wavesurfer.getCurrentTime()));
-			wavesurfer.on('play', () => setIsPlaying(true));
-			wavesurfer.on('pause', () => setIsPlaying(false));
+			// Playback time, once per animation frame. Phones update the audio element's time in coarse steps (every
+			// 100–250 ms), which made everything following the playhead jump; so while playing, time runs on the frame
+			// clock and eases toward each fresh reading. A seek or a stall (a reading far off) snaps to it.
+			let timeFrame = 0;
+			let clock: { base: number; at: number; reading: number } | null = null;
+			const SNAP_S = 0.3;
+			const EASE = 0.2;
+			const tick = (now: number) => {
+				const reading = wavesurfer.getCurrentTime();
+				if (!clock) clock = { base: reading, at: now, reading };
+				let t = clock.base + ((now - clock.at) / 1000) * wavesurfer.getPlaybackRate();
+				if (reading !== clock.reading) {
+					const err = reading - t;
+					t = Math.abs(err) > SNAP_S ? reading : t + err * EASE;
+					clock = { base: t, at: now, reading };
+				}
+				setCurrentTime(t);
+				timeFrame = requestAnimationFrame(tick);
+			};
+			const syncTime = () => {
+				clock = null;
+				setCurrentTime(wavesurfer.getCurrentTime());
+			};
+			wavesurfer.on('interaction', syncTime);
+			wavesurfer.on('seeking', syncTime);
+			wavesurfer.on('play', () => {
+				cancelAnimationFrame(timeFrame);
+				clock = null;
+				timeFrame = requestAnimationFrame(tick);
+				setIsPlaying(true);
+			});
+			wavesurfer.on('pause', () => {
+				// Where it stopped, exactly
+				cancelAnimationFrame(timeFrame);
+				syncTime();
+				setIsPlaying(false);
+			});
 
 			return () => {
+				cancelAnimationFrame(timeFrame);
 				try {
 					wavesurfer.pause();
 				} catch {
@@ -321,40 +382,45 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			});
 		}, []);
 
-		// Follow playhead effect - continuously update transform when following is enabled
+		// Navigation jump: seek, then centre the item (or the waveform at that time) and stop following
+		const jumpTo = useCallback(
+			(time: number, at?: { x: number; y: number }) => {
+				seekToTime(time);
+				setIsFollowingPlayhead(false);
+				const rect = canvasRef.current?.getBoundingClientRect();
+				if (!rect || (!at && duration <= 0)) return;
+				const along = () => timeToAxis(time, timeAxisOf(rect, duration, orientation));
+				const p = at ?? (orientation === 'horizontal' ? { x: along(), y: 0 } : { x: 0, y: along() });
+				setTransformSafe((prev) => ({ ...prev, offsetX: -p.x * prev.scale, offsetY: rect.height / 2 - p.y * prev.scale }));
+			},
+			[seekToTime, duration, orientation, setTransformSafe]
+		);
+
+		// Follow the playhead: keep it at 33 % of the view as time moves. Subscribed to the time store (not a render per
+		// tick), and paused while the frame editor covers the canvas (it catches up when the editor closes).
+		const followPaused = storyboard.editingFrameId !== null;
 		useEffect(() => {
-			if (!isFollowingPlayhead || !canvasRef.current || duration === 0) return;
-
+			if (!isFollowingPlayhead || !canvasRef.current || duration === 0 || followPaused) return;
 			const canvas = canvasRef.current;
-			const rect = canvas.getBoundingClientRect();
-			const timeProgress = currentTime / duration;
-
-			if (orientation === 'horizontal') {
-				const baseWaveformWidth = Math.max(rect.width * 3, duration * 100);
-				const scaledWaveformWidth = baseWaveformWidth * transform.scale;
-				const targetPlayheadX = timeProgress * scaledWaveformWidth;
-				// Screen X is: rect.width / 2 + offsetX + targetPlayheadX
-				// Target playhead position is 33% from screen left
-				const targetScreenX = rect.width * 0.33;
-
-				setTransformSafe((prev) => ({
-					offsetX: targetScreenX - rect.width / 2 - targetPlayheadX, // Keep playhead at 33% from left
-					offsetY: prev.offsetY, // Don't change Y position
-					scale: prev.scale,
-				}));
-			} else {
-				const baseWaveformHeight = Math.max(rect.height * 3, duration * 100);
-				const scaledWaveformHeight = baseWaveformHeight * transform.scale;
-				const targetPlayheadY = timeProgress * scaledWaveformHeight;
-				const playheadPositionY = rect.height * 0.33; // Position at 33% from top
-
-				setTransformSafe((prev) => ({
-					offsetX: prev.offsetX, // Don't change X position
-					offsetY: playheadPositionY - targetPlayheadY, // Keep playhead centered
-					scale: prev.scale, // Maintain current zoom level
-				}));
-			}
-		}, [currentTime, duration, transform.scale, isFollowingPlayhead, orientation, canvasRef, setTransformSafe]);
+			const follow = () => {
+				const rect = canvas.getBoundingClientRect();
+				const timeProgress = currentTimeStore.getSnapshot() / duration;
+				setTransformSafe((prev) => {
+					if (orientation === 'horizontal') {
+						const scaledWaveformWidth = Math.max(rect.width * 3, duration * 100) * prev.scale;
+						// Screen X is rect.width / 2 + offsetX + playhead X; the playhead goes 33 % from the left
+						const offsetX = rect.width * 0.33 - rect.width / 2 - timeProgress * scaledWaveformWidth;
+						return offsetX === prev.offsetX ? prev : { ...prev, offsetX };
+					}
+					const scaledWaveformHeight = Math.max(rect.height * 3, duration * 100) * prev.scale;
+					// The playhead goes 33 % from the top
+					const offsetY = rect.height * 0.33 - timeProgress * scaledWaveformHeight;
+					return offsetY === prev.offsetY ? prev : { ...prev, offsetY };
+				});
+			};
+			follow();
+			return currentTimeStore.subscribe(follow);
+		}, [duration, transform.scale, isFollowingPlayhead, orientation, canvasRef, setTransformSafe, followPaused]);
 
 		const handleAddNoteAtCurrentTime = useCallback(
 			(e: React.MouseEvent) => {
@@ -362,6 +428,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				if (!canvasRef.current || duration === 0) return;
 
 				const rect = canvasRef.current.getBoundingClientRect();
+				const currentTime = currentTimeStore.getSnapshot();
 				const timeProgress = currentTime / duration;
 
 				if (orientation === 'horizontal') {
@@ -387,14 +454,23 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 					setDragOccurred(false);
 				}, 50);
 			},
-			[canvasRef, duration, currentTime, orientation, onAddNote, setDragOccurred]
+			[canvasRef, duration, orientation, onAddNote, setDragOccurred]
 		);
+
+		const { handleAddFrame, openFrameEditor } = storyboard;
+		const renderPaused = storyboard.editingFrameId !== null;
+		const handleAddFrameAtCurrentTime = useCallback(() => {
+			if (!canvasRef.current || duration === 0) return;
+			const currentTime = currentTimeStore.getSnapshot();
+			const { canvasX, canvasY } = cardPositionAt(canvasRef.current, currentTime, duration, orientation, frames, board);
+			openFrameEditor(handleAddFrame(currentTime, canvasX, canvasY));
+		}, [duration, orientation, frames, board, handleAddFrame, openFrameEditor]);
 
 		const handleRecenterToPlayhead = useCallback(() => {
 			if (!canvasRef.current) return;
 
 			const canvas = canvasRef.current;
-			const timeProgress = duration > 0 ? currentTime / duration : 0;
+			const timeProgress = duration > 0 ? currentTimeStore.getSnapshot() / duration : 0;
 
 			if (orientation === 'horizontal') {
 				const rect = canvas.getBoundingClientRect();
@@ -447,7 +523,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 				// Enable playhead following mode
 				setIsFollowingPlayhead(true);
 			}
-		}, [currentTime, duration, transform.scale, isFollowingPlayhead, orientation, setTransformSafe, setIsFollowingPlayhead]);
+		}, [duration, transform.scale, isFollowingPlayhead, orientation, setTransformSafe, setIsFollowingPlayhead]);
 
 		// Register the recenter function with the context
 		useEffect(() => {
@@ -466,6 +542,11 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 					stopPropagation: () => {},
 				} as React.MouseEvent;
 				handleAddNoteAtCurrentTime(syntheticEvent);
+			},
+			addFrameAtCurrentTime: handleAddFrameAtCurrentTime,
+			cardPositionAt: (time: number) => {
+				const doc = storyboard.storyboardRef.current;
+				return cardPositionAt(canvasRef.current, time, duration, orientation, doc.frames, doc.board);
 			},
 			volumeUp: volumeUp,
 			volumeDown: volumeDown,
@@ -598,6 +679,16 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 			// Orientation
 			orientation,
+
+			// Storyboard frames
+			frames,
+			board,
+			symbols,
+			selectedFrameIds,
+			setSelectedFrameIds,
+			renderPaused,
+			jumpTo,
+			onChangeNoteColor,
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		}), [
 			transform, isPanning, lastPanPoint, isFollowingPlayhead,
@@ -606,7 +697,8 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 			selectionBox, selectedDrawingIds, selectedStrokeGroups,
 			erasingStrokeIds, eraserCursor, movingStrokePreview, showSelectionActions,
 			contextMenu, deleteConfirmNoteId, orientation,
-			onAddNote, onUpdateNote, onDeleteNote, onMoveNote, onAddDrawing, onUpdateDrawing,
+			frames, board, symbols, selectedFrameIds, renderPaused, jumpTo,
+			onAddNote, onUpdateNote, onDeleteNote, onMoveNote, onAddDrawing, onUpdateDrawing, onChangeNoteColor,
 		]);
 
 		return (
@@ -617,6 +709,7 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 					<div className="flex-1 overflow-hidden bg-neutral-900 relative rounded-2xl">
 						<div className="absolute inset-0">
 							<WaveformPlayerContent />
+							<Navigation showRail={showRail} />
 							<div ref={waveformRef} className="hidden" />
 							{/* Fullscreen loading overlay handled at the page level */}
 						</div>
@@ -629,4 +722,6 @@ const WaveformPlayer = forwardRef<WaveformPlayerRef, WaveformPlayerProps>(
 
 WaveformPlayer.displayName = 'WaveformPlayer';
 
-export default WaveformPlayer;
+// Memoized: the page re-renders on every board edit (each move of a frame-editor drag); the canvas only needs to
+// when its own props change
+export default memo(WaveformPlayer);

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FileUploader from '@/components/FileUploader';
 import { UploadIcon } from '@/assets/icons';
+import { audioTypeOf } from '@/lib/audioFiles';
 
 type Props = {
   onFileSelect: (file: File) => void;
   isLoading: boolean;
+  /** Also accept a dropped storyboard (`.motia.zip` / `motia.json`) and hand it here */
+  onImportFile?: (file: File) => void;
   // Optional: render children instead of default uploader (kept for flexibility)
   children?: React.ReactNode;
 };
@@ -17,11 +20,11 @@ function pickFirstAudioFile(dt: DataTransfer): File | null {
   if (file.type && file.type.startsWith('audio/')) return file;
   // Some browsers might not set type; fallback by extension
   const name = file.name.toLowerCase();
-  if (/\.(mp3|wav|m4a|aac|flac|ogg|oga|opus)$/i.test(name)) return file;
+  if (audioTypeOf(name)) return file;
   return null;
 }
 
-const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) => {
+const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, onImportFile, children }) => {
   const [dragActive, setDragActive] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const dragCounter = useRef(0);
@@ -35,6 +38,12 @@ const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) =>
     dragCounter.current = 0;
     setDragActive(false);
     if (isLoading) return;
+    const dropped = e.dataTransfer?.files?.[0];
+    if (onImportFile && dropped && /\.(zip|json)$/i.test(dropped.name)) {
+      onImportFile(dropped);
+      setInvalid(false);
+      return;
+    }
     const file = e.dataTransfer ? pickFirstAudioFile(e.dataTransfer) : null;
     if (file) {
       onFileSelect(file);
@@ -44,7 +53,7 @@ const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) =>
       // hide invalid state after a brief moment
       setTimeout(() => setInvalid(false), 1200);
     }
-  }, [isLoading, onFileSelect]);
+  }, [isLoading, onFileSelect, onImportFile]);
 
   const onDragEnterWindow = useCallback((e: DragEvent) => {
     // Prevent default so the browser allows dropping
@@ -119,14 +128,14 @@ const FileDropzone: React.FC<Props> = ({ onFileSelect, isLoading, children }) =>
               <div className={`text-xl font-semibold tracking-wide ${invalid ? 'text-red-200' : 'text-blue-200'}`}>
                 {invalid ? 'Unsupported file type' : 'Drop audio to upload'}
               </div>
-              <div className="text-xs text-neutral-400 mt-1">mp3, wav, m4a, aac, flac, ogg, opus</div>
+              <div className="text-xs text-neutral-400 mt-1">mp3, wav, m4a, aac, flac, ogg, opus{onImportFile ? ' · or a .motia.zip to import' : ''}</div>
               <div className="text-[11px] text-neutral-500 mt-2">You can also click the button to choose a file</div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  ), [overlayVisible, invalid]);
+  ), [overlayVisible, invalid, onImportFile]);
 
   return (
     <div className="relative">

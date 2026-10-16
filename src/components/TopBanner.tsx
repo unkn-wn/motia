@@ -43,17 +43,17 @@ const BannerButton: React.FC<BannerButtonProps> = ({ variant = 'neutral', alt, c
   );
 };
 
-export const Banner = Object.assign(BannerBase, { Button: BannerButton }) as BannerComponent;
+const Banner = Object.assign(BannerBase, { Button: BannerButton }) as BannerComponent;
 
 // Option API and orchestrator
-export type BannerOption = {
+type BannerOption = {
   id: string;
   show: boolean;
   priority: number; // higher wins
   render: () => React.ReactNode;
 };
 
-export const TopBanner: React.FC<{ options: BannerOption[] }> = ({ options }) => {
+const TopBanner: React.FC<{ options: BannerOption[] }> = ({ options }) => {
   const active = useMemo(() => {
     const candidates = options.filter(o => o.show);
     if (candidates.length === 0) return null;
@@ -99,27 +99,29 @@ export function RelinkBannerOption({ show, isLoading, onRelinkClick, fileInputRe
   };
 }
 
+// Declared once, outside the option factory: a component created inside it would be a new type on every render of
+// the page, so React would remount it and an open sign-in dialog would close whenever the page re-renders
+const SignInContent: React.FC = () => {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const openSignin = useCallback(() => { setMode('signin'); setOpen(true); }, []);
+  const openSignup = useCallback(() => { setMode('signup'); setOpen(true); }, []);
+
+  return (
+    <>
+      <Banner variant="blue" className="flex-col md:flex-row">
+        <span>Sign in to save your progress across devices.</span>
+        <div className="flex items-center gap-2">
+          <Banner.Button variant="blue" onClick={openSignin}>Sign in</Banner.Button>
+          <Banner.Button variant="neutral" alt onClick={openSignup}>Create account</Banner.Button>
+        </div>
+      </Banner>
+      <AuthModal open={open} mode={mode} onClose={() => setOpen(false)} />
+    </>
+  );
+};
+
 export function SignInBannerOption({ show }: { show: boolean }): BannerOption {
-  const SignInContent: React.FC = () => {
-    const [open, setOpen] = useState(false);
-    const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-    const openSignin = useCallback(() => { setMode('signin'); setOpen(true); }, []);
-    const openSignup = useCallback(() => { setMode('signup'); setOpen(true); }, []);
-
-    return (
-      <>
-        <Banner variant="blue" className="flex-col md:flex-row">
-          <span>Sign in to save your progress across devices.</span>
-          <div className="flex items-center gap-2">
-            <Banner.Button variant="blue" onClick={openSignin}>Sign in</Banner.Button>
-            <Banner.Button variant="neutral" alt onClick={openSignup}>Create account</Banner.Button>
-          </div>
-        </Banner>
-        <AuthModal open={open} mode={mode} onClose={() => setOpen(false)} />
-      </>
-    );
-  };
-
   return {
     id: 'signin',
     show,

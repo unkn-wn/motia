@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { WaveformCanvas } from './WaveformCanvas';
 import { NoteContextMenu } from './NoteContextMenu';
 import { InlineNoteEditor } from './InlineNoteEditor';
@@ -7,15 +7,17 @@ import { useCanvasRenderer } from '../hooks/useCanvasRenderer';
 import { useGlobalMouseHandlers } from '../hooks/useGlobalMouseHandlers';
 import { useAudio } from '@contexts/objects/AudioContextObject';
 import { useWaveformContext } from '@contexts/objects/WaveformContextObject';
-import { deleteSelectedStrokes } from '../hooks/mouse/selectionMouseHandlers';
-import { isUserTyping } from '@utils/shortcutsUtils';
+import { deleteSelection } from '../hooks/mouse/selectionMouseHandlers';
+import { useStoryboard } from '@/features/storyboard/StoryboardContext';
+import { thumbnailStore } from '@/features/storyboard/canvas/thumbnails';
+import { currentTimeStore } from '@components/AudioControls/state';
+import { isFrameEditorOpen, isUserTyping } from '@utils/shortcutsUtils';
 
 export const WaveformPlayerContent: React.FC = () => {
   const { renderCanvas } = useCanvasRenderer();
   const { isPlaying } = useAudio();
   const ctx = useWaveformContext();
-  const { isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, toolMode, movingStrokePreview, canvasRef } = ctx;
-  const frameRef = useRef<number | null>(null);
+  const { renderPaused, isPanning, isDrawing, dragging, transform, notes, editingNote, setEditingNote, setEditContent, deleteConfirmNoteId, setDeleteConfirmNoteId, contextMenu, setContextMenu, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, toolMode, movingStrokePreview, canvasRef } = ctx;
   const activeRef = useRef(false);
   const suppressContextUntilRef = useRef<number>(0);
   const rcOriginInsideEditorRef = useRef<boolean>(false);
@@ -23,52 +25,61 @@ export const WaveformPlayerContent: React.FC = () => {
   // Keep a fresh ref of context for stable keyboard handler
   const ctxRef = useRef(ctx);
   useEffect(() => { ctxRef.current = ctx; }, [ctx]);
+  const storyboard = useStoryboard();
+  const storyboardRef = useRef(storyboard);
+  useEffect(() => { storyboardRef.current = storyboard; }, [storyboard]);
 
   // Set up global mouse handlers
   useGlobalMouseHandlers();
 
-  // RAF-driven render when actively changing (playback, panning, drawing, dragging)
-  useEffect(() => {
-    // Treat selection drag and erase interactions as active so we get smooth live feedback
-    const active = isPlaying || isPanning || isDrawing || !!dragging || !!selectionBox?.dragging || toolMode === 'erase';
-    activeRef.current = active;
+  // The loop draws with the latest renderer. While following the playhead the view moves every frame, so the
+  // renderer changes every frame: it must not restart the loop. A restart cancels the frame the loop was waiting for,
+  // and when the playback clock's own frame runs first (it updates the time, which re-renders and settles this
+  // effect before the canvas's frame), every frame is cancelled and the canvas stops drawing.
+  const renderRef = useRef(renderCanvas);
+  useLayoutEffect(() => { renderRef.current = renderCanvas; }, [renderCanvas]);
 
+  // Animated while something changes continuously (playback, panning, drawing, dragging, erasing); nothing to draw
+  // while the frame editor covers the canvas. Only becoming active or idle starts or stops the loop.
+  const active = !renderPaused && (isPlaying || isPanning || isDrawing || !!dragging || !!selectionBox?.dragging || toolMode === 'erase');
+  useEffect(() => {
+    activeRef.current = active;
     if (!active) {
-      // If not active, render once to reflect latest state
-      renderCanvas();
-      // Ensure any pending RAF is canceled
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
+      // Idle: draw once with the latest state
+      renderRef.current();
       return;
     }
+    let frame = requestAnimationFrame(function tick() {
+      renderRef.current();
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active]);
 
-    const tick = () => {
-      renderCanvas();
-      frameRef.current = requestAnimationFrame(tick);
-    };
+  // A time change while nothing animates (a seek, a click on the waveform) redraws the playhead once
+  useEffect(
+    () =>
+      currentTimeStore.subscribe(() => {
+        if (!activeRef.current) renderRef.current();
+      }),
+    []
+  );
 
-    frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-    };
-  }, [isPlaying, isPanning, isDrawing, dragging, selectionBox?.dragging, toolMode, renderCanvas]);
+  // Bumps when frame thumbnails finish rendering
+  const thumbnailVersion = useSyncExternalStore(thumbnailStore.subscribe, thumbnailStore.getVersion);
 
-  // When static, re-render on key data changes (transform/notes) to reflect updates
+  // When static, re-render on key data changes (transform/notes/thumbnails) to reflect updates
   useEffect(() => {
     if (!activeRef.current) {
       renderCanvas();
     }
     // Only when transform or notes identity changes
-  }, [transform, notes, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, movingStrokePreview, renderCanvas]);
+  }, [transform, notes, selectionBox, selectedDrawingIds, selectedStrokeGroups, erasingStrokeIds, eraserCursor, movingStrokePreview, renderCanvas, thumbnailVersion]);
 
   // Global Escape handling: close editor or modal if open
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isFrameEditorOpen()) return;
       if (e.key === 'Escape') {
         if (contextMenu.isOpen) {
           e.preventDefault();
@@ -95,14 +106,14 @@ export const WaveformPlayerContent: React.FC = () => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-      if (isUserTyping()) return;
+      if (isUserTyping() || isFrameEditorOpen()) return;
       // Ignore if modifiers are held (Ctrl+Backspace = browser back, etc.)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const currentCtx = ctxRef.current;
       if (currentCtx.toolMode !== 'select') return;
-      if (!currentCtx.selectedStrokeGroups || currentCtx.selectedStrokeGroups.length === 0) return;
+      if (!currentCtx.selectedStrokeGroups?.length && currentCtx.selectedFrameIds.size === 0) return;
       e.preventDefault();
-      deleteSelectedStrokes(currentCtx);
+      deleteSelection(currentCtx, storyboardRef.current);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -110,7 +121,7 @@ export const WaveformPlayerContent: React.FC = () => {
 
   // Stable callback for the mobile delete button
   const handleDeleteSelection = useCallback(() => {
-    deleteSelectedStrokes(ctxRef.current);
+    deleteSelection(ctxRef.current, storyboardRef.current);
   }, []);
 
   // Temporary suppression of native context menu for ~100ms after any right mouseup
@@ -151,8 +162,7 @@ export const WaveformPlayerContent: React.FC = () => {
     && toolMode === 'select'
     && selectionBox
     && !selectionBox.dragging
-    && selectedStrokeGroups
-    && selectedStrokeGroups.length > 0;
+    && ((selectedStrokeGroups?.length ?? 0) > 0 || ctx.selectedFrameIds.size > 0);
 
   const deleteButtonPos = useMemo(() => {
     if (!showDeleteButton || !canvasRef.current) return null;
@@ -175,7 +185,7 @@ export const WaveformPlayerContent: React.FC = () => {
         <button
           type="button"
           onClick={handleDeleteSelection}
-          aria-label="Delete selected strokes"
+          aria-label="Delete selection"
           style={{
             position: 'absolute',
             left: deleteButtonPos.x,

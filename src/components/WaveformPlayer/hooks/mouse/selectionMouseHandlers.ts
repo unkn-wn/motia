@@ -1,10 +1,42 @@
 import { decompressSession } from '@utils/advancedCompression';
 import { strokeIntersectsRect, recomputeBoundsFromStrokes, compressDrawingAdaptive } from '@utils/drawingUtils';
+import { history } from '@utils/history';
+import { framesInRect } from '@/features/storyboard/canvas/layout';
+import { setCardPositions } from '@/features/storyboard/model';
+import type { StoryboardContextValue } from '@/features/storyboard/StoryboardContext';
 
 type Ctx = ReturnType<typeof import('@contexts/objects/WaveformContextObject').useWaveformContext>;
+type Storyboard = Pick<StoryboardContextValue, 'liveUpdate' | 'endLiveEdit' | 'handleDeleteFrames'>;
 
-// Update selection box position while dragging an existing box (move mode)
-export function handleSelectionMove(ctx: Ctx, e: MouseEvent | PointerEvent, toCanvas: (x: number, y: number) => { x: number; y: number }) {
+/** Starts moving the current selection box: remembers where strokes and cards were. */
+export function startSelectionMove(ctx: Ctx, storyboard: Pick<StoryboardContextValue, 'beginLiveEdit'>, canvasX: number, canvasY: number) {
+  const { selectionBox, setSelectionBox, selectedDrawingIds, notes, frames, selectedFrameIds } = ctx;
+  if (!selectionBox) return;
+  setSelectionBox?.({
+    ...selectionBox,
+    dragging: true,
+    mode: 'move',
+    startPointerX: canvasX,
+    startPointerY: canvasY,
+    originX: selectionBox.x,
+    originY: selectionBox.y,
+    originalPositions: Array.from(selectedDrawingIds || []).map((id) => {
+      const n = notes.find((n) => n.id === id);
+      return { id, x: n?.canvasX || 0, y: n?.canvasY || 0 };
+    }),
+    framePositions: frames.filter((f) => selectedFrameIds.has(f.id)).map((f) => ({ id: f.id, x: f.canvasX, y: f.canvasY })),
+  });
+  // Cards move live; if the move is interrupted they go back with the strokes
+  storyboard.beginLiveEdit('revert', 'MoveFrames');
+}
+
+// Update selection box position while dragging an existing box (move mode); selected cards move live
+export function handleSelectionMove(
+  ctx: Ctx,
+  e: MouseEvent | PointerEvent,
+  toCanvas: (x: number, y: number) => { x: number; y: number },
+  storyboard: Storyboard
+) {
   const { selectionBox, setSelectionBox, selectedStrokeGroups, setMovingStrokePreview } = ctx;
   if (!selectionBox?.dragging || selectionBox.mode !== 'move') return;
   const cur = toCanvas(e.clientX, e.clientY);
@@ -15,11 +47,16 @@ export function handleSelectionMove(ctx: Ctx, e: MouseEvent | PointerEvent, toCa
     const group = selectedStrokeGroups[0];
     setMovingStrokePreview?.({ noteId: group.noteId, strokeIndexes: group.strokeIndexes, dx, dy });
   }
+  const origins = selectionBox.framePositions;
+  if (origins && origins.length) {
+    const positions = new Map(origins.map((p) => [p.id, { x: p.x + dx, y: p.y + dy }]));
+    storyboard.liveUpdate((doc) => setCardPositions(doc, positions));
+  }
 }
 
 // Create/resize selection box and compute stroke hits (create mode)
 export function handleSelectionCreate(ctx: Ctx, e: MouseEvent | PointerEvent, toCanvas: (x: number, y: number) => { x: number; y: number }) {
-  const { selectionBox, setSelectionBox, notes, setSelectedDrawingIds, setSelectedStrokeGroups } = ctx;
+  const { selectionBox, setSelectionBox, notes, setSelectedDrawingIds, setSelectedStrokeGroups, frames, board, setSelectedFrameIds } = ctx;
   if (!selectionBox?.dragging || selectionBox.mode !== 'create') return;
   const anchorX = selectionBox.anchorX ?? selectionBox.x;
   const anchorY = selectionBox.anchorY ?? selectionBox.y;
@@ -54,10 +91,19 @@ export function handleSelectionCreate(ctx: Ctx, e: MouseEvent | PointerEvent, to
   }
   setSelectedDrawingIds?.(selectedNotes);
   setSelectedStrokeGroups?.(selectedStrokeGroupsLocal);
+  setSelectedFrameIds(framesInRect({ x: minX, y: minY, w, h }, frames, board));
+}
+
+/** Commits a selection move: the strokes and the cards land as one undo step. */
+export function commitSelectionMove(ctx: Ctx, storyboard: Storyboard) {
+  history.batch('MoveSelection', () => {
+    finalizeSelectionMove(ctx);
+    storyboard.endLiveEdit('MoveFrames');
+  });
 }
 
 // Commit translation of the selected strokes after finishing a move
-export function finalizeSelectionMove(ctx: Ctx) {
+function finalizeSelectionMove(ctx: Ctx) {
   const { selectionBox, selectedStrokeGroups, notes, setMovingStrokePreview, onUpdateDrawing } = ctx;
   if (!selectionBox || selectionBox.mode !== 'move' || !selectedStrokeGroups || selectedStrokeGroups.length !== 1) return;
   const group = selectedStrokeGroups[0];
@@ -91,12 +137,22 @@ export function finalizeSelectionMove(ctx: Ctx) {
 }
 
 /**
- * Delete all strokes that are currently selected via the selection tool.
- * Follows the same decompress→filter→recompress→onUpdateDrawing pattern
- * used by the eraser (commitEraser). History entries are recorded
- * automatically by onUpdateDrawing (via useNotesState).
+ * Delete the strokes and frame cards selected with the selection tool, as one undo step.
+ * Strokes follow the same decompress→filter→recompress→onUpdateDrawing pattern used by the eraser (commitEraser).
  */
-export function deleteSelectedStrokes(ctx: Ctx): boolean {
+export function deleteSelection(ctx: Ctx, storyboard: Storyboard): boolean {
+  const { selectedStrokeGroups, selectedFrameIds } = ctx;
+  if (!selectedStrokeGroups?.length && selectedFrameIds.size === 0) return false;
+  history.batch('DeleteSelection', () => {
+    deleteSelectedStrokes(ctx);
+    if (selectedFrameIds.size > 0) storyboard.handleDeleteFrames(selectedFrameIds);
+  });
+  ctx.setSelectionBox?.(null);
+  ctx.setSelectedFrameIds(new Set());
+  return true;
+}
+
+function deleteSelectedStrokes(ctx: Ctx): boolean {
   const {
     selectedStrokeGroups,
     notes,

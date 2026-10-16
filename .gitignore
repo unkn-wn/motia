@@ -29,3 +29,6 @@ dist-ssr
 *.sw?
 
 build
+# Test output
+test-results
+playwright-report

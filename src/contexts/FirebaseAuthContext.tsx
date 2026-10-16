@@ -26,6 +26,7 @@ import {
 import { DEFAULT_PREFERENCES, setPreferences, setShortcutsFromMap, subscribeShortcuts } from '@utils/shortcutsUtils';
 import { shortcutsArrayToMap } from '@/lib/db';
 import { AuthContext, type AuthContextValue } from './objects/FirebaseAuthContextObject';
+import { reassignProjectAssets } from '@/features/storyboard/assets/localAssets';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const [user, setUser] = useState<User | null>(null);
@@ -59,7 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 		// If currently anonymous, backup anon project and clean up before switching auth
 		const prevAnonUid = lastAnonUidRef.current;
 
-		type Backup = { projectId: string; meta: import('@types').ProjectMetaDoc; notes: import('@types').Note[] | null };
+		type Backup = {
+			projectId: string;
+			meta: import('@types').ProjectMetaDoc;
+			notes: import('@types').Note[] | null;
+			storyboard?: string;
+		};
 		let pendingMigration: Backup | null = null;
 		try {
 			if (prevAnonUid) {
@@ -71,10 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 					const meta = await fetchProjectMeta(prevAnonUid, projectId);
 					const notesData = await fetchProjectNotes(prevAnonUid, projectId);
 					const notes = notesData ? notesData.notes : null;
+					const storyboard = notesData?.storyboard;
 					if (meta) {
-						pendingMigration = { projectId, meta, notes: notes ?? null };
+						pendingMigration = { projectId, meta, notes: notes ?? null, storyboard };
 						// Persist a backup across navigation just in case sign-in flow reloads
-						sessionStorage.setItem('pendingMigrationV1', JSON.stringify({ projectId, meta, notes: notes ?? null } satisfies Backup));
+						sessionStorage.setItem('pendingMigrationV1', JSON.stringify(pendingMigration satisfies Backup));
 						sessionStorage.setItem('pendingMigrationFromUid', prevAnonUid);
 
 						await deleteUserData(prevAnonUid);
@@ -107,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 					return;
 				}
 
-				const { projectId, meta, notes } = pendingMigration;
+				const { projectId, meta, notes, storyboard } = pendingMigration;
 
 				// Avoid accidental overwrite if destination already has this ID
 				const existing = await fetchProjectMeta(current.uid, projectId);
@@ -124,8 +131,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 				} else {
 					await updateProjectMeta(current.uid, projectId, meta);
 				}
-				if (notes && notes.length) {
-					await saveProjectNotes(current.uid, destProjectId, notes);
+				if ((notes && notes.length) || storyboard) {
+					await saveProjectNotes(current.uid, destProjectId, notes ?? [], undefined, storyboard, { holdOversized: false });
+				}
+				// Local images stay on this device; keep them attached if the project got a new id
+				try {
+					await reassignProjectAssets(projectId, destProjectId);
+				} catch (e) {
+					console.warn('Failed to move local images to the migrated project', e);
 				}
 
 				// Clear backup

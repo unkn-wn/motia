@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { PlayIcon, PauseIcon } from '@/assets/icons';
 import { formatTime } from '@/utils/timeUtils';
 import { useAudio } from '@/contexts/objects/AudioContextObject';
@@ -47,6 +47,19 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 
 	// Constants for handle dimensions (avoid recalculating)
 	const HANDLE_WIDTH = 3;
+	/** The shortest stretch of the song a zoomed view shows */
+	const MIN_VIEW_S = 1;
+
+	// The part of the song shown: all of it, or (Alt/Ctrl + wheel) a zoomed window; a plain wheel then scrolls it
+	const [view, setView] = useState<{ start: number; span: number } | null>(null);
+	const shown = useMemo(() => view ?? { start: 0, span: duration || 1 }, [view, duration]);
+	useEffect(() => setView(null), [duration]);
+	/** x of a time on a track `width` px wide (handles stay whole at the edges) */
+	const toX = useCallback((t: number, width: number) => HANDLE_WIDTH / 2 + ((t - shown.start) / shown.span) * (width - HANDLE_WIDTH), [shown]);
+	const toTime = useCallback(
+		(x: number, width: number) => Math.max(0, Math.min(duration, shown.start + ((x - HANDLE_WIDTH / 2) / (width - HANDLE_WIDTH)) * shown.span)),
+		[shown, duration]
+	);
 	const HANDLE_GRIP_WIDTH = 12;
 	const HANDLE_GRIP_HEIGHT = 24;
 
@@ -123,13 +136,11 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 			trimStart,
 			trimEnd,
 			showPlayhead: true,
+			timeToX: (t) => toX(t, width),
 		});
 
-		// Calculate handle positions using same effective width logic
-		const effectiveWidth = width - HANDLE_WIDTH;
-
-		const startX = (trimStart / duration) * effectiveWidth + HANDLE_WIDTH / 2;
-		const endX = (trimEnd / duration) * effectiveWidth + HANDLE_WIDTH / 2;
+		const startX = toX(trimStart, width);
+		const endX = toX(trimEnd, width);
 
 		// Handles are now centered on the exact time position from the logic above
 		const startHandleX = startX;
@@ -184,7 +195,37 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 			ctx.fillRect(endHandleX - HANDLE_WIDTH / 2, 0, HANDLE_WIDTH, height);
 			ctx.shadowBlur = 0;
 		}
-	}, [waveformData, duration, trimStart, trimEnd, currentTime, hoverHandle, dragging]);
+	}, [waveformData, duration, trimStart, trimEnd, currentTime, hoverHandle, dragging, toX]);
+
+	// Non-passive, so neither the page nor the browser zoom takes the wheel
+	useEffect(() => {
+		const canvas = canvasRef.current;
+		if (!canvas || duration <= 0) return;
+		const onWheel = (e: WheelEvent) => {
+			const zoom = e.altKey || e.ctrlKey;
+			if (!zoom && !view) return;
+			e.preventDefault();
+			const rect = canvas.getBoundingClientRect();
+			const at = toTime(e.clientX - rect.left, rect.width);
+			setView((v) => {
+				const cur = v ?? { start: 0, span: duration };
+				let span = cur.span;
+				let start = cur.start;
+				if (zoom) {
+					span = Math.max(MIN_VIEW_S, Math.min(duration, cur.span * Math.exp(e.deltaY * 0.002)));
+					// The time under the pointer stays under it
+					start = at - ((at - cur.start) / cur.span) * span;
+				} else {
+					const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+					start = cur.start + (d / rect.width) * cur.span;
+				}
+				start = Math.max(0, Math.min(duration - span, start));
+				return span >= duration ? null : { start, span };
+			});
+		};
+		canvas.addEventListener('wheel', onWheel, { passive: false });
+		return () => canvas.removeEventListener('wheel', onWheel);
+	}, [duration, view, toTime]);
 
 	// Draw waveform - only when drawCanvas function changes
 	useEffect(() => {
@@ -199,11 +240,8 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 			const rect = canvasRef.current.getBoundingClientRect();
 			const x = e.clientX - rect.left;
 
-			const startX = (trimStart / duration) * rect.width;
-			const endX = (trimEnd / duration) * rect.width;
-
-			const startHandleX = Math.max(HANDLE_WIDTH / 2, startX);
-			const endHandleX = Math.min(rect.width - HANDLE_WIDTH / 2, endX);
+			const startHandleX = toX(trimStart, rect.width);
+			const endHandleX = toX(trimEnd, rect.width);
 
 			if (Math.abs(x - startHandleX) < HANDLE_GRIP_WIDTH) {
 				setHoverHandle('start');
@@ -216,7 +254,7 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 				canvasRef.current.style.cursor = 'pointer';
 			}
 		},
-		[duration, trimStart, trimEnd, dragging, HANDLE_WIDTH, HANDLE_GRIP_WIDTH]
+		[trimStart, trimEnd, dragging, HANDLE_GRIP_WIDTH, toX]
 	);
 
 	// Handle canvas click/drag
@@ -226,16 +264,9 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 
 			const rect = canvasRef.current.getBoundingClientRect();
 			const x = e.clientX - rect.left;
-			// Compensate for handle widths to ensure precise time mapping
-			const effectiveWidth = rect.width - HANDLE_WIDTH; // usable track width
-			const offsetX = x - HANDLE_WIDTH / 2; // offset by half handle
-
-			// Map visual position to time: clamp to ensure valid range
-			// Using effectiveWidth ensures dragging to far right reaches exactly duration
-			const clickTime = Math.max(0, Math.min(duration, (offsetX / effectiveWidth) * duration));
-
-			const startX = (trimStart / duration) * effectiveWidth + HANDLE_WIDTH / 2;
-			const endX = (trimEnd / duration) * effectiveWidth + HANDLE_WIDTH / 2;
+			const clickTime = toTime(x, rect.width);
+			const startX = toX(trimStart, rect.width);
+			const endX = toX(trimEnd, rect.width);
 
 			// Use larger grip area for touch/mouse
 			if (Math.abs(x - startX) < HANDLE_GRIP_WIDTH) {
@@ -257,7 +288,7 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 				}
 			}
 		},
-		[duration, trimStart, trimEnd, audioElement, HANDLE_WIDTH, HANDLE_GRIP_WIDTH]
+		[trimStart, trimEnd, audioElement, HANDLE_GRIP_WIDTH, toX, toTime]
 	);
 
 	const handlePointerMove = useCallback(
@@ -267,11 +298,7 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 			if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) return;
 
 			const rect = canvasRef.current.getBoundingClientRect();
-			const x = e.clientX - rect.left;
-
-			const effectiveWidth = rect.width - HANDLE_WIDTH;
-			const offsetX = x - HANDLE_WIDTH / 2;
-			const time = Math.max(0, Math.min(duration, (offsetX / effectiveWidth) * duration));
+			const time = toTime(e.clientX - rect.left, rect.width);
 
 			if (dragging === 'start') {
 				const newStart = Math.min(time, trimEnd - 0.5);
@@ -285,7 +312,7 @@ export const AudioTrimSettings: React.FC<AudioTrimSettingsProps> = ({ projectId 
 				setGlobalTrimEnd(clampedEnd);
 			}
 		},
-		[dragging, duration, trimStart, trimEnd, setGlobalTrimStart, setGlobalTrimEnd]
+		[dragging, duration, trimStart, trimEnd, setGlobalTrimStart, setGlobalTrimEnd, toTime]
 	);
 
 	const handlePointerUp = useCallback((e: PointerEvent) => {

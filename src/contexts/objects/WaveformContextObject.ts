@@ -1,6 +1,28 @@
 import { createContext, useContext } from 'react';
 import type { Note, CanvasTransform, ToolMode } from '@types';
 import type { DrawingSession, DrawingPoint } from '@types';
+import type { BoardFormat, Frame, StoryboardSymbol } from '@/features/storyboard/types';
+import type { FrameHitKind } from '@/features/storyboard/canvas/layout';
+
+/** A pointer drag on the canvas: a note card, or a frame's card, anchor dot or span end tick. */
+export type CanvasDrag = {
+	kind: 'note' | FrameHitKind;
+	id: string;
+	startX: number;
+	startY: number;
+	initialCanvasX: number;
+	initialCanvasY: number;
+	initialTime?: number;
+	initialEndTime?: number;
+};
+
+export type ContextMenuState = {
+	isOpen: boolean;
+	x: number;
+	y: number;
+	noteId: string | null;
+	frameId?: string | null;
+};
 
 export interface WaveformContextValue {
 	transform: CanvasTransform;
@@ -16,22 +38,8 @@ export interface WaveformContextValue {
 	setEditingNote: React.Dispatch<React.SetStateAction<string | null>>;
 	editContent: string;
 	setEditContent: React.Dispatch<React.SetStateAction<string>>;
-	dragging: {
-		id: string;
-		startX: number;
-		startY: number;
-		initialCanvasX: number;
-		initialCanvasY: number;
-	} | null;
-	setDragging: React.Dispatch<
-		React.SetStateAction<{
-			id: string;
-			startX: number;
-			startY: number;
-			initialCanvasX: number;
-			initialCanvasY: number;
-		} | null>
-	>;
+	dragging: CanvasDrag | null;
+	setDragging: React.Dispatch<React.SetStateAction<CanvasDrag | null>>;
 	dragOccurred: boolean;
 	setDragOccurred: React.Dispatch<React.SetStateAction<boolean>>;
 	isDrawingMode: boolean;
@@ -53,22 +61,10 @@ export interface WaveformContextValue {
 	onUpdateDrawing?: (id: string, drawing: Note['drawing']) => void;
 	canvasRef: React.RefObject<HTMLCanvasElement | null>;
 	NOTE_LABEL_HIDE_THRESHOLD: number;
-	contextMenu: {
-		isOpen: boolean;
-		x: number;
-		y: number;
-		noteId: string | null;
-	};
+	contextMenu: ContextMenuState;
 	// Layout cache shared between renderer and hit testing
 	noteLayoutCache?: Map<string, { key: string; lines: string[]; noteHeight: number }>;
-	setContextMenu: React.Dispatch<
-		React.SetStateAction<{
-			isOpen: boolean;
-			x: number;
-			y: number;
-			noteId: string | null;
-		}>
-	>;
+	setContextMenu: React.Dispatch<React.SetStateAction<ContextMenuState>>;
 	deleteConfirmNoteId: string | null;
 	setDeleteConfirmNoteId: React.Dispatch<React.SetStateAction<string | null>>;
 	// Tooling
@@ -87,6 +83,8 @@ export interface WaveformContextValue {
 		originX?: number;
 		originY?: number;
 		originalPositions?: Array<{ id: string; x: number; y: number }>;
+		/** Card positions when a selection move started */
+		framePositions?: Array<{ id: string; x: number; y: number }>;
 		anchorX?: number;
 		anchorY?: number;
 	} | null;
@@ -103,10 +101,27 @@ export interface WaveformContextValue {
 			originX?: number;
 			originY?: number;
 			originalPositions?: Array<{ id: string; x: number; y: number }>;
+			framePositions?: Array<{ id: string; x: number; y: number }>;
 			anchorX?: number;
 			anchorY?: number;
 		} | null>
 	>;
+	// Storyboard frames drawn on the canvas, and the cards picked by the select tool
+	frames: Frame[];
+	board: BoardFormat;
+	/** Symbols, for boxes drawn in frame thumbnails */
+	symbols: StoryboardSymbol[];
+	selectedFrameIds: Set<string>;
+	/** True while the frame editor covers the canvas: no drawing, no animation loop. */
+	renderPaused: boolean;
+	/**
+	 * Navigation (index rail, Find): seek to `time` and centre the view on `at` (world units; default the waveform
+	 * at that time). Stops following the playhead. Never edits.
+	 */
+	jumpTo: (time: number, at?: { x: number; y: number }) => void;
+	/** Changes a note's colour (the note menu's colour dots), one undo step */
+	onChangeNoteColor?: (id: string, color: string) => void;
+	setSelectedFrameIds: React.Dispatch<React.SetStateAction<Set<string>>>;
 	selectedDrawingIds?: Set<string>;
 	setSelectedDrawingIds?: React.Dispatch<React.SetStateAction<Set<string>>>;
 	selectedStrokeGroups?: { noteId: string; strokeIndexes: number[] }[];
